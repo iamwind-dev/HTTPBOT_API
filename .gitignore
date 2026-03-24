@@ -16,7 +16,7 @@ migrate_working_dir/
 .dart_tool/
 .github/
 .history/
-.openspec/
+openspec/
 .skill.src/
 AGENTS.md
 .dart_skills/
