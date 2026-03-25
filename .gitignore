@@ -17,7 +17,7 @@ migrate_working_dir/
 .github/
 .history/
 openspec/
-.skill.src
+.skillsrc
 AGENTS.md
 .dart_skills/
 docs/
