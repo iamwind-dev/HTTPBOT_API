@@ -17,7 +17,7 @@ migrate_working_dir/
 .github/
 .history/
 openspec/
-.skillsrc
+
 AGENTS.md
 .dart_skills/
 docs/
@@ -28,7 +28,7 @@ test/
 *.ipr
 *.iws
 .idea/
-
+.skillsrc
 # The .vscode folder contains launch configuration and tasks you configure in
 # VS Code which you may wish to be included in version control, so this line
 # is commented out by default.
