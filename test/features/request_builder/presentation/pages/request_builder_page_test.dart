@@ -2,11 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:httpbot_api/core/keys/widget_keys.dart';
+import 'package:httpbot_api/core/router/app_shell_tab.dart';
 import 'package:httpbot_api/core/theme/app_theme.dart';
+import 'package:httpbot_api/core/widgets/app_shell_scaffold.dart';
 import 'package:httpbot_api/features/request_builder/domain/usecases/get_request_draft_use_case.dart';
 import 'package:httpbot_api/features/request_builder/presentation/cubit/request_builder_cubit.dart';
 import 'package:httpbot_api/features/request_builder/presentation/models/request_list_item.dart';
 import 'package:httpbot_api/features/request_builder/presentation/pages/request_builder_page.dart';
+import 'package:httpbot_api/features/request_builder/presentation/widgets/request_search_field.dart';
+import 'package:httpbot_api/features/request_builder/presentation/widgets/request_shell_action_button.dart';
 
 import '../../../../shared/fakes/fake_request_builder_repository.dart';
 
@@ -19,13 +23,9 @@ void main() {
 
       await robot.pumpScreen();
 
-      robot.expectTitleVisible();
-      robot.expectSearchVisible();
       robot.expectMethodVisible('GET');
       robot.expectMethodVisible('POST');
       robot.expectUrlVisible('https://api.example.com/users');
-      robot.expectFavoriteActionVisible();
-      robot.expectFabVisible();
     });
 
     testWidgets('filters visible requests by url metadata', (tester) async {
@@ -62,7 +62,7 @@ void main() {
     });
 
     testWidgets(
-      'keeps bottom navigation and add action visible on android-sized layouts',
+      'keeps app shell search and add action visible on android-sized layouts',
       (tester) async {
         final robot = _RequestBuilderPageRobot(tester);
 
@@ -73,23 +73,56 @@ void main() {
 
         await robot.pumpScreen();
 
+        robot.expectSearchVisible();
         robot.expectFabVisible();
-        robot.expectTabVisible(AppWidgetKeys.requestsTab);
-        robot.expectTabVisible(AppWidgetKeys.settingsTab);
+      },
+    );
+
+    testWidgets(
+      'keeps a single request card below the shell header while overscrolling',
+      (tester) async {
+        final robot = _RequestBuilderPageRobot(tester);
+
+        await robot.pumpScreen(
+          platform: TargetPlatform.iOS,
+          seedRequests: const [
+            RequestListItem(
+              method: 'GET',
+              title: 'Only request',
+              url: 'https://api.example.com/users',
+            ),
+          ],
+        );
+        await robot.dragShortList();
+
+        robot.expectRequestCardBelowHeader('Only request');
       },
     );
   });
 }
 
 class _TestApp extends StatelessWidget {
-  const _TestApp({required this.cubit});
+  const _TestApp({required this.cubit, this.platform});
 
   final RequestBuilderCubit cubit;
+  final TargetPlatform? platform;
 
   @override
   Widget build(BuildContext context) => MaterialApp(
-    theme: AppTheme.lightTheme,
-    home: BlocProvider.value(value: cubit, child: const RequestBuilderPage()),
+    theme: platform == null
+        ? AppTheme.lightTheme
+        : AppTheme.lightTheme.copyWith(platform: platform),
+    home: BlocProvider.value(
+      value: cubit,
+      child: AppShellScaffold(
+        currentTab: AppShellTab.requests,
+        title: 'Requests',
+        body: const RequestBuilderPage(),
+        bottomSlot: const RequestSearchField(),
+        floatingActionButton: const RequestShellActionButton(),
+        onTabSelected: (_) {},
+      ),
+    ),
   );
 }
 
@@ -100,9 +133,11 @@ class _RequestBuilderPageRobot {
 
   Future<void> pumpScreen({
     List<RequestListItem>? seedRequests,
+    TargetPlatform? platform,
   }) async {
     await tester.pumpWidget(
       _TestApp(
+        platform: platform,
         cubit: RequestBuilderCubit(
           GetRequestDraftUseCase(const FakeRequestBuilderRepository()),
           seedRequests: seedRequests,
@@ -111,6 +146,11 @@ class _RequestBuilderPageRobot {
     );
 
     await tester.pumpAndSettle();
+  }
+
+  Future<void> dragShortList() async {
+    await tester.drag(find.byType(ListView), const Offset(0, -120));
+    await tester.pump();
   }
 
   Future<void> enterSearchText(String value) async {
@@ -143,20 +183,13 @@ class _RequestBuilderPageRobot {
 
   void expectFavoriteActionVisible() {
     expect(
-      find.byKey(const ValueKey<String>(AppWidgetKeys.requestsFavoriteButton)),
+      find.byType(RequestShellActionButton),
       findsOneWidget,
     );
   }
 
   void expectFabVisible() {
-    expect(
-      find.byKey(const ValueKey<String>(AppWidgetKeys.requestsFab)),
-      findsOneWidget,
-    );
-  }
-
-  void expectTabVisible(String widgetKey) {
-    expect(find.byKey(ValueKey<String>(widgetKey)), findsOneWidget);
+    expect(find.byType(FloatingActionButton), findsOneWidget);
   }
 
   void expectEmptyStateVisible() {
@@ -179,5 +212,12 @@ class _RequestBuilderPageRobot {
       find.text('Try a different search term or create a new request.'),
       findsOneWidget,
     );
+  }
+
+  void expectRequestCardBelowHeader(String title) {
+    final headerBottom = tester.getBottomLeft(find.text('Search')).dy;
+    final titleTop = tester.getTopLeft(find.text(title)).dy;
+
+    expect(titleTop, greaterThanOrEqualTo(headerBottom));
   }
 }

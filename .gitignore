@@ -21,6 +21,7 @@ openspec/
 AGENTS.md
 .dart_skills/
 docs/
+test/
 
 # IntelliJ related
 *.iml

@@ -11,6 +11,7 @@ abstract final class AppStrings {
   static const requestsNoResultsMessage =
       'Try a different search term or create a new request.';
   static const requestsSoonMessage = 'This section is not available yet.';
+  static const sectionUnavailableMessage = 'This section is not available yet.';
   static const requestsTabLabel = 'Requests';
   static const websocketsTabLabel = 'WebSockets';
   static const collectionsTabLabel = 'Collections';

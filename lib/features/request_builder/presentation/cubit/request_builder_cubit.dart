@@ -25,35 +25,16 @@ class RequestBuilderCubit extends Cubit<RequestBuilderState> {
   }
 
   void updateSearchQuery(String value) {
-    emit(state.copyWith(searchQuery: value, clearPlaceholderTab: true));
-  }
-
-  void showPlaceholderTab(RequestBottomTab tab) {
-    if (tab == RequestBottomTab.requests) {
-      emit(
-        state.copyWith(
-          selectedTab: RequestBottomTab.requests,
-          clearPlaceholderTab: true,
-        ),
-      );
-
-      return;
-    }
-
-    emit(
-      state.copyWith(
-        selectedTab: RequestBottomTab.requests,
-        placeholderTab: tab,
-      ),
-    );
-  }
-
-  void clearPlaceholderTab() {
-    emit(state.copyWith(clearPlaceholderTab: true));
+    emit(state.copyWith(searchQuery: value));
   }
 
   List<RequestListItem> _buildSeedRequests(RequestDraft draft) =>
       <RequestListItem>[
+        RequestListItem(
+          method: draft.method,
+          title: 'Untitled Request',
+          url: draft.url,
+        ),
         RequestListItem(
           method: draft.method,
           title: 'Untitled Request',
