@@ -4,6 +4,7 @@ import 'app_colors.dart';
 import 'app_radius.dart';
 
 abstract final class AppTheme {
+  // Keep the app canvas aligned with list item surfaces for a clean, uniform backdrop.
   static ThemeData get lightTheme {
     final colorScheme = ColorScheme.fromSeed(
       seedColor: AppColors.primary,
@@ -16,9 +17,9 @@ abstract final class AppTheme {
     return ThemeData(
       useMaterial3: true,
       colorScheme: colorScheme,
-      scaffoldBackgroundColor: AppColors.background,
+      scaffoldBackgroundColor: AppColors.surface,
       appBarTheme: const AppBarTheme(
-        backgroundColor: AppColors.background,
+        backgroundColor: AppColors.surface,
         foregroundColor: AppColors.textPrimary,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
@@ -35,7 +36,13 @@ abstract final class AppTheme {
       ),
       inputDecorationTheme: const InputDecorationTheme(
         filled: true,
-        fillColor: AppColors.surface,
+        fillColor: AppColors.surfaceMuted,
+        hintStyle: TextStyle(
+          color: AppColors.textSecondary,
+          fontSize: 16,
+          fontWeight: FontWeight.w400,
+          height: 1.5,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.all(Radius.circular(AppRadius.medium)),
           borderSide: BorderSide(color: AppColors.border),
@@ -62,6 +69,12 @@ abstract final class AppTheme {
           fontWeight: FontWeight.w700,
           height: 1.3,
         ),
+        bodySmall: TextStyle(
+          color: AppColors.textSecondary,
+          fontSize: 14,
+          fontWeight: FontWeight.w400,
+          height: 1.5,
+        ),
         bodyLarge: TextStyle(
           color: AppColors.textPrimary,
           fontSize: 16,
@@ -78,6 +91,18 @@ abstract final class AppTheme {
           color: AppColors.textSecondary,
           fontSize: 14,
           fontWeight: FontWeight.w600,
+          height: 1.4,
+        ),
+        labelMedium: TextStyle(
+          color: AppColors.textOnPrimary,
+          fontSize: 14,
+          fontWeight: FontWeight.w700,
+          height: 1.2,
+        ),
+        labelSmall: TextStyle(
+          color: AppColors.primary,
+          fontSize: 14,
+          fontWeight: FontWeight.w700,
           height: 1.4,
         ),
       ),
