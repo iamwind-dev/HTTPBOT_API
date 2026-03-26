@@ -1,5 +1,6 @@
 import 'package:equatable/equatable.dart';
-import 'package:flutter/material.dart';
+
+import '../../../../generated/assets.gen.dart';
 
 enum SettingsItemKind { navigation, themeToggle }
 
@@ -13,7 +14,7 @@ class SettingsItem extends Equatable {
 
   final String id;
   final String title;
-  final IconData icon;
+  final SvgGenImage icon;
   final SettingsItemKind kind;
 
   /// Provides a stable widget-key suffix for settings entry widgets.
