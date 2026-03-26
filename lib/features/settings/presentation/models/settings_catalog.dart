@@ -1,23 +1,22 @@
-import 'package:flutter/material.dart';
-
 import '../../../../core/constants/app_strings.dart';
+import '../../../../generated/assets.gen.dart';
 import 'settings_item.dart';
 import 'settings_section.dart';
 
 abstract final class SettingsCatalog {
   /// Returns the fixed settings overview structure used by the current feature slice.
-  static List<SettingsSection> sections() => const <SettingsSection>[
+  static List<SettingsSection> sections() => <SettingsSection>[
     SettingsSection(
       items: <SettingsItem>[
         SettingsItem(
           id: 'request-settings',
           title: AppStrings.settingsRequestSettings,
-          icon: Icons.tune_rounded,
+          icon: Assets.icons.requestsSettingIc,
         ),
         SettingsItem(
           id: 'disk-usage',
           title: AppStrings.settingsDiskUsage,
-          icon: Icons.save_outlined,
+          icon: Assets.icons.diskIc,
         ),
       ],
     ),
@@ -27,32 +26,32 @@ abstract final class SettingsCatalog {
         SettingsItem(
           id: 'cookies',
           title: AppStrings.settingsCookies,
-          icon: Icons.square_outlined,
+          icon: Assets.icons.cookieIc,
         ),
         SettingsItem(
           id: 'environments',
           title: AppStrings.settingsEnvironments,
-          icon: Icons.square_outlined,
+          icon: Assets.icons.environmentIc,
         ),
         SettingsItem(
           id: 'global-variables',
           title: AppStrings.settingsGlobalVariables,
-          icon: Icons.public_rounded,
+          icon: Assets.icons.globalVariablesIc,
         ),
         SettingsItem(
           id: 'saved-auth',
           title: AppStrings.settingsSavedAuth,
-          icon: Icons.key_rounded,
+          icon: Assets.icons.savedAuthIc,
         ),
         SettingsItem(
           id: 'response-filters',
           title: AppStrings.settingsResponseFilters,
-          icon: Icons.filter_list_rounded,
+          icon: Assets.icons.responeFilterIc,
         ),
         SettingsItem(
           id: 'graphql',
           title: AppStrings.settingsGraphql,
-          icon: Icons.square_outlined,
+          icon: Assets.icons.graphqlIc,
         ),
       ],
     ),
@@ -62,7 +61,7 @@ abstract final class SettingsCatalog {
         SettingsItem(
           id: 'postman-account',
           title: AppStrings.settingsPostmanAccount,
-          icon: Icons.circle_outlined,
+          icon: Assets.icons.postmanIcon,
         ),
       ],
     ),
@@ -72,12 +71,12 @@ abstract final class SettingsCatalog {
         SettingsItem(
           id: 'more-settings',
           title: AppStrings.settingsMoreSettings,
-          icon: Icons.tune_rounded,
+          icon: Assets.icons.aboutIc,
         ),
         SettingsItem(
           id: 'theme-mode',
           title: AppStrings.settingsDarkMode,
-          icon: Icons.dark_mode_rounded,
+          icon: Assets.icons.settingsIc,
           kind: SettingsItemKind.themeToggle,
         ),
       ],

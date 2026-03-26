@@ -38,7 +38,14 @@ class SettingsRow extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Icon(item.icon, color: colors.navActive, size: AppSpacing.large),
+              item.icon.svg(
+                width: AppSpacing.large,
+                height: AppSpacing.large,
+                colorFilter: ColorFilter.mode(
+                  colors.navActive,
+                  BlendMode.srcIn,
+                ),
+              ),
               const SizedBox(width: AppSpacing.medium),
               Expanded(
                 child: Text(
