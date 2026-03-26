@@ -17,4 +17,20 @@ abstract final class AppStrings {
   static const collectionsTabLabel = 'Collections';
   static const postmanTabLabel = 'Postman';
   static const settingsTabLabel = 'Settings';
+  static const settingsTitle = 'Settings';
+  static const settingsSectionSavedItems = 'Saved Items';
+  static const settingsSectionPostman = 'Postman';
+  static const settingsSectionHttpbot = 'HTTPBot';
+  static const settingsRequestSettings = 'Request Settings';
+  static const settingsDiskUsage = 'Disk Usage';
+  static const settingsCookies = 'Cookies';
+  static const settingsEnvironments = 'Environments';
+  static const settingsGlobalVariables = 'Global Variables';
+  static const settingsSavedAuth = 'Saved Auth';
+  static const settingsResponseFilters = 'Response Filters';
+  static const settingsGraphql = 'GraphQL';
+  static const settingsPostmanAccount = 'Postman Account';
+  static const settingsMoreSettings = 'More Settings';
+  static const settingsDetailUnavailableMessage =
+      'This feature is not available yet.';
 }

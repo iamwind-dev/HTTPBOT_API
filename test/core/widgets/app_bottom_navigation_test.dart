@@ -32,16 +32,17 @@ class _AppBottomNavigationRobot {
         theme: AppTheme.lightTheme,
         home: Scaffold(
           bottomNavigationBar: AppBottomNavigation<int>(
-            items: const [
+            items: [
               AppBottomNavigationItem<int>(
                 value: 0,
-                icon: Icons.home_rounded,
+                iconBuilder: (color) => Icon(Icons.home_rounded, color: color),
                 label: 'Home',
                 widgetKey: 'home',
               ),
               AppBottomNavigationItem<int>(
                 value: 1,
-                icon: Icons.settings_rounded,
+                iconBuilder: (color) =>
+                    Icon(Icons.settings_rounded, color: color),
                 label: 'Settings',
                 widgetKey: 'settings',
               ),

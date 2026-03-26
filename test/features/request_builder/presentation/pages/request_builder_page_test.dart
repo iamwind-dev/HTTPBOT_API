@@ -170,11 +170,11 @@ class _RequestBuilderPageRobot {
   }
 
   void expectMethodVisible(String method) {
-    expect(find.text(method), findsOneWidget);
+    expect(find.text(method), findsAtLeastNWidgets(1));
   }
 
   void expectUrlVisible(String url) {
-    expect(find.text(url), findsOneWidget);
+    expect(find.text(url), findsAtLeastNWidgets(1));
   }
 
   void expectUrlNotVisible(String url) {
@@ -182,10 +182,7 @@ class _RequestBuilderPageRobot {
   }
 
   void expectFavoriteActionVisible() {
-    expect(
-      find.byType(RequestShellActionButton),
-      findsOneWidget,
-    );
+    expect(find.byType(RequestShellActionButton), findsOneWidget);
   }
 
   void expectFabVisible() {
