@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/constants/app_strings.dart';
 import '../../core/keys/widget_keys.dart';
-import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_theme_context.dart';
 import '../../core/widgets/app_section_placeholder.dart';
 import '../../core/widgets/app_shell_scaffold.dart';
 import '../../features/request_builder/domain/usecases/get_request_draft_use_case.dart';
@@ -183,6 +183,7 @@ class _SettingsShell extends StatelessWidget {
   Widget build(BuildContext context) => AppShellScaffold(
     currentTab: AppShellTab.settings,
     title: AppStrings.settingsTitle,
+    bodyHorizontalPadding: 0,
     body: SettingsPage(onItemSelected: onItemSelected),
     onTabSelected: onTabSelected,
   );
@@ -215,15 +216,16 @@ class _RequestFavoriteButton extends StatelessWidget {
 
   // Preserve the request-specific trailing action while the shell is now router-owned.
   @override
-  Widget build(BuildContext context) => IconButton(
-    key: const ValueKey<String>(AppWidgetKeys.requestsFavoriteButton),
-    tooltip: AppStrings.requestsFavoriteTooltip,
-    onPressed: () {},
-    icon: const Icon(
-      Icons.favorite_border_rounded,
-      color: AppColors.textPrimary,
-    ),
-  );
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+
+    return IconButton(
+      key: const ValueKey<String>(AppWidgetKeys.requestsFavoriteButton),
+      tooltip: AppStrings.requestsFavoriteTooltip,
+      onPressed: () {},
+      icon: Icon(Icons.favorite_border_rounded, color: colors.iconPrimary),
+    );
+  }
 }
 
 class _SettingsBackButton extends StatelessWidget {
@@ -233,10 +235,14 @@ class _SettingsBackButton extends StatelessWidget {
 
   // Expose an in-shell back action for pushed settings detail placeholders.
   @override
-  Widget build(BuildContext context) => IconButton(
-    key: const ValueKey<String>(AppWidgetKeys.settingsBackButton),
-    tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-    onPressed: onPressed,
-    icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary),
-  );
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+
+    return IconButton(
+      key: const ValueKey<String>(AppWidgetKeys.settingsBackButton),
+      tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+      onPressed: onPressed,
+      icon: Icon(Icons.arrow_back_rounded, color: colors.iconPrimary),
+    );
+  }
 }

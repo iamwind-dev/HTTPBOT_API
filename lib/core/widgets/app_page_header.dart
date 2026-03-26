@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../theme/app_colors.dart';
 import '../theme/app_radius.dart';
 import '../theme/app_spacing.dart';
+import '../theme/app_theme_context.dart';
 
 class AppPageHeader extends StatelessWidget {
   const AppPageHeader({
@@ -39,6 +39,7 @@ class AppPageHeader extends StatelessWidget {
   // Render a reusable frosted shell that keeps the title visually centered.
   @override
   Widget build(BuildContext context) {
+    final colors = context.appColors;
     final theme = Theme.of(context);
     final resolvedHeight =
         height ?? heightFor(hasBottomSlot: bottomSlot != null);
@@ -54,9 +55,9 @@ class AppPageHeader extends StatelessWidget {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            AppColors.surface.withValues(alpha: 0.9),
-            AppColors.surface.withValues(alpha: 0.65),
-            AppColors.surface.withValues(alpha: 0.0),
+            colors.headerOverlayTop,
+            colors.headerOverlayMid,
+            colors.headerOverlayBottom,
           ],
           stops: const [0, 0.55, 1],
         ),
@@ -76,7 +77,7 @@ class AppPageHeader extends StatelessWidget {
                     alignment: Alignment.centerLeft,
                     child: DecoratedBox(
                       decoration: BoxDecoration(
-                        color: AppColors.surface.withValues(alpha: 0.72),
+                        color: colors.headerActionSurface,
                         borderRadius: const BorderRadius.all(
                           Radius.circular(AppRadius.large),
                         ),
@@ -99,7 +100,7 @@ class AppPageHeader extends StatelessWidget {
                     alignment: Alignment.centerRight,
                     child: DecoratedBox(
                       decoration: BoxDecoration(
-                        color: AppColors.surface.withValues(alpha: 0.72),
+                        color: colors.headerActionSurface,
                         borderRadius: const BorderRadius.all(
                           Radius.circular(AppRadius.large),
                         ),

@@ -1,120 +1,144 @@
 import 'package:flutter/material.dart';
 
-import 'app_colors.dart';
 import 'app_radius.dart';
+import 'app_theme_colors.dart';
 
 abstract final class AppTheme {
-  // Keep the app canvas aligned with list item surfaces for a clean, uniform backdrop.
-  static ThemeData get lightTheme {
-    final colorScheme = ColorScheme.fromSeed(
-      seedColor: AppColors.primary,
-      brightness: Brightness.light,
-      primary: AppColors.primary,
-      secondary: AppColors.secondary,
-      surface: AppColors.surface,
-    );
+  static ThemeData get lightTheme =>
+      _buildTheme(const AppThemeColors.light(), Brightness.light);
+
+  static ThemeData get darkTheme =>
+      _buildTheme(const AppThemeColors.dark(), Brightness.dark);
+
+  static ThemeData _buildTheme(AppThemeColors colors, Brightness brightness) {
+    final colorScheme =
+        ColorScheme.fromSeed(
+          seedColor: colors.primary,
+          brightness: brightness,
+        ).copyWith(
+          primary: colors.primary,
+          secondary: colors.secondary,
+          surface: colors.surface,
+          onSurface: colors.textPrimary,
+          onPrimary: colors.textOnPrimary,
+          outline: colors.border,
+        );
 
     return ThemeData(
       useMaterial3: true,
+      brightness: brightness,
       colorScheme: colorScheme,
-      scaffoldBackgroundColor: AppColors.surface,
-      appBarTheme: const AppBarTheme(
-        backgroundColor: AppColors.surface,
-        foregroundColor: AppColors.textPrimary,
+      scaffoldBackgroundColor: colors.background,
+      dividerColor: colors.divider,
+      iconTheme: IconThemeData(color: colors.iconPrimary),
+      appBarTheme: AppBarTheme(
+        backgroundColor: colors.surface,
+        foregroundColor: colors.textPrimary,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
         centerTitle: false,
+        titleTextStyle: TextStyle(
+          color: colors.textPrimary,
+          fontSize: 22,
+          fontWeight: FontWeight.w700,
+        ),
       ),
-      cardTheme: const CardThemeData(
-        color: AppColors.surface,
+      cardTheme: CardThemeData(
+        color: colors.card,
         elevation: 0,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(AppRadius.large)),
-          side: BorderSide(color: AppColors.border),
+          borderRadius: const BorderRadius.all(
+            Radius.circular(AppRadius.large),
+          ),
+          side: BorderSide(color: colors.border),
         ),
       ),
-      inputDecorationTheme: const InputDecorationTheme(
+      inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: AppColors.surfaceMuted,
+        fillColor: colors.surfaceMuted,
         hintStyle: TextStyle(
-          color: AppColors.textSecondary,
+          color: colors.textSecondary,
           fontSize: 16,
           fontWeight: FontWeight.w400,
           height: 1.5,
         ),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.all(Radius.circular(AppRadius.medium)),
-          borderSide: BorderSide(color: AppColors.border),
+          borderRadius: const BorderRadius.all(
+            Radius.circular(AppRadius.medium),
+          ),
+          borderSide: BorderSide(color: colors.border),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.all(Radius.circular(AppRadius.medium)),
-          borderSide: BorderSide(color: AppColors.border),
+          borderRadius: const BorderRadius.all(
+            Radius.circular(AppRadius.medium),
+          ),
+          borderSide: BorderSide(color: colors.border),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.all(Radius.circular(AppRadius.medium)),
-          borderSide: BorderSide(color: AppColors.primary),
+          borderRadius: const BorderRadius.all(
+            Radius.circular(AppRadius.medium),
+          ),
+          borderSide: BorderSide(color: colors.primary),
         ),
       ),
-      textTheme: const TextTheme(
+      textTheme: TextTheme(
         headlineMedium: TextStyle(
-          color: AppColors.textPrimary,
+          color: colors.textPrimary,
           fontSize: 28,
           fontWeight: FontWeight.w700,
           height: 1.2,
         ),
         titleLarge: TextStyle(
-          color: AppColors.textPrimary,
+          color: colors.textPrimary,
           fontSize: 20,
           fontWeight: FontWeight.w700,
           height: 1.3,
         ),
+        titleMedium: TextStyle(
+          color: colors.textPrimary,
+          fontSize: 18,
+          fontWeight: FontWeight.w600,
+          height: 1.3,
+        ),
         bodySmall: TextStyle(
-          color: AppColors.textSecondary,
+          color: colors.textSecondary,
           fontSize: 14,
           fontWeight: FontWeight.w400,
           height: 1.5,
         ),
         bodyLarge: TextStyle(
-          color: AppColors.textPrimary,
+          color: colors.textPrimary,
           fontSize: 16,
           fontWeight: FontWeight.w500,
           height: 1.5,
         ),
         bodyMedium: TextStyle(
-          color: AppColors.textSecondary,
+          color: colors.textSecondary,
           fontSize: 16,
           fontWeight: FontWeight.w400,
           height: 1.5,
         ),
         labelLarge: TextStyle(
-          color: AppColors.textSecondary,
+          color: colors.textSecondary,
           fontSize: 14,
           fontWeight: FontWeight.w600,
           height: 1.4,
         ),
         labelMedium: TextStyle(
-          color: AppColors.textOnPrimary,
+          color: colors.textOnPrimary,
           fontSize: 14,
           fontWeight: FontWeight.w700,
           height: 1.2,
         ),
         labelSmall: TextStyle(
-          color: AppColors.primary,
+          color: colors.primary,
           fontSize: 14,
           fontWeight: FontWeight.w700,
           height: 1.4,
         ),
       ),
-      extensions: const <ThemeExtension<dynamic>>[],
-    ).copyWith(
-      appBarTheme: const AppBarTheme(
-        titleTextStyle: TextStyle(
-          color: AppColors.textPrimary,
-          fontSize: 22,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
+      extensions: <ThemeExtension<dynamic>>[colors],
     );
   }
 }

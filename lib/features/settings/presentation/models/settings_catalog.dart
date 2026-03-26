@@ -74,6 +74,12 @@ abstract final class SettingsCatalog {
           title: AppStrings.settingsMoreSettings,
           icon: Icons.tune_rounded,
         ),
+        SettingsItem(
+          id: 'theme-mode',
+          title: AppStrings.settingsDarkMode,
+          icon: Icons.dark_mode_rounded,
+          kind: SettingsItemKind.themeToggle,
+        ),
       ],
     ),
   ];

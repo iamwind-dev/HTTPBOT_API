@@ -10,6 +10,16 @@ abstract final class AppStrings {
   static const requestsNoResultsTitle = 'No matching requests';
   static const requestsNoResultsMessage =
       'Try a different search term or create a new request.';
+  static const requestEditorCloseTooltip = 'Close request editor';
+  static const requestEditorQueryParams = 'Query Params';
+  static const requestEditorHeaders = 'Headers';
+  static const requestEditorBody = 'Body';
+  static const requestEditorAuth = 'Auth';
+  static const requestEditorType = 'Type';
+  static const requestEditorAdd = 'Add';
+  static const requestEditorSend = 'Send';
+  static const requestResponseCloseTooltip = 'Close response viewer';
+  static const requestResponseBodySelector = 'Body';
   static const requestsSoonMessage = 'This section is not available yet.';
   static const sectionUnavailableMessage = 'This section is not available yet.';
   static const requestsTabLabel = 'Requests';
@@ -30,6 +40,7 @@ abstract final class AppStrings {
   static const settingsResponseFilters = 'Response Filters';
   static const settingsGraphql = 'GraphQL';
   static const settingsPostmanAccount = 'Postman Account';
+  static const settingsDarkMode = 'Dark Mode';
   static const settingsMoreSettings = 'More Settings';
   static const settingsDetailUnavailableMessage =
       'This feature is not available yet.';

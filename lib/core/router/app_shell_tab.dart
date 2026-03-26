@@ -39,10 +39,10 @@ extension AppShellTabX on AppShellTab {
       height: AppSpacing.large,
       colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
     ),
-    AppShellTab.websockets => Icon(
-      Icons.compare_arrows_rounded,
-      color: color,
-      size: AppSpacing.large,
+    AppShellTab.websockets => Assets.icons.websocketIc.svg(
+      width: AppSpacing.large,
+      height: AppSpacing.large,
+      colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
     ),
     AppShellTab.collections => Assets.icons.collections.svg(
       width: AppSpacing.large,
@@ -52,7 +52,7 @@ extension AppShellTabX on AppShellTab {
     AppShellTab.postman => Assets.icons.postmanIcon.svg(
       width: AppSpacing.large,
       height: AppSpacing.large,
-      // colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+      colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
       
     ),
     AppShellTab.settings => Assets.icons.settingsIc.svg(
