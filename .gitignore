@@ -70,4 +70,4 @@ lib/generated/
 **/*.config.dart
 **/*.gr.dart
 
-test/
+.metadata
