@@ -3,16 +3,18 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
 
+typedef AppBottomNavigationIconBuilder = Widget Function(Color color);
+
 class AppBottomNavigationItem<T> {
   const AppBottomNavigationItem({
     required this.value,
-    required this.icon,
+    required this.iconBuilder,
     required this.label,
     required this.widgetKey,
   });
 
   final T value;
-  final IconData icon;
+  final AppBottomNavigationIconBuilder iconBuilder;
   final String label;
   final String widgetKey;
 }
@@ -100,7 +102,10 @@ class _AppBottomNavigationTile<T> extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(item.icon, color: foregroundColor),
+              SizedBox.square(
+                dimension: AppSpacing.large,
+                child: Center(child: item.iconBuilder(foregroundColor)),
+              ),
               const SizedBox(height: AppSpacing.xSmall),
               SizedBox(
                 height: AppSpacing.large,

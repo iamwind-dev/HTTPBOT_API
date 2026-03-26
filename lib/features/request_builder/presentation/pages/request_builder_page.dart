@@ -22,10 +22,8 @@ class RequestBuilderPage extends StatelessWidget {
         bottom: AppSpacing.xxxLarge + AppSpacing.medium,
       ),
       itemCount: state.visibleRequests.length,
-      separatorBuilder: (_, _) => const Divider(
-        color: AppColors.border,
-        thickness: 1,
-      ),
+      separatorBuilder: (_, _) =>
+          const Divider(color: AppColors.border, thickness: 1),
       itemBuilder: (context, index) =>
           RequestListItemCard(item: state.visibleRequests[index]),
     );

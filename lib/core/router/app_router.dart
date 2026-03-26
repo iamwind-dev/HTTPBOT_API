@@ -12,6 +12,10 @@ import '../../features/request_builder/presentation/cubit/request_builder_cubit.
 import '../../features/request_builder/presentation/pages/request_builder_page.dart';
 import '../../features/request_builder/presentation/widgets/request_search_field.dart';
 import '../../features/request_builder/presentation/widgets/request_shell_action_button.dart';
+import '../../features/settings/presentation/cubit/settings_cubit.dart';
+import '../../features/settings/presentation/models/settings_catalog.dart';
+import '../../features/settings/presentation/pages/settings_detail_page.dart';
+import '../../features/settings/presentation/pages/settings_page.dart';
 import '../../injection/injection.dart';
 import 'app_shell_tab.dart';
 
@@ -33,31 +37,44 @@ abstract final class AppRouter {
       ),
       GoRoute(
         path: '/websockets',
-        builder: (context, state) => _PlaceholderShell(
-          currentTab: AppShellTab.websockets,
-          onTabSelected: (tab) => context.go(tab.location),
-        ),
+        builder: (context, state) =>
+            _WebSocketsShell(onTabSelected: (tab) => context.go(tab.location)),
       ),
       GoRoute(
         path: '/collections',
-        builder: (context, state) => _PlaceholderShell(
-          currentTab: AppShellTab.collections,
-          onTabSelected: (tab) => context.go(tab.location),
-        ),
+        builder: (context, state) =>
+            _CollectionsShell(onTabSelected: (tab) => context.go(tab.location)),
       ),
       GoRoute(
         path: '/postman',
-        builder: (context, state) => _PlaceholderShell(
-          currentTab: AppShellTab.postman,
-          onTabSelected: (tab) => context.go(tab.location),
-        ),
+        builder: (context, state) =>
+            _PostmanShell(onTabSelected: (tab) => context.go(tab.location)),
       ),
       GoRoute(
         path: '/settings',
-        builder: (context, state) => _PlaceholderShell(
-          currentTab: AppShellTab.settings,
-          onTabSelected: (tab) => context.go(tab.location),
+        builder: (context, state) => BlocProvider(
+          create: (_) => SettingsCubit()..load(),
+          child: _SettingsShell(
+            onTabSelected: (tab) => context.go(tab.location),
+            onItemSelected: (itemId) => context.push('/settings/$itemId'),
+          ),
         ),
+      ),
+      GoRoute(
+        path: '/settings/:itemId',
+        builder: (context, state) {
+          final item = SettingsCatalog.findItemById(
+            state.pathParameters['itemId'] ?? '',
+          );
+
+          return _SettingsDetailShell(
+            itemTitle: item?.title ?? AppStrings.settingsTitle,
+            onBack: () => context.canPop()
+                ? context.pop()
+                : context.go(AppShellTab.settings.location),
+            onTabSelected: (tab) => context.go(tab.location),
+          );
+        },
       ),
     ],
   );
@@ -72,7 +89,6 @@ class _RequestsShell extends StatelessWidget {
 
   final ValueChanged<AppShellTab> onTabSelected;
 
-  // Wrap the Requests content with the app-wide shell while keeping request state local.
   @override
   Widget build(BuildContext context) => AppShellScaffold(
     currentTab: AppShellTab.requests,
@@ -85,24 +101,111 @@ class _RequestsShell extends StatelessWidget {
   );
 }
 
-class _PlaceholderShell extends StatelessWidget {
-  const _PlaceholderShell({
+class _WebSocketsShell extends StatelessWidget {
+  const _WebSocketsShell({required this.onTabSelected});
+
+  final ValueChanged<AppShellTab> onTabSelected;
+
+  // Keep the WebSockets tab on the shared shell while leaving header actions disabled.
+  @override
+  Widget build(BuildContext context) => _StaticTabShell(
+    currentTab: AppShellTab.websockets,
+    title: AppStrings.websocketsTabLabel,
+    message: AppStrings.sectionUnavailableMessage,
+    onTabSelected: onTabSelected,
+  );
+}
+
+class _CollectionsShell extends StatelessWidget {
+  const _CollectionsShell({required this.onTabSelected});
+
+  final ValueChanged<AppShellTab> onTabSelected;
+
+  // Keep the Collections tab on the shared shell while leaving header actions disabled.
+  @override
+  Widget build(BuildContext context) => _StaticTabShell(
+    currentTab: AppShellTab.collections,
+    title: AppStrings.collectionsTabLabel,
+    message: AppStrings.sectionUnavailableMessage,
+    onTabSelected: onTabSelected,
+  );
+}
+
+class _PostmanShell extends StatelessWidget {
+  const _PostmanShell({required this.onTabSelected});
+
+  final ValueChanged<AppShellTab> onTabSelected;
+
+  // Keep the Postman tab on the shared shell while leaving header actions disabled.
+  @override
+  Widget build(BuildContext context) => _StaticTabShell(
+    currentTab: AppShellTab.postman,
+    title: AppStrings.postmanTabLabel,
+    message: AppStrings.sectionUnavailableMessage,
+    onTabSelected: onTabSelected,
+  );
+}
+
+class _StaticTabShell extends StatelessWidget {
+  const _StaticTabShell({
     required this.currentTab,
+    required this.title,
+    required this.message,
     required this.onTabSelected,
   });
 
   final AppShellTab currentTab;
+  final String title;
+  final String message;
   final ValueChanged<AppShellTab> onTabSelected;
 
-  // Render non-request sections through the same app shell until their feature pages exist.
+  // Provide the same shell structure as Requests while allowing screens to omit header actions.
   @override
   Widget build(BuildContext context) => AppShellScaffold(
     currentTab: currentTab,
-    title: currentTab.title,
-    body: AppSectionPlaceholder(
-      title: currentTab.title,
-      message: AppStrings.sectionUnavailableMessage,
-    ),
+    title: title,
+    body: AppSectionPlaceholder(title: title, message: message),
+    onTabSelected: onTabSelected,
+  );
+}
+
+class _SettingsShell extends StatelessWidget {
+  const _SettingsShell({
+    required this.onTabSelected,
+    required this.onItemSelected,
+  });
+
+  final ValueChanged<AppShellTab> onTabSelected;
+  final ValueChanged<String> onItemSelected;
+
+  // Render the dedicated settings overview inside the shared application shell.
+  @override
+  Widget build(BuildContext context) => AppShellScaffold(
+    currentTab: AppShellTab.settings,
+    title: AppStrings.settingsTitle,
+    body: SettingsPage(onItemSelected: onItemSelected),
+    onTabSelected: onTabSelected,
+  );
+}
+
+class _SettingsDetailShell extends StatelessWidget {
+  const _SettingsDetailShell({
+    required this.itemTitle,
+    required this.onBack,
+    required this.onTabSelected,
+  });
+
+  final String itemTitle;
+  final VoidCallback onBack;
+  final ValueChanged<AppShellTab> onTabSelected;
+
+  // Keep placeholder settings destinations inside the shared shell and preserve back navigation.
+  @override
+  Widget build(BuildContext context) => AppShellScaffold(
+    currentTab: AppShellTab.settings,
+    title: itemTitle,
+    leading: _SettingsBackButton(onPressed: onBack),
+    body: const SettingsDetailPage(),
     onTabSelected: onTabSelected,
   );
 }
@@ -120,5 +223,20 @@ class _RequestFavoriteButton extends StatelessWidget {
       Icons.favorite_border_rounded,
       color: AppColors.textPrimary,
     ),
+  );
+}
+
+class _SettingsBackButton extends StatelessWidget {
+  const _SettingsBackButton({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  // Expose an in-shell back action for pushed settings detail placeholders.
+  @override
+  Widget build(BuildContext context) => IconButton(
+    key: const ValueKey<String>(AppWidgetKeys.settingsBackButton),
+    tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+    onPressed: onPressed,
+    icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary),
   );
 }

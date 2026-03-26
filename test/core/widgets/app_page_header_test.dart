@@ -18,6 +18,49 @@ void main() {
         robot.expectBottomSlotVisible();
       },
     );
+
+    testWidgets(
+      'should keep the title horizontally centered when only a leading action is shown',
+      (tester) async {
+        final robot = _AppPageHeaderRobot(tester);
+
+        await robot.pumpHeader(
+          title: 'Settings',
+          leading: const Icon(Icons.arrow_back_rounded),
+        );
+
+        robot.expectTitleCentered('Settings');
+      },
+    );
+
+    testWidgets(
+      'should keep the title horizontally centered when only a trailing action is shown',
+      (tester) async {
+        final robot = _AppPageHeaderRobot(tester);
+
+        await robot.pumpHeader(
+          title: 'Requests',
+          trailing: const Icon(Icons.favorite_border_rounded),
+        );
+
+        robot.expectTitleCentered('Requests');
+      },
+    );
+
+    testWidgets(
+      'should use a more compact header height when no bottom slot is shown',
+      (tester) async {
+        final robot = _AppPageHeaderRobot(tester);
+
+        await robot.pumpHeader(
+          title: 'Settings',
+          trailing: null,
+          bottomSlot: null,
+        );
+
+        robot.expectHeaderHeightLessThan(AppPageHeader.defaultHeight);
+      },
+    );
   });
 }
 
@@ -26,15 +69,21 @@ class _AppPageHeaderRobot {
 
   final WidgetTester tester;
 
-  Future<void> pumpHeader() async {
+  Future<void> pumpHeader({
+    String title = 'Requests',
+    Widget? leading,
+    Widget? trailing = const Icon(Icons.favorite_border_rounded),
+    Widget? bottomSlot = const Text('Search'),
+  }) async {
     await tester.pumpWidget(
       MaterialApp(
         theme: AppTheme.lightTheme,
-        home: const Scaffold(
+        home: Scaffold(
           body: AppPageHeader(
-            title: 'Requests',
-            trailing: Icon(Icons.favorite_border_rounded),
-            bottomSlot: Text('Search'),
+            title: title,
+            leading: leading,
+            trailing: trailing,
+            bottomSlot: bottomSlot,
           ),
         ),
       ),
@@ -51,5 +100,18 @@ class _AppPageHeaderRobot {
 
   void expectBottomSlotVisible() {
     expect(find.text('Search'), findsOneWidget);
+  }
+
+  void expectTitleCentered(String title) {
+    final headerCenter = tester.getCenter(find.byType(AppPageHeader));
+    final titleCenter = tester.getCenter(find.text(title));
+
+    expect(titleCenter.dx, closeTo(headerCenter.dx, 1));
+  }
+
+  void expectHeaderHeightLessThan(double height) {
+    final headerHeight = tester.getSize(find.byType(AppPageHeader)).height;
+
+    expect(headerHeight, lessThan(height));
   }
 }
