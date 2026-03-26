@@ -17,16 +17,18 @@ migrate_working_dir/
 .github/
 .history/
 openspec/
-.skill.src/
+
 AGENTS.md
 .dart_skills/
+docs/
+test/
 
 # IntelliJ related
 *.iml
 *.ipr
 *.iws
 .idea/
-
+.skillsrc
 # The .vscode folder contains launch configuration and tasks you configure in
 # VS Code which you may wish to be included in version control, so this line
 # is commented out by default.
@@ -41,6 +43,9 @@ AGENTS.md
 .pub/
 /build/
 /coverage/
+.env
+.vscode/
+
 
 # Symbolication related
 app.*.symbols
@@ -55,3 +60,14 @@ app.*.map.json
 
 # FVM Version Cache
 .fvm/
+.fvmrc
+
+# Generated files
+lib/generated/
+**/*.g.dart
+**/*.freezed.dart
+**/*.gen.dart
+**/*.config.dart
+**/*.gr.dart
+
+.metadata

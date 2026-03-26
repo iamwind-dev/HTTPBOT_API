@@ -1,11 +1,46 @@
 import 'package:flutter/material.dart';
 
 abstract final class AppColors {
-  static const background = Color(0xFFF5F7FA);
+  // static const background = Color(0xFFF5F7FA);
+  static const background = Color(0xFFFFFFFF);
   static const surface = Color(0xFFFFFFFF);
+  static const surfaceMuted = Color(0xFFE9EDF2);
   static const primary = Color(0xFF1F3A5F);
+  static const primarySoft = Color(0xFFDDEAFE);
   static const secondary = Color(0xFF3D6B99);
   static const border = Color(0xFFD7DEE7);
   static const textPrimary = Color(0xFF16212E);
   static const textSecondary = Color(0xFF5F6F82);
+  static const chipNeutral = Color(0xFF8A8F99);
+  static const methodGet = Color(0xFF1B84F3);
+  static const methodPost = Color(0xFF32C759);
+  static const methodPut = Color(0xFFFF8B1F);
+  static const methodDelete = Color(0xFFFF4D4F);
+  static const methodPatch = Color(0xFF7A7F87);
+  static const methodHead = Color(0xFF7A7F87);
+  static const methodOptions = Color(0xFF8B8F97);
+  static const methodConnect = Color(0xFF8B8F97);
+  static const textOnPrimary = Color(0xFFFFFFFF);
+  static const card = Color.fromARGB(255, 250, 248, 248);
+  // static const darkBackground = Color(0xFF0F131A);
+  static const darkBackground = Color(0xFF151B24);
+  static const darkSurface = Color(0xFF151B24);
+  static const darkSurfaceMuted = Color(0xFF202938);
+  static const darkCard = Color(0xFF1A2230);
+  static const darkBorder = Color(0xFF2A3444);
+  static const darkTextPrimary = Color(0xFFF4F7FB);
+  static const darkTextSecondary = Color(0xFF9BAAC0);
+  static const darkTextOnPrimary = Color(0xFF0B1017);
+  static const darkPrimary = Color(0xFF5AA9FF);
+  static const darkPrimarySoft = Color(0xFF173452);
+  static const darkSecondary = Color(0xFF8ABEFF);
+  static const darkChipNeutral = Color(0xFF8E9AAF);
+  static const darkMethodGet = Color(0xFF5AA9FF);
+  static const darkMethodPost = Color(0xFF48D07C);
+  static const darkMethodPut = Color(0xFFFFB454);
+  static const darkMethodDelete = Color(0xFFFF7D7D);
+  static const darkMethodPatch = Color(0xFFADB6C5);
+  static const darkMethodHead = Color(0xFFADB6C5);
+  static const darkMethodOptions = Color(0xFF98A4B8);
+  static const darkMethodConnect = Color(0xFF98A4B8);
 }
