@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../theme/app_colors.dart';
 import '../theme/app_spacing.dart';
+import '../theme/app_theme_context.dart';
 
 typedef AppBottomNavigationIconBuilder = Widget Function(Color color);
 
@@ -25,41 +25,47 @@ class AppBottomNavigation<T> extends StatelessWidget {
     required this.items,
     required this.selectedValue,
     required this.onItemSelected,
-    this.backgroundColor = AppColors.textOnPrimary,
-    this.activeColor = AppColors.methodGet,
-    this.inactiveColor = AppColors.textPrimary,
+    this.backgroundColor,
+    this.activeColor,
+    this.inactiveColor,
   });
 
   final List<AppBottomNavigationItem<T>> items;
   final T selectedValue;
   final ValueChanged<T> onItemSelected;
-  final Color backgroundColor;
-  final Color activeColor;
-  final Color inactiveColor;
+  final Color? backgroundColor;
+  final Color? activeColor;
+  final Color? inactiveColor;
 
   // Render a generic bottom bar shell while leaving selection behavior to the caller.
   @override
-  Widget build(BuildContext context) => SafeArea(
-    child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xSmall),
-      decoration: BoxDecoration(color: backgroundColor),
-      child: Row(
-        children: items
-            .map(
-              (item) => Expanded(
-                child: _AppBottomNavigationTile<T>(
-                  item: item,
-                  isActive: item.value == selectedValue,
-                  activeColor: activeColor,
-                  inactiveColor: inactiveColor,
-                  onTap: () => onItemSelected(item.value),
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+
+    return SafeArea(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xSmall),
+        decoration: BoxDecoration(
+          color: backgroundColor ?? colors.navBackground,
+        ),
+        child: Row(
+          children: items
+              .map(
+                (item) => Expanded(
+                  child: _AppBottomNavigationTile<T>(
+                    item: item,
+                    isActive: item.value == selectedValue,
+                    activeColor: activeColor ?? colors.navActive,
+                    inactiveColor: inactiveColor ?? colors.navInactive,
+                    onTap: () => onItemSelected(item.value),
+                  ),
                 ),
-              ),
-            )
-            .toList(growable: false),
+              )
+              .toList(growable: false),
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class _AppBottomNavigationTile<T> extends StatelessWidget {

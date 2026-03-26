@@ -46,6 +46,7 @@ test/
 .env
 .vscode/
 
+
 # Symbolication related
 app.*.symbols
 
@@ -68,3 +69,5 @@ lib/generated/
 **/*.gen.dart
 **/*.config.dart
 **/*.gr.dart
+
+.metadata

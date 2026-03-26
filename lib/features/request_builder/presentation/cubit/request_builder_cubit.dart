@@ -15,15 +15,21 @@ class RequestBuilderCubit extends Cubit<RequestBuilderState> {
   final GetRequestDraftUseCase _getRequestDraftUseCase;
   final List<RequestListItem>? _seedRequests;
 
+  /// Loads the starting draft and the visible list of saved requests.
   void load() {
     final draft = _getRequestDraftUseCase();
     final requests = _seedRequests ?? _buildSeedRequests(draft);
 
     emit(
-      state.copyWith(status: RequestBuilderStatus.ready, requests: requests),
+      state.copyWith(
+        status: RequestBuilderStatus.ready,
+        requests: requests,
+        initialDraft: draft,
+      ),
     );
   }
 
+  /// Updates the request search query used to filter the list.
   void updateSearchQuery(String value) {
     emit(state.copyWith(searchQuery: value));
   }
