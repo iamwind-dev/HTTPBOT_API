@@ -20,61 +20,98 @@ import '../../injection/injection.dart';
 import 'app_shell_tab.dart';
 
 abstract final class AppRouter {
+  /// Creates the application router with stateful tab branches so each tab preserves its stack.
   static GoRouter createRouter({
     required GetRequestDraftUseCase getRequestDraftUseCase,
     String? initialLocation,
   }) => GoRouter(
     initialLocation: initialLocation,
-    routes: [
-      GoRoute(
-        path: '/',
-        builder: (context, state) => BlocProvider(
-          create: (_) => RequestBuilderCubit(getRequestDraftUseCase)..load(),
-          child: _RequestsShell(
-            onTabSelected: (tab) => context.go(tab.location),
+    routes: <RouteBase>[
+      StatefulShellRoute.indexedStack(
+        builder: (context, state, navigationShell) => navigationShell,
+        branches: <StatefulShellBranch>[
+          StatefulShellBranch(
+            routes: <RouteBase>[
+              GoRoute(
+                path: '/',
+                builder: (context, state) => BlocProvider(
+                  create: (_) =>
+                      RequestBuilderCubit(getRequestDraftUseCase)..load(),
+                  child: _RequestsShell(
+                    onTabSelected: (tab) =>
+                        _handleShellTabSelection(context, tab),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ),
-      ),
-      GoRoute(
-        path: '/websockets',
-        builder: (context, state) =>
-            _WebSocketsShell(onTabSelected: (tab) => context.go(tab.location)),
-      ),
-      GoRoute(
-        path: '/collections',
-        builder: (context, state) =>
-            _CollectionsShell(onTabSelected: (tab) => context.go(tab.location)),
-      ),
-      GoRoute(
-        path: '/postman',
-        builder: (context, state) =>
-            _PostmanShell(onTabSelected: (tab) => context.go(tab.location)),
-      ),
-      GoRoute(
-        path: '/settings',
-        builder: (context, state) => BlocProvider(
-          create: (_) => SettingsCubit()..load(),
-          child: _SettingsShell(
-            onTabSelected: (tab) => context.go(tab.location),
-            onItemSelected: (itemId) => context.push('/settings/$itemId'),
+          StatefulShellBranch(
+            routes: <RouteBase>[
+              GoRoute(
+                path: '/websockets',
+                builder: (context, state) => _WebSocketsShell(
+                  onTabSelected: (tab) =>
+                      _handleShellTabSelection(context, tab),
+                ),
+              ),
+            ],
           ),
-        ),
-      ),
-      GoRoute(
-        path: '/settings/:itemId',
-        builder: (context, state) {
-          final item = SettingsCatalog.findItemById(
-            state.pathParameters['itemId'] ?? '',
-          );
+          StatefulShellBranch(
+            routes: <RouteBase>[
+              GoRoute(
+                path: '/collections',
+                builder: (context, state) => _CollectionsShell(
+                  onTabSelected: (tab) =>
+                      _handleShellTabSelection(context, tab),
+                ),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: <RouteBase>[
+              GoRoute(
+                path: '/postman',
+                builder: (context, state) => _PostmanShell(
+                  onTabSelected: (tab) =>
+                      _handleShellTabSelection(context, tab),
+                ),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: <RouteBase>[
+              GoRoute(
+                path: '/settings',
+                builder: (context, state) => BlocProvider(
+                  create: (_) => SettingsCubit()..load(),
+                  child: _SettingsShell(
+                    onTabSelected: (tab) =>
+                        _handleShellTabSelection(context, tab),
+                    onItemSelected: (itemId) =>
+                        context.push('/settings/$itemId'),
+                  ),
+                ),
+                routes: <RouteBase>[
+                  GoRoute(
+                    path: ':itemId',
+                    builder: (context, state) {
+                      final item = SettingsCatalog.findItemById(
+                        state.pathParameters['itemId'] ?? '',
+                      );
 
-          return _SettingsDetailShell(
-            itemTitle: item?.title ?? AppStrings.settingsTitle,
-            onBack: () => context.canPop()
-                ? context.pop()
-                : context.go(AppShellTab.settings.location),
-            onTabSelected: (tab) => context.go(tab.location),
-          );
-        },
+                      return _SettingsDetailShell(
+                        itemTitle: item?.title ?? AppStrings.settingsTitle,
+                        onBack: () => _handleSettingsBack(context),
+                        onTabSelected: (tab) =>
+                            _handleShellTabSelection(context, tab),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
       ),
     ],
   );
@@ -82,6 +119,28 @@ abstract final class AppRouter {
   static final GoRouter router = createRouter(
     getRequestDraftUseCase: getIt<GetRequestDraftUseCase>(),
   );
+
+  /// Switches tabs while restoring each branch's last active route.
+  static void _handleShellTabSelection(BuildContext context, AppShellTab tab) {
+    final navigationShell = StatefulNavigationShell.of(context);
+
+    navigationShell.goBranch(
+      tab.index,
+      initialLocation: tab.index == navigationShell.currentIndex,
+    );
+  }
+
+  /// Pops the settings branch when possible or resets it to the overview route.
+  static void _handleSettingsBack(BuildContext context) {
+    if (context.canPop()) {
+      context.pop();
+      return;
+    }
+
+    final navigationShell = StatefulNavigationShell.of(context);
+
+    navigationShell.goBranch(AppShellTab.settings.index, initialLocation: true);
+  }
 }
 
 class _RequestsShell extends StatelessWidget {
