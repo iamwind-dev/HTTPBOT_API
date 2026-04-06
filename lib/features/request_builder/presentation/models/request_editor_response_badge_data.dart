@@ -1,5 +1,7 @@
 import 'package:equatable/equatable.dart';
 
+import '../../domain/entities/request_execution_result.dart';
+
 class RequestEditorResponseBadgeData extends Equatable {
   const RequestEditorResponseBadgeData({
     required this.statusCode,
@@ -11,11 +13,14 @@ class RequestEditorResponseBadgeData extends Equatable {
   final int? payloadSizeBytes;
   final int? durationMs;
 
-  /// Provides demo badge data until the editor is connected to real responses.
-  const RequestEditorResponseBadgeData.demo()
-    : statusCode = 200,
-      payloadSizeBytes = 3072,
-      durationMs = 279;
+  /// Creates compact badge data from a real request execution result.
+  factory RequestEditorResponseBadgeData.fromExecutionResult(
+    RequestExecutionResult executionResult,
+  ) => RequestEditorResponseBadgeData(
+    statusCode: executionResult.statusCode,
+    payloadSizeBytes: executionResult.payloadSizeBytes,
+    durationMs: executionResult.duration.inMilliseconds,
+  );
 
   /// Formats the response status code for compact badge display.
   String get statusLabel => statusCode?.toString() ?? '--';

@@ -8,6 +8,7 @@ import '../../core/theme/app_theme_context.dart';
 import '../../core/widgets/app_section_placeholder.dart';
 import '../../core/widgets/app_shell_scaffold.dart';
 import '../../features/request_builder/domain/usecases/get_request_draft_use_case.dart';
+import '../../features/request_builder/domain/usecases/get_request_variable_store_use_case.dart';
 import '../../features/request_builder/presentation/cubit/request_builder_cubit.dart';
 import '../../features/request_builder/presentation/pages/request_builder_page.dart';
 import '../../features/request_builder/presentation/widgets/request_search_field.dart';
@@ -23,6 +24,7 @@ abstract final class AppRouter {
   /// Creates the application router with stateful tab branches so each tab preserves its stack.
   static GoRouter createRouter({
     required GetRequestDraftUseCase getRequestDraftUseCase,
+    required GetRequestVariableStoreUseCase getRequestVariableStoreUseCase,
     String? initialLocation,
   }) => GoRouter(
     initialLocation: initialLocation,
@@ -35,8 +37,10 @@ abstract final class AppRouter {
               GoRoute(
                 path: '/',
                 builder: (context, state) => BlocProvider(
-                  create: (_) =>
-                      RequestBuilderCubit(getRequestDraftUseCase)..load(),
+                  create: (_) => RequestBuilderCubit(
+                    getRequestDraftUseCase,
+                    getRequestVariableStoreUseCase,
+                  )..load(),
                   child: _RequestsShell(
                     onTabSelected: (tab) =>
                         _handleShellTabSelection(context, tab),
@@ -118,6 +122,7 @@ abstract final class AppRouter {
 
   static final GoRouter router = createRouter(
     getRequestDraftUseCase: getIt<GetRequestDraftUseCase>(),
+    getRequestVariableStoreUseCase: getIt<GetRequestVariableStoreUseCase>(),
   );
 
   /// Switches tabs while restoring each branch's last active route.

@@ -5,10 +5,12 @@ import '../../../../core/constants/app_strings.dart';
 import '../../../../core/keys/widget_keys.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_theme_context.dart';
+import '../../domain/entities/request_draft.dart';
+import '../../domain/entities/request_variable_store.dart';
+import '../../domain/entities/requests_method.dart';
 import '../cubit/request_builder_cubit.dart';
 import '../cubit/request_builder_state.dart';
 import '../models/request_list_item.dart';
-import '../models/request_editor_sheet_data.dart';
 import '../widgets/request_empty_state.dart';
 import '../widgets/request_editor_sheet.dart';
 import '../widgets/request_list_item_card.dart';
@@ -69,7 +71,28 @@ class RequestBuilderPage extends StatelessWidget {
 
     showRequestEditorSheet(
       context,
-      data: RequestEditorSheetData.fromRequest(item: item, draft: draft),
+      title: item.title,
+      initialDraft: _buildDraftForListItem(item, draft),
+      variableStore:
+          state.initialVariableStore ?? const RequestVariableStore(),
     );
+  }
+
+  /// Merges the tapped list metadata into the persisted draft used as the editor baseline.
+  RequestDraft _buildDraftForListItem(RequestListItem item, RequestDraft draft) =>
+      draft.copyWith(
+        method: _mapMethodLabel(item.method),
+        url: item.url,
+      );
+
+  /// Maps the compact list method label back to the corresponding request method enum.
+  HttpMethod _mapMethodLabel(String label) {
+    for (final method in HttpMethod.values) {
+      if (method.label == label) {
+        return method;
+      }
+    }
+
+    return HttpMethod.get;
   }
 }

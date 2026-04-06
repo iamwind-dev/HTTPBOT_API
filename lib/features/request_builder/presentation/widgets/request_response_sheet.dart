@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/constants/app_strings.dart';
 import '../../../../core/keys/widget_keys.dart';
@@ -7,62 +8,104 @@ import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_theme_context.dart';
 import '../../../../core/theme/app_theme_colors.dart';
-import '../models/fake_request_response_data.dart';
+import '../../domain/entities/parsed_response.dart';
+import '../../domain/entities/request_variable_store.dart';
+import '../bloc/request_send_bloc.dart';
+import '../bloc/request_send_event.dart';
+import '../bloc/request_send_state.dart';
+import '../cubit/request_editor_cubit.dart';
 import '../models/request_editor_response_badge_data.dart';
-import '../models/request_editor_sheet_data.dart';
 import 'request_modal_sheet.dart';
 
 /// Opens the response viewer as a full-screen slide-up sheet layered above the editor.
 Future<RequestEditorResponseBadgeData?> showRequestResponseSheet(
-  BuildContext context, {
-  required RequestEditorSheetData requestData,
-}) => showRequestModalSheet<RequestEditorResponseBadgeData>(
+  BuildContext context,
+  {
+  required RequestEditorCubit requestEditorCubit,
+  required RequestSendBloc requestSendBloc,
+  required RequestVariableStore variableStore,
+}
+) => showRequestModalSheet<RequestEditorResponseBadgeData>(
   context,
-  builder: (context) => _RequestResponseSheet(requestData: requestData),
+  builder: (context) => MultiBlocProvider(
+    providers: [
+      BlocProvider<RequestEditorCubit>.value(value: requestEditorCubit),
+      BlocProvider<RequestSendBloc>.value(value: requestSendBloc),
+    ],
+    child: _RequestResponseSheet(variableStore: variableStore),
+  ),
 );
 
-class _RequestResponseSheet extends StatefulWidget {
-  const _RequestResponseSheet({required this.requestData});
+class _RequestResponseSheet extends StatelessWidget {
+  const _RequestResponseSheet({required this.variableStore});
 
-  final RequestEditorSheetData requestData;
+  final RequestVariableStore variableStore;
 
+  /// Builds the live response sheet from the current request send pipeline state.
   @override
-  State<_RequestResponseSheet> createState() => _RequestResponseSheetState();
-}
+  Widget build(BuildContext context) =>
+      BlocBuilder<RequestSendBloc, RequestSendState>(
+        builder: (context, state) => RequestModalSheetCard(
+          key: const ValueKey<String>(AppWidgetKeys.requestsResponseSheet),
+          child: Column(
+            children: [
+              const SizedBox(height: AppSpacing.small),
+              _ResponseHeader(
+                summaryLabel: _summaryLabel(state),
+                onClose: () => _close(context, state),
+                onResend: () => _resend(context),
+                isSending: state.status == RequestSendStatus.sending,
+              ),
+              const SizedBox(height: AppSpacing.small),
+              Expanded(child: _ResponseBody(state: state)),
+              const _ResponseActionBar(),
+            ],
+          ),
+        ),
+      );
 
-class _RequestResponseSheetState extends State<_RequestResponseSheet> {
-  int _attempt = 0;
+  /// Re-runs the current editor draft through the real send pipeline.
+  void _resend(BuildContext context) {
+    final draft = context.read<RequestEditorCubit>().state.draft;
 
-  FakeRequestResponseData get _response =>
-      FakeRequestResponseData.forAttempt(_attempt);
-
-  /// Cycles through deterministic fake responses to mimic a resend flow.
-  void _resend() {
-    setState(() {
-      _attempt += 1;
-    });
+    context.read<RequestSendBloc>().add(const RequestSendResetRequested());
+    context.read<RequestSendBloc>().add(
+      RequestSendRequested(
+        draft: draft,
+        variableStore: variableStore,
+      ),
+    );
   }
 
-  /// Dismisses only the response layer and returns the user to the editor sheet.
-  void _close() => Navigator.of(context).pop(_response.badgeData);
+  /// Closes the response layer and returns the latest execution badge when one exists.
+  void _close(BuildContext context, RequestSendState state) {
+    final executionResult = state.executionResult;
+    final badgeData = executionResult == null
+        ? null
+        : RequestEditorResponseBadgeData.fromExecutionResult(executionResult);
 
-  @override
-  Widget build(BuildContext context) => RequestModalSheetCard(
-    key: const ValueKey<String>(AppWidgetKeys.requestsResponseSheet),
-    child: Column(
-      children: [
-        const SizedBox(height: AppSpacing.small),
-        _ResponseHeader(
-          summaryLabel: _response.badgeData.displayLabel,
-          onClose: _close,
-          onResend: _resend,
-        ),
-        const SizedBox(height: AppSpacing.small),
-        Expanded(child: _JsonViewer(body: _response.prettyJsonBody)),
-        const _ResponseActionBar(),
-      ],
-    ),
-  );
+    Navigator.of(context).pop(badgeData);
+  }
+
+  /// Formats the response summary badge label from the active send state.
+  String _summaryLabel(RequestSendState state) {
+    if (state.status == RequestSendStatus.sending) {
+      return 'Sending...';
+    }
+
+    final executionResult = state.executionResult;
+    if (executionResult != null) {
+      return RequestEditorResponseBadgeData.fromExecutionResult(
+        executionResult,
+      ).displayLabel;
+    }
+
+    if (state.status == RequestSendStatus.blocked) {
+      return 'Blocked';
+    }
+
+    return 'Response';
+  }
 }
 
 class _ResponseHeader extends StatelessWidget {
@@ -70,11 +113,13 @@ class _ResponseHeader extends StatelessWidget {
     required this.summaryLabel,
     required this.onClose,
     required this.onResend,
+    required this.isSending,
   });
 
   final String summaryLabel;
   final VoidCallback onClose;
   final VoidCallback onResend;
+  final bool isSending;
 
   /// Builds the top row for the response sheet with close, summary, and resend actions.
   @override
@@ -106,6 +151,7 @@ class _ResponseHeader extends StatelessWidget {
               AppWidgetKeys.requestsResponseSendButton,
             ),
             onPressed: onResend,
+            isLoading: isSending,
           ),
         ],
       ),
@@ -170,19 +216,72 @@ class _JsonViewer extends StatelessWidget {
   Widget build(BuildContext context) {
     final lines = body.split('\n');
 
-    return Container(
+    return SizedBox(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.medium),
-      child: Scrollbar(
-        child: ListView.builder(
-          physics: const BouncingScrollPhysics(),
-          itemCount: lines.length,
-          itemBuilder: (context, index) =>
-              _JsonLineRow(lineNumber: index + 1, content: lines[index]),
+      child: SelectionArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.medium),
+          child: Scrollbar(
+            child: ListView.builder(
+              physics: const BouncingScrollPhysics(),
+              itemCount: lines.length,
+              itemBuilder: (context, index) =>
+                  _JsonLineRow(lineNumber: index + 1, content: lines[index]),
+            ),
+          ),
         ),
       ),
     );
   }
+}
+
+class _ResponseBody extends StatelessWidget {
+  const _ResponseBody({required this.state});
+
+  final RequestSendState state;
+
+  /// Chooses the most useful body representation for loading, blocked, error, and success states.
+  @override
+  Widget build(BuildContext context) => _JsonViewer(body: _buildBodyText());
+
+  /// Builds the textual body shown in the response viewer from parsed output or pipeline issues.
+  String _buildBodyText() {
+    if (state.status == RequestSendStatus.sending) {
+      return 'Sending request...';
+    }
+
+    final parsedResponse = state.parsedResponse;
+    if (parsedResponse != null && parsedResponse.formattedBody.trim().isNotEmpty) {
+      return parsedResponse.formattedBody;
+    }
+
+    final issueLines = <String>[
+      if (state.errorMessage.trim().isNotEmpty) state.errorMessage.trim(),
+      ...state.resolutionIssues.map(
+        (issue) => 'Resolution issue: ${issue.placeholder} (${issue.type.name})',
+      ),
+      ...state.authIssues.map((issue) => 'Auth issue: ${issue.message}'),
+    ];
+
+    if (issueLines.isNotEmpty) {
+      return issueLines.join('\n');
+    }
+
+    if (parsedResponse != null) {
+      return _fallbackBodyForParsedResponse(parsedResponse);
+    }
+
+    return 'No response body.';
+  }
+
+  /// Provides a fallback description when the parser produced metadata but no formatted body.
+  String _fallbackBodyForParsedResponse(ParsedResponse parsedResponse) =>
+      switch (parsedResponse.bodyType) {
+        ParsedResponseBodyType.empty => 'No response body.',
+        ParsedResponseBodyType.binary => 'Binary response received.',
+        ParsedResponseBodyType.error => parsedResponse.execution.errorMessage,
+        _ => parsedResponse.execution.bodyText,
+      };
 }
 
 class _JsonLineRow extends StatelessWidget {
@@ -360,9 +459,14 @@ class _CircularActionButton extends StatelessWidget {
 }
 
 class _SheetSendButton extends StatelessWidget {
-  const _SheetSendButton({super.key, required this.onPressed});
+  const _SheetSendButton({
+    super.key,
+    required this.onPressed,
+    this.isLoading = false,
+  });
 
   final VoidCallback onPressed;
+  final bool isLoading;
 
   /// Renders the reusable blue pill send action used in the response sheet.
   @override
@@ -373,7 +477,7 @@ class _SheetSendButton extends StatelessWidget {
       color: colors.methodGet,
       borderRadius: const BorderRadius.all(Radius.circular(AppRadius.xxLarge)),
       child: InkWell(
-        onTap: onPressed,
+        onTap: isLoading ? null : onPressed,
         borderRadius: const BorderRadius.all(
           Radius.circular(AppRadius.xxLarge),
         ),
@@ -382,11 +486,29 @@ class _SheetSendButton extends StatelessWidget {
             horizontal: AppSpacing.large,
             vertical: AppSpacing.medium,
           ),
-          child: Text(
-            AppStrings.requestEditorSend,
-            style: Theme.of(
-              context,
-            ).textTheme.titleLarge?.copyWith(color: colors.textOnPrimary),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (isLoading) ...[
+                SizedBox(
+                  width: AppSpacing.medium,
+                  height: AppSpacing.medium,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      colors.textOnPrimary,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.small),
+              ],
+              Text(
+                AppStrings.requestEditorSend,
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(color: colors.textOnPrimary),
+              ),
+            ],
           ),
         ),
       ),

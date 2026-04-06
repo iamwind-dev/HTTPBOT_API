@@ -15,9 +15,16 @@ abstract final class AppStrings {
   static const requestEditorHeaders = 'Headers';
   static const requestEditorBody = 'Body';
   static const requestEditorAuth = 'Auth';
+  static const requestEditorMethod = 'Method';
+  static const requestEditorOptions = 'Options';
+  static const requestEditorTimeout = 'Timeout (seconds)';
+  static const requestEditorVerifySsl = 'Verify SSL';
   static const requestEditorType = 'Type';
   static const requestEditorAdd = 'Add';
   static const requestEditorSend = 'Send';
+  static const requestEditorBodyEmptyMessage = 'This request does not send a body.';
+  static const requestEditorUnsupportedAuthMessage =
+      'This auth mode is modeled in the editor, but execution support is not implemented yet.';
   static const requestResponseCloseTooltip = 'Close response viewer';
   static const requestResponseBodySelector = 'Body';
   static const requestsSoonMessage = 'This section is not available yet.';
