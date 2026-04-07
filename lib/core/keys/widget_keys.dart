@@ -17,6 +17,7 @@ abstract final class AppWidgetKeys {
   static const settingsThemeModeSwitch = 'settings_theme_mode_switch';
   static const requestsTab = 'requests_tab';
   static const websocketsTab = 'websockets_tab';
+  static const websocketsList = 'websockets_list';
   static const collectionsTab = 'collections_tab';
   static const postmanTab = 'postman_tab';
   static const settingsTab = 'settings_tab';

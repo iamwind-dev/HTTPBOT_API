@@ -1,4 +1,4 @@
-abstract final class AppSpacing {
+abstract final class  AppSpacing {
   static const xxSmall = 4.0;
   static const xSmall = 8.0;
   static const small = 12.0;
