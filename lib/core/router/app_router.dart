@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:httpbot_api/core/widgets/body_empty.dart';
+import 'package:httpbot_api/features/collection/presentation/screens/collection_screens.dart';
+import 'package:httpbot_api/features/postman/presentation/screens/postman_screens.dart';
+import 'package:httpbot_api/features/web_sockets/presentation/screens/websocket_screen.dart';
+import 'package:httpbot_api/features/web_sockets/presentation/widget/search_websocket.dart';
 
 import '../../core/constants/app_strings.dart';
 import '../../core/keys/widget_keys.dart';
@@ -167,10 +172,12 @@ class _WebSocketsShell extends StatelessWidget {
 
   // Keep the WebSockets tab on the shared shell while leaving header actions disabled.
   @override
-  Widget build(BuildContext context) => _StaticTabShell(
+  Widget build(BuildContext context) => AppShellScaffold(
     currentTab: AppShellTab.websockets,
     title: AppStrings.websocketsTabLabel,
-    message: AppStrings.sectionUnavailableMessage,
+    trailing: const _RequestFavoriteButton(),
+    bottomSlot: const SearchWebsocket(),
+    body: WebsocketScreen(),
     onTabSelected: onTabSelected,
   );
 }
@@ -182,10 +189,11 @@ class _CollectionsShell extends StatelessWidget {
 
   // Keep the Collections tab on the shared shell while leaving header actions disabled.
   @override
-  Widget build(BuildContext context) => _StaticTabShell(
+  Widget build(BuildContext context) => AppShellScaffold(
     currentTab: AppShellTab.collections,
     title: AppStrings.collectionsTabLabel,
-    message: AppStrings.sectionUnavailableMessage,
+    bottomSlot: const SearchWebsocket(),
+    body: const CollectionScreen(),
     onTabSelected: onTabSelected,
   );
 }
@@ -197,10 +205,11 @@ class _PostmanShell extends StatelessWidget {
 
   // Keep the Postman tab on the shared shell while leaving header actions disabled.
   @override
-  Widget build(BuildContext context) => _StaticTabShell(
+  Widget build(BuildContext context) => AppShellScaffold(
     currentTab: AppShellTab.postman,
     title: AppStrings.postmanTabLabel,
-    message: AppStrings.sectionUnavailableMessage,
+    bottomSlot: const SearchWebsocket(),
+    body: const PostmanScreens(),
     onTabSelected: onTabSelected,
   );
 }
