@@ -2,6 +2,7 @@ import 'package:equatable/equatable.dart';
 
 import '../../domain/entities/request_draft.dart';
 import '../../domain/entities/request_variable_store.dart';
+import '../../domain/entities/saved_request_draft.dart';
 import '../models/request_list_item.dart';
 
 enum RequestBuilderStatus { initial, ready }
@@ -13,6 +14,7 @@ class RequestBuilderState extends Equatable {
     required this.searchQuery,
     required this.initialDraft,
     required this.initialVariableStore,
+    required this.savedRequests,
   });
 
   const RequestBuilderState.initial()
@@ -20,13 +22,15 @@ class RequestBuilderState extends Equatable {
       requests = const <RequestListItem>[],
       searchQuery = '',
       initialDraft = null,
-      initialVariableStore = null;
+      initialVariableStore = null,
+      savedRequests = const <SavedRequestDraft>[];
 
   final RequestBuilderStatus status;
   final List<RequestListItem> requests;
   final String searchQuery;
   final RequestDraft? initialDraft;
   final RequestVariableStore? initialVariableStore;
+  final List<SavedRequestDraft> savedRequests;
 
   /// Returns the request list filtered by the active search query.
   List<RequestListItem> get visibleRequests => requests
@@ -45,12 +49,14 @@ class RequestBuilderState extends Equatable {
     String? searchQuery,
     RequestDraft? initialDraft,
     RequestVariableStore? initialVariableStore,
+    List<SavedRequestDraft>? savedRequests,
   }) => RequestBuilderState(
     status: status ?? this.status,
     requests: requests ?? this.requests,
     searchQuery: searchQuery ?? this.searchQuery,
     initialDraft: initialDraft ?? this.initialDraft,
     initialVariableStore: initialVariableStore ?? this.initialVariableStore,
+    savedRequests: savedRequests ?? this.savedRequests,
   );
 
   @override
@@ -60,5 +66,6 @@ class RequestBuilderState extends Equatable {
     searchQuery,
     initialDraft,
     initialVariableStore,
+    savedRequests,
   ];
 }

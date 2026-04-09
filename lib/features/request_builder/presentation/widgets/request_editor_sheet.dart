@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -20,33 +22,88 @@ import '../bloc/request_send_state.dart';
 import '../cubit/request_editor_cubit.dart';
 import '../cubit/request_editor_state.dart';
 import '../models/request_editor_response_badge_data.dart';
+import '../models/request_editor_result.dart';
 import 'request_modal_sheet.dart';
 import 'request_response_sheet.dart';
 
 /// Presents the request editor as a full-screen sheet backed by a real request draft.
-Future<void> showRequestEditorSheet(
+Future<RequestEditorResult?> showRequestEditorSheet(
   BuildContext context, {
   required String title,
   required RequestDraft initialDraft,
   required RequestVariableStore variableStore,
-}) => showRequestModalSheet<void>(
-  context,
-  builder: (context) => MultiBlocProvider(
-    providers: [
-      BlocProvider(
-        create: (_) =>
-            RequestEditorCubit(title: title, initialDraft: initialDraft),
+  Future<void> Function(RequestEditorResult result)? onDraftChanged,
+  Future<void> Function()? onDraftDiscarded,
+}) async {
+  final editorCubit = RequestEditorCubit(
+    title: title,
+    initialDraft: initialDraft,
+  );
+  final requestSendBloc = getIt<RequestSendBloc>();
+  Timer? autosaveTimer;
+  RequestEditorState? pendingAutosaveState;
+
+  Future<void> saveEditorState(RequestEditorState state) async {
+    await onDraftChanged?.call(
+      RequestEditorResult(title: state.title, draft: state.draft),
+    );
+  }
+
+  final editorSubscription = editorCubit.stream.listen((state) {
+    if (onDraftChanged == null) {
+      return;
+    }
+
+    pendingAutosaveState = state;
+    autosaveTimer?.cancel();
+    autosaveTimer = Timer(const Duration(milliseconds: 450), () {
+      final autosaveState = pendingAutosaveState;
+      if (autosaveState != null) {
+        unawaited(saveEditorState(autosaveState));
+      }
+    });
+  });
+
+  try {
+    final result = await showRequestModalSheet<RequestEditorResult?>(
+      context,
+      builder: (context) => MultiBlocProvider(
+        providers: [
+          BlocProvider<RequestEditorCubit>.value(value: editorCubit),
+          BlocProvider<RequestSendBloc>.value(value: requestSendBloc),
+        ],
+        child: _RequestEditorSheet(
+          initialTitle: title,
+          initialDraft: initialDraft,
+          variableStore: variableStore,
+          onDraftDiscarded: onDraftDiscarded,
+        ),
       ),
-      BlocProvider(create: (_) => getIt<RequestSendBloc>()),
-    ],
-    child: _RequestEditorSheet(variableStore: variableStore),
-  ),
-);
+    );
+
+    autosaveTimer?.cancel();
+
+    return result;
+  } finally {
+    autosaveTimer?.cancel();
+    await editorSubscription.cancel();
+    await editorCubit.close();
+    await requestSendBloc.close();
+  }
+}
 
 class _RequestEditorSheet extends StatefulWidget {
-  const _RequestEditorSheet({required this.variableStore});
+  const _RequestEditorSheet({
+    required this.initialTitle,
+    required this.initialDraft,
+    required this.variableStore,
+    this.onDraftDiscarded,
+  });
 
+  final String initialTitle;
+  final RequestDraft initialDraft;
   final RequestVariableStore variableStore;
+  final Future<void> Function()? onDraftDiscarded;
 
   @override
   State<_RequestEditorSheet> createState() => _RequestEditorSheetState();
@@ -54,6 +111,40 @@ class _RequestEditorSheet extends StatefulWidget {
 
 class _RequestEditorSheetState extends State<_RequestEditorSheet> {
   RequestEditorResponseBadgeData? _lastResponseBadge;
+  bool _isClosing = false;
+
+  /// Lets the method badge in the header update the request method in place.
+  Future<void> _openMethodPicker(HttpMethod currentMethod) async {
+    final selectedMethod = await showModalBottomSheet<HttpMethod>(
+      context: context,
+      useSafeArea: true,
+      backgroundColor: context.appColors.surface,
+      builder: (context) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            for (final method in HttpMethod.values)
+              ListTile(
+                title: Text(method.wireName),
+                trailing: method == currentMethod
+                    ? Icon(
+                        CupertinoIcons.check_mark,
+                        color: context.appColors.methodColor(method.label),
+                      )
+                    : null,
+                onTap: () => Navigator.of(context).pop(method),
+              ),
+          ],
+        ),
+      ),
+    );
+
+    if (!mounted || selectedMethod == null) {
+      return;
+    }
+
+    context.read<RequestEditorCubit>().updateMethod(selectedMethod);
+  }
 
   /// Opens the temporary response viewer and stores the latest summary when it closes.
   Future<void> _openResponseSheet() async {
@@ -88,6 +179,135 @@ class _RequestEditorSheetState extends State<_RequestEditorSheet> {
     });
   }
 
+  bool _hasUnsavedChanges(RequestEditorState state) =>
+      state.title != widget.initialTitle || state.draft != widget.initialDraft;
+
+  Future<void> _handleMoreAction(_RequestEditorMoreAction action) async {
+    switch (action) {
+      case _RequestEditorMoreAction.environment:
+        await _openEnvironmentPicker();
+      case _RequestEditorMoreAction.useGraphQl:
+        _useGraphQlMode();
+      case _RequestEditorMoreAction.viewCurl:
+        await _viewCurl();
+      case _RequestEditorMoreAction.exportHar:
+        await _exportHar();
+      case _RequestEditorMoreAction.cookies:
+        await _openCookies();
+      case _RequestEditorMoreAction.tests:
+        await _openTests();
+      case _RequestEditorMoreAction.settings:
+        await _openRequestSettings();
+    }
+  }
+
+  Future<void> _openEnvironmentPicker() async {
+    // TODO: Open the request environment picker and persist the selected environment.
+  }
+
+  void _useGraphQlMode() {
+    final editorCubit = context.read<RequestEditorCubit>();
+    final body = editorCubit.state.draft.body;
+
+    editorCubit.updateBody(body.copyWith(type: RequestBodyType.graphql));
+  }
+
+  Future<void> _viewCurl() async {
+    // TODO: Generate and present the current request as a cURL command.
+  }
+
+  Future<void> _exportHar() async {
+    // TODO: Export the current request draft as a HAR entry/file.
+  }
+
+  Future<void> _openCookies() async {
+    // TODO: Open request cookie management for the current request.
+  }
+
+  Future<void> _openTests() async {
+    // TODO: Open request test scripts for the current request.
+  }
+
+  Future<void> _openRequestSettings() async {
+    // TODO: Open request-specific settings for the current request.
+  }
+
+  Future<bool> _confirmCloseIfNeeded(RequestEditorState state) async {
+    if (_isClosing) {
+      return false;
+    }
+
+    if (!_hasUnsavedChanges(state)) {
+      _closeWithoutSaving();
+      return true;
+    }
+
+    final action = await showCupertinoModalPopup<_UnsavedChangesAction>(
+      context: context,
+      builder: (context) => CupertinoActionSheet(
+        title: const Text('Unsaved Changes'),
+        message: const Text('Do you want to save this request before closing?'),
+        actions: [
+          CupertinoActionSheetAction(
+            onPressed: () =>
+                Navigator.of(context).pop(_UnsavedChangesAction.save),
+            child: const Text('Save'),
+          ),
+          CupertinoActionSheetAction(
+            isDestructiveAction: true,
+            onPressed: () =>
+                Navigator.of(context).pop(_UnsavedChangesAction.discard),
+            child: const Text('Discard'),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () =>
+              Navigator.of(context).pop(_UnsavedChangesAction.cancel),
+          child: const Text('Cancel'),
+        ),
+      ),
+    );
+
+    if (!mounted) {
+      return false;
+    }
+
+    switch (action) {
+      case _UnsavedChangesAction.save:
+        _closeWithSave(state);
+        return true;
+      case _UnsavedChangesAction.discard:
+        await widget.onDraftDiscarded?.call();
+        if (mounted) {
+          _closeWithoutSaving();
+        }
+        return true;
+      case _UnsavedChangesAction.cancel:
+      case null:
+        return false;
+    }
+  }
+
+  void _closeWithSave(RequestEditorState state) {
+    if (_isClosing) {
+      return;
+    }
+
+    _isClosing = true;
+    Navigator.of(
+      context,
+    ).pop(RequestEditorResult(title: state.title, draft: state.draft));
+  }
+
+  void _closeWithoutSaving() {
+    if (_isClosing) {
+      return;
+    }
+
+    _isClosing = true;
+    Navigator.of(context).pop();
+  }
+
   /// Builds the request editor shell while binding the visible controls to cubit state.
   @override
   Widget build(BuildContext context) => RequestModalSheetCard(
@@ -97,80 +317,120 @@ class _RequestEditorSheetState extends State<_RequestEditorSheet> {
         final draft = state.draft;
         final responseBadge = _lastResponseBadge;
 
-        return Column(
-          children: [
-            const SizedBox(height: AppSpacing.small),
-            const _SheetHandle(),
-            _EditorHeader(title: state.title, method: draft.method.label),
-            const SizedBox(height: AppSpacing.small),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.large,
-                  0,
-                  AppSpacing.large,
-                  AppSpacing.large,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _RequestBasicsSection(draft: draft),
-                    const SizedBox(height: AppSpacing.large),
-                    _KeyValueSection(
-                      title: AppStrings.requestEditorQueryParams,
-                      sectionId: 'query',
-                      items: draft.queryParameters,
-                    ),
-                    const SizedBox(height: AppSpacing.large),
-                    _KeyValueSection(
-                      title: AppStrings.requestEditorHeaders,
-                      sectionId: 'headers',
-                      items: draft.headers,
-                    ),
-                    const SizedBox(height: AppSpacing.large),
-                    _BodySection(draft: draft),
-                    const SizedBox(height: AppSpacing.large),
-                    _AuthSection(auth: draft.auth),
-                    const SizedBox(height: AppSpacing.large),
-                    _OptionsSection(draft: draft),
-                    const SizedBox(height: AppSpacing.xxxLarge),
-                  ],
-                ),
+        return PopScope(
+          canPop: false,
+          onPopInvokedWithResult: (didPop, result) {
+            if (didPop || _isClosing) {
+              return;
+            }
+
+            unawaited(_confirmCloseIfNeeded(state));
+          },
+          child: Column(
+            children: [
+              const SizedBox(height: AppSpacing.small),
+              const _SheetHandle(),
+              _EditorHeader(
+                title: state.title,
+                method: draft.method.label,
+                onMethodPressed: () => _openMethodPicker(draft.method),
+                onMoreActionSelected: _handleMoreAction,
+                onClose: () => _confirmCloseIfNeeded(state),
               ),
-            ),
-            BlocBuilder<RequestSendBloc, RequestSendState>(
-              builder: (context, sendState) => Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.large,
-                  0,
-                  AppSpacing.large,
-                  AppSpacing.large,
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: responseBadge == null
-                            ? const SizedBox.shrink()
-                            : _ResponseBadge(data: responseBadge),
+              const SizedBox(height: AppSpacing.small),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.large,
+                    0,
+                    AppSpacing.large,
+                    AppSpacing.large,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _RequestBasicsSection(title: state.title, draft: draft),
+                      const SizedBox(height: AppSpacing.large),
+                      _KeyValueSection(
+                        title: AppStrings.requestEditorQueryParams,
+                        sectionId: 'query',
+                        items: draft.queryParameters,
                       ),
-                    ),
-                    const SizedBox(width: AppSpacing.medium),
-                    _SendButton(
-                      onPressed: _openResponseSheet,
-                      isLoading:
-                          sendState.status == RequestSendStatus.sending,
-                    ),
-                  ],
+                      const SizedBox(height: AppSpacing.large),
+                      _KeyValueSection(
+                        title: AppStrings.requestEditorHeaders,
+                        sectionId: 'headers',
+                        items: draft.headers,
+                      ),
+                      const SizedBox(height: AppSpacing.large),
+                      _BodySection(draft: draft),
+                      const SizedBox(height: AppSpacing.large),
+                      _AuthSection(auth: draft.auth),
+                      const SizedBox(height: AppSpacing.large),
+                      _OptionsSection(draft: draft),
+                      const SizedBox(height: AppSpacing.xxxLarge),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
+              BlocBuilder<RequestSendBloc, RequestSendState>(
+                builder: (context, sendState) => Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.large,
+                    0,
+                    AppSpacing.large,
+                    AppSpacing.large,
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: responseBadge == null
+                              ? const SizedBox.shrink()
+                              : _ResponseBadge(data: responseBadge),
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.medium),
+                      _SendButton(
+                        onPressed: _openResponseSheet,
+                        isLoading:
+                            sendState.status == RequestSendStatus.sending,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         );
       },
     ),
   );
+}
+
+enum _UnsavedChangesAction { save, discard, cancel }
+
+enum _RequestEditorMoreAction {
+  environment,
+  useGraphQl,
+  viewCurl,
+  exportHar,
+  cookies,
+  tests,
+  settings,
+}
+
+extension _RequestEditorMoreActionLabel on _RequestEditorMoreAction {
+  String get label => switch (this) {
+    _RequestEditorMoreAction.environment => 'Environment',
+    _RequestEditorMoreAction.useGraphQl => 'Use GraphQL',
+    _RequestEditorMoreAction.viewCurl => 'View curl',
+    _RequestEditorMoreAction.exportHar => 'Export as HAR',
+    _RequestEditorMoreAction.cookies => 'Cookies',
+    _RequestEditorMoreAction.tests => 'Tests',
+    _RequestEditorMoreAction.settings => 'Settings',
+  };
 }
 
 class _SheetHandle extends StatelessWidget {
@@ -189,10 +449,19 @@ class _SheetHandle extends StatelessWidget {
 }
 
 class _EditorHeader extends StatelessWidget {
-  const _EditorHeader({required this.title, required this.method});
+  const _EditorHeader({
+    required this.title,
+    required this.method,
+    required this.onMethodPressed,
+    required this.onMoreActionSelected,
+    required this.onClose,
+  });
 
   final String title;
   final String method;
+  final VoidCallback onMethodPressed;
+  final ValueChanged<_RequestEditorMoreAction> onMoreActionSelected;
+  final VoidCallback onClose;
 
   /// Builds the editor toolbar with the current request identity and close action.
   @override
@@ -210,9 +479,11 @@ class _EditorHeader extends StatelessWidget {
       child: Row(
         children: [
           IconButton(
-            key: const ValueKey<String>(AppWidgetKeys.requestsEditorCloseButton),
+            key: const ValueKey<String>(
+              AppWidgetKeys.requestsEditorCloseButton,
+            ),
             tooltip: AppStrings.requestEditorCloseTooltip,
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: onClose,
             style: IconButton.styleFrom(
               backgroundColor: colors.background,
               foregroundColor: colors.iconPrimary,
@@ -227,34 +498,88 @@ class _EditorHeader extends StatelessWidget {
               spacing: AppSpacing.small,
               runSpacing: AppSpacing.xSmall,
               children: [
-                _MethodBadge(method: method),
-                Text(title, style: theme.textTheme.titleLarge),
+                _MethodBadge(method: method, onPressed: onMethodPressed),
+                Text(title, style: theme.textTheme.titleMedium),
               ],
             ),
           ),
+          const SizedBox(width: AppSpacing.small),
+          _RequestEditorMoreButton(onSelected: onMoreActionSelected),
         ],
       ),
     );
   }
 }
 
+class _RequestEditorMoreButton extends StatelessWidget {
+  const _RequestEditorMoreButton({required this.onSelected});
+
+  final ValueChanged<_RequestEditorMoreAction> onSelected;
+
+  @override
+  Widget build(BuildContext context) =>
+      PopupMenuButton<_RequestEditorMoreAction>(
+        tooltip: 'More request actions',
+        icon: const Icon(CupertinoIcons.ellipsis),
+        color: context.appColors.surface,
+        elevation: 12,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        constraints: const BoxConstraints(minWidth: 196),
+        position: PopupMenuPosition.under,
+        onSelected: onSelected,
+        itemBuilder: (context) => _RequestEditorMoreAction.values
+            .map(
+              (action) => PopupMenuItem<_RequestEditorMoreAction>(
+                value: action,
+                child: _RequestEditorMoreMenuRow(label: action.label),
+              ),
+            )
+            .toList(growable: false),
+      );
+}
+
+class _RequestEditorMoreMenuRow extends StatelessWidget {
+  const _RequestEditorMoreMenuRow({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Text(
+    label,
+    style: TextStyle(
+      color: context.appColors.textPrimary,
+      fontWeight: FontWeight.w600,
+    ),
+  );
+}
+
 class _MethodBadge extends StatelessWidget {
-  const _MethodBadge({required this.method});
+  const _MethodBadge({required this.method, required this.onPressed});
 
   final String method;
+  final VoidCallback onPressed;
 
   /// Shows the request method using the shared request-method palette.
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(
-      horizontal: AppSpacing.medium,
-      vertical: AppSpacing.xSmall,
-    ),
-    decoration: BoxDecoration(
-      color: context.appColors.methodColor(method),
+  Widget build(BuildContext context) => Material(
+    color: context.appColors.methodColor(method),
+    borderRadius: const BorderRadius.all(Radius.circular(AppRadius.pill)),
+    child: InkWell(
+      onTap: onPressed,
       borderRadius: const BorderRadius.all(Radius.circular(AppRadius.pill)),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.medium,
+          vertical: AppSpacing.xSmall,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(method, style: Theme.of(context).textTheme.labelMedium),
+          ],
+        ),
+      ),
     ),
-    child: Text(method, style: Theme.of(context).textTheme.labelMedium),
   );
 }
 
@@ -269,44 +594,32 @@ class _EditorSectionTitle extends StatelessWidget {
     title,
     style: Theme.of(
       context,
-    ).textTheme.titleLarge?.copyWith(color: context.appColors.textSecondary),
+    ).textTheme.titleSmall?.copyWith(color: context.appColors.textSecondary),
   );
 }
 
 class _RequestBasicsSection extends StatelessWidget {
-  const _RequestBasicsSection({required this.draft});
+  const _RequestBasicsSection({required this.title, required this.draft});
 
+  final String title;
   final RequestDraft draft;
 
   /// Builds the method selector and URL editor for the current request draft.
   @override
   Widget build(BuildContext context) {
-    final editorCubit = context.read<RequestEditorCubit>();
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _EditorSectionTitle(title: AppStrings.requestEditorMethod),
+        const _EditorSectionTitle(title: 'Request Name'),
         const SizedBox(height: AppSpacing.small),
-        _EditorDropdownField<HttpMethod>(
-          fieldKey: AppWidgetKeys.requestsEditorMethodField,
-          label: AppStrings.requestEditorMethod,
-          value: draft.method,
-          items: HttpMethod.values
-              .map(
-                (method) => DropdownMenuItem<HttpMethod>(
-                  value: method,
-                  child: Text(method.wireName),
-                ),
-              )
-              .toList(growable: false),
-          onChanged: (method) {
-            if (method != null) {
-              editorCubit.updateMethod(method);
-            }
-          },
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorTitleField,
+          value: title,
+          label: 'Request Name',
+          hintText: 'Untitled Request',
+          onChanged: context.read<RequestEditorCubit>().updateTitle,
         ),
-        const SizedBox(height: AppSpacing.small),
+        const SizedBox(height: AppSpacing.large),
         _EditorTextField(
           fieldKey: AppWidgetKeys.requestsEditorUrlField,
           value: draft.url,
@@ -314,7 +627,7 @@ class _RequestBasicsSection extends StatelessWidget {
           hintText: 'https://api.example.com/users/{{user_id}}',
           keyboardType: TextInputType.url,
           textInputAction: TextInputAction.go,
-          onChanged: editorCubit.updateUrl,
+          onChanged: context.read<RequestEditorCubit>().updateUrl,
         ),
       ],
     );
@@ -341,19 +654,11 @@ class _KeyValueSection extends StatelessWidget {
     children: [
       _EditorSectionTitle(title: title),
       const SizedBox(height: AppSpacing.small),
-      for (var index = 0; index < items.length; index++) ...[
-        _KeyValueRow(
-          sectionId: sectionId,
-          index: index,
-          item: items[index],
-          onChanged: (item) => _replace(context, index, item),
-          onRemove: () => _remove(context, index),
-        ),
-        const SizedBox(height: AppSpacing.small),
-      ],
-      _AddRowCard(
+      _KeyValueCard(
         sectionId: sectionId,
-        onPressed: () => _appendEmptyItem(context),
+        items: items,
+        onItemChanged: (index, item) => _replace(context, index, item),
+        onAddPressed: () => _appendEmptyItem(context),
       ),
     ],
   );
@@ -368,12 +673,6 @@ class _KeyValueSection extends StatelessWidget {
   void _replace(BuildContext context, int index, KeyValueItem item) {
     final updatedItems = [...items];
     updatedItems[index] = item;
-    _commit(context, updatedItems);
-  }
-
-  /// Removes one row from the current key-value collection.
-  void _remove(BuildContext context, int index) {
-    final updatedItems = [...items]..removeAt(index);
     _commit(context, updatedItems);
   }
 
@@ -397,82 +696,287 @@ class _KeyValueSection extends StatelessWidget {
   }
 }
 
+class _KeyValueCard extends StatelessWidget {
+  const _KeyValueCard({
+    required this.sectionId,
+    required this.items,
+    required this.onItemChanged,
+    required this.onAddPressed,
+  });
+
+  final String sectionId;
+  final List<KeyValueItem> items;
+  final void Function(int index, KeyValueItem item) onItemChanged;
+  final VoidCallback onAddPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final rowCount = items.length + 1;
+
+    return DecoratedBox(
+      decoration: _buildCardDecoration(context),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.small),
+        child: Column(
+          children: [
+            for (var rowIndex = 0; rowIndex < rowCount; rowIndex++) ...[
+              if (rowIndex < items.length)
+                _KeyValueRow(
+                  sectionId: sectionId,
+                  index: rowIndex,
+                  item: items[rowIndex],
+                  onChanged: (item) => onItemChanged(rowIndex, item),
+                )
+              else
+                _AddKeyValueRow(sectionId: sectionId, onPressed: onAddPressed),
+              if (rowIndex < rowCount - 1) const _KeyValueDivider(),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _KeyValueRow extends StatelessWidget {
   const _KeyValueRow({
     required this.sectionId,
     required this.index,
     required this.item,
     required this.onChanged,
-    required this.onRemove,
   });
 
   final String sectionId;
   final int index;
   final KeyValueItem item;
   final ValueChanged<KeyValueItem> onChanged;
-  final VoidCallback onRemove;
 
-  /// Renders one editable key-value row with enable, edit, and remove controls.
   @override
-  Widget build(BuildContext context) => DecoratedBox(
-    decoration: _buildCardDecoration(context),
-    child: Padding(
-      padding: const EdgeInsets.all(AppSpacing.medium),
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(
+      horizontal: AppSpacing.large,
+      vertical: AppSpacing.small,
+    ),
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: AppSpacing.xxxLarge),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          SizedBox(
-            height: 56,
-            child: Center(
-              child: Checkbox.adaptive(
-                key: ValueKey<String>(
-                  AppWidgetKeys.requestsEditorKeyValueToggle(sectionId, index),
-                ),
-                value: item.isEnabled,
-                onChanged: (value) =>
-                    onChanged(item.copyWith(isEnabled: value ?? false)),
-              ),
+          _EnabledIndicator(
+            key: ValueKey<String>(
+              AppWidgetKeys.requestsEditorKeyValueToggle(sectionId, index),
             ),
+            isEnabled: item.isEnabled,
+            onPressed: () =>
+                onChanged(item.copyWith(isEnabled: !item.isEnabled)),
           ),
-          const SizedBox(width: AppSpacing.xSmall),
+          const SizedBox(width: AppSpacing.large),
           Expanded(
-            child: _EditorTextField(
+            child: _InlineKeyValueTextField(
               fieldKey: AppWidgetKeys.requestsEditorKeyValueKeyField(
                 sectionId,
                 index,
               ),
               value: item.key,
-              label: 'Key',
+              hintText: 'Key',
               onChanged: (value) => onChanged(item.copyWith(key: value)),
             ),
           ),
-          const SizedBox(width: AppSpacing.small),
+          const SizedBox(width: AppSpacing.large),
           Expanded(
-            child: _EditorTextField(
+            child: _InlineKeyValueTextField(
               fieldKey: AppWidgetKeys.requestsEditorKeyValueValueField(
                 sectionId,
                 index,
               ),
               value: item.value,
-              label: 'Value',
+              hintText: 'Value',
+              textAlign: TextAlign.end,
               onChanged: (value) => onChanged(item.copyWith(value: value)),
             ),
-          ),
-          const SizedBox(width: AppSpacing.xSmall),
-          IconButton(
-            key: ValueKey<String>(
-              AppWidgetKeys.requestsEditorKeyValueRemoveButton(
-                sectionId,
-                index,
-              ),
-            ),
-            tooltip: 'Remove row',
-            onPressed: onRemove,
-            icon: const Icon(CupertinoIcons.delete_simple),
           ),
         ],
       ),
     ),
+  );
+}
+
+class _EnabledIndicator extends StatelessWidget {
+  const _EnabledIndicator({
+    super.key,
+    required this.isEnabled,
+    required this.onPressed,
+  });
+
+  final bool isEnabled;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+
+    return GestureDetector(
+      onTap: onPressed,
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        width: AppSpacing.large,
+        height: AppSpacing.large,
+        decoration: BoxDecoration(
+          color: isEnabled ? colors.methodGet : colors.surface,
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: isEnabled ? colors.methodGet : colors.border,
+            width: 1.5,
+          ),
+        ),
+        child: isEnabled
+            ? Icon(
+                CupertinoIcons.check_mark,
+                color: colors.textOnPrimary,
+                size: AppSpacing.small,
+              )
+            : null,
+      ),
+    );
+  }
+}
+
+class _InlineKeyValueTextField extends StatefulWidget {
+  const _InlineKeyValueTextField({
+    required this.fieldKey,
+    required this.value,
+    required this.hintText,
+    required this.onChanged,
+    this.textAlign = TextAlign.start,
+  });
+
+  final String fieldKey;
+  final String value;
+  final String hintText;
+  final ValueChanged<String> onChanged;
+  final TextAlign textAlign;
+
+  @override
+  State<_InlineKeyValueTextField> createState() =>
+      _InlineKeyValueTextFieldState();
+}
+
+class _InlineKeyValueTextFieldState extends State<_InlineKeyValueTextField> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.value);
+  }
+
+  @override
+  void didUpdateWidget(covariant _InlineKeyValueTextField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (widget.value != _controller.text) {
+      _controller.value = TextEditingValue(
+        text: widget.value,
+        selection: TextSelection.collapsed(offset: widget.value.length),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final textStyle = Theme.of(context).textTheme.bodyLarge;
+
+    return TextFormField(
+      key: ValueKey<String>(widget.fieldKey),
+      controller: _controller,
+      onChanged: widget.onChanged,
+      textAlign: widget.textAlign,
+      style: textStyle,
+      decoration: InputDecoration(
+        isDense: true,
+        filled: true,
+        fillColor: Colors.white,
+        border: InputBorder.none,
+        enabledBorder: InputBorder.none,
+        focusedBorder: InputBorder.none,
+        contentPadding: EdgeInsets.zero,
+        hintText: widget.hintText,
+        hintStyle: textStyle?.copyWith(color: context.appColors.textSecondary),
+      ),
+    );
+  }
+}
+
+class _AddKeyValueRow extends StatelessWidget {
+  const _AddKeyValueRow({required this.sectionId, required this.onPressed});
+
+  final String sectionId;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+    final theme = Theme.of(context);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        key: ValueKey<String>(
+          AppWidgetKeys.requestsEditorSectionAddButton(sectionId),
+        ),
+        onTap: onPressed,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.large,
+            vertical: AppSpacing.medium,
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: AppSpacing.large,
+                height: AppSpacing.large,
+                decoration: BoxDecoration(
+                  color: colors.methodGet,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  CupertinoIcons.add,
+                  color: colors.textOnPrimary,
+                  size: AppSpacing.small,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.large),
+              Text(
+                AppStrings.requestEditorAdd,
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  color: colors.textSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _KeyValueDivider extends StatelessWidget {
+  const _KeyValueDivider();
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(
+      left: AppSpacing.xxxLarge + AppSpacing.xLarge,
+      right: AppSpacing.large,
+    ),
+    child: Divider(height: 1, thickness: 1, color: context.appColors.divider),
   );
 }
 
@@ -578,9 +1082,7 @@ class _BodySection extends StatelessWidget {
                 minLines: 8,
                 maxLines: 12,
                 onChanged: (value) => editorCubit.updateBody(
-                  body.copyWith(
-                    graphQl: body.graphQl.copyWith(query: value),
-                  ),
+                  body.copyWith(graphQl: body.graphQl.copyWith(query: value)),
                 ),
               ),
               const SizedBox(height: AppSpacing.small),
@@ -772,9 +1274,7 @@ class _AuthSection extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.small),
               _EditorTextField(
-                fieldKey: AppWidgetKeys.requestsEditorAuthField(
-                  'bearer_token',
-                ),
+                fieldKey: AppWidgetKeys.requestsEditorAuthField('bearer_token'),
                 value: auth.bearerToken.token,
                 label: 'Token',
                 onChanged: (value) => editorCubit.updateAuth(
@@ -858,10 +1358,7 @@ class _OptionsSection extends StatelessWidget {
 }
 
 class _SendButton extends StatelessWidget {
-  const _SendButton({
-    required this.onPressed,
-    this.isLoading = false,
-  });
+  const _SendButton({required this.onPressed, this.isLoading = false});
 
   final VoidCallback onPressed;
   final bool isLoading;
@@ -941,9 +1438,9 @@ class _ResponseBadge extends StatelessWidget {
           const SizedBox(width: AppSpacing.small),
           Text(
             data.displayLabel,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w500,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w500),
           ),
         ],
       ),
@@ -970,14 +1467,11 @@ class _EditorDropdownField<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) => DropdownButtonFormField<T>(
     key: ValueKey<String>(fieldKey),
-    value: value,
+    initialValue: value,
     items: items,
     onChanged: onChanged,
     borderRadius: const BorderRadius.all(Radius.circular(AppRadius.xxLarge)),
-    decoration: _buildFieldDecoration(
-      context,
-      label: label,
-    ),
+    decoration: _buildFieldDecoration(context, label: label),
     icon: const Icon(CupertinoIcons.chevron_down),
   );
 }
@@ -1070,67 +1564,12 @@ class _InfoCard extends StatelessWidget {
       padding: const EdgeInsets.all(AppSpacing.medium),
       child: Text(
         message,
-        style: Theme.of(
-          context,
-        ).textTheme.bodyMedium?.copyWith(color: context.appColors.textSecondary),
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+          color: context.appColors.textSecondary,
+        ),
       ),
     ),
   );
-}
-
-class _AddRowCard extends StatelessWidget {
-  const _AddRowCard({
-    required this.sectionId,
-    required this.onPressed,
-  });
-
-  final String sectionId;
-  final VoidCallback onPressed;
-
-  /// Shows the compact add-row affordance used by dynamic key-value sections.
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.appColors;
-    final theme = Theme.of(context);
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        key: ValueKey<String>(
-          AppWidgetKeys.requestsEditorSectionAddButton(sectionId),
-        ),
-        onTap: onPressed,
-        borderRadius: const BorderRadius.all(
-          Radius.circular(AppRadius.xxLarge),
-        ),
-        child: DecoratedBox(
-          decoration: _buildCardDecoration(context),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.large,
-              vertical: AppSpacing.medium,
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  CupertinoIcons.add_circled_solid,
-                  color: colors.navActive,
-                  size: AppSpacing.large,
-                ),
-                const SizedBox(width: AppSpacing.medium),
-                Text(
-                  AppStrings.requestEditorAdd,
-                  style: theme.textTheme.bodyLarge?.copyWith(
-                    color: colors.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 /// Returns the shared editor card decoration used by row groups and hint surfaces.

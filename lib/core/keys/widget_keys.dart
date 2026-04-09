@@ -5,6 +5,7 @@ abstract final class AppWidgetKeys {
   static const requestsListItemPrefix = 'requests_list_item';
   static const requestsEditorSheet = 'requests_editor_sheet';
   static const requestsEditorCloseButton = 'requests_editor_close_button';
+  static const requestsEditorTitleField = 'requests_editor_title_field';
   static const requestsEditorUrlField = 'requests_editor_url_field';
   static const requestsEditorMethodField = 'requests_editor_method_field';
   static const requestsEditorBodyModeField = 'requests_editor_body_mode_field';
