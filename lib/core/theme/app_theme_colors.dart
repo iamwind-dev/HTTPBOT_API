@@ -166,7 +166,7 @@ class AppThemeColors extends ThemeExtension<AppThemeColors> {
     'PUT' => methodPut,
     'DEL' => methodDelete,
     'PAT' => methodPatch,
-    'HEAD' => methodHead,
+    'HEAD' || 'TRACE' => methodHead,
     'OPT' || 'OPTI' => methodOptions,
     'CON' => methodConnect,
     _ => chipNeutral,

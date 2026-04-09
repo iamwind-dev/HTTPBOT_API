@@ -195,7 +195,7 @@ class _ResponseSummaryBadge extends StatelessWidget {
             const SizedBox(width: AppSpacing.small),
             Text(
               label,
-              style: theme.textTheme.titleMedium?.copyWith(
+              style: theme.textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -294,7 +294,7 @@ class _JsonLineRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.appColors;
-    final baseStyle = Theme.of(context).textTheme.bodyLarge?.copyWith(
+    final baseStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
       fontFamily: 'monospace',
       color: colors.textPrimary,
     );
@@ -311,7 +311,7 @@ class _JsonLineRow extends StatelessWidget {
               style: baseStyle?.copyWith(color: colors.textSecondary),
             ),
           ),
-          const SizedBox(width: AppSpacing.small),
+          const SizedBox(width: AppSpacing.xxxSmall),
           Expanded(
             child: Text.rich(
               TextSpan(
@@ -506,7 +506,7 @@ class _SheetSendButton extends StatelessWidget {
                 AppStrings.requestEditorSend,
                 style: Theme.of(
                   context,
-                ).textTheme.titleLarge?.copyWith(color: colors.textOnPrimary),
+                ).textTheme.titleSmall?.copyWith(color: colors.textOnPrimary),
               ),
             ],
           ),

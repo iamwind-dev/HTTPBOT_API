@@ -50,7 +50,7 @@ class SettingsRow extends StatelessWidget {
               Expanded(
                 child: Text(
                   item.title,
-                  style: theme.textTheme.titleMedium?.copyWith(
+                  style: theme.textTheme.titleSmall?.copyWith(
                     color: colors.textPrimary,
                   ),
                 ),

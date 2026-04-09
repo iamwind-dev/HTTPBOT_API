@@ -14,12 +14,17 @@ import '../features/request_builder/data/repositories/request_execution_reposito
 import '../features/request_builder/data/repositories/request_builder_repository_impl.dart';
 import '../features/request_builder/domain/repositories/request_execution_repository.dart';
 import '../features/request_builder/domain/repositories/request_builder_repository.dart';
+import '../features/request_builder/domain/usecases/clear_current_request_draft_session_use_case.dart';
 import '../features/request_builder/domain/usecases/execute_request_use_case.dart';
+import '../features/request_builder/domain/usecases/get_current_request_draft_session_use_case.dart';
 import '../features/request_builder/domain/usecases/get_request_draft_use_case.dart';
 import '../features/request_builder/domain/usecases/get_request_variable_store_use_case.dart';
+import '../features/request_builder/domain/usecases/get_saved_request_drafts_use_case.dart';
 import '../features/request_builder/domain/usecases/parse_response_use_case.dart';
 import '../features/request_builder/domain/usecases/apply_request_auth_use_case.dart';
+import '../features/request_builder/domain/usecases/save_current_request_draft_session_use_case.dart';
 import '../features/request_builder/domain/usecases/save_request_draft_use_case.dart';
+import '../features/request_builder/domain/usecases/save_saved_request_drafts_use_case.dart';
 import '../features/request_builder/domain/usecases/resolve_request_use_case.dart';
 import '../features/request_builder/presentation/bloc/request_send_bloc.dart';
 
@@ -49,6 +54,27 @@ void configureDependencies() {
     )
     ..registerLazySingleton(
       () => SaveRequestDraftUseCase(getIt<RequestBuilderRepository>()),
+    )
+    ..registerLazySingleton(
+      () => GetCurrentRequestDraftSessionUseCase(
+        getIt<RequestBuilderRepository>(),
+      ),
+    )
+    ..registerLazySingleton(
+      () => SaveCurrentRequestDraftSessionUseCase(
+        getIt<RequestBuilderRepository>(),
+      ),
+    )
+    ..registerLazySingleton(
+      () => ClearCurrentRequestDraftSessionUseCase(
+        getIt<RequestBuilderRepository>(),
+      ),
+    )
+    ..registerLazySingleton(
+      () => GetSavedRequestDraftsUseCase(getIt<RequestBuilderRepository>()),
+    )
+    ..registerLazySingleton(
+      () => SaveSavedRequestDraftsUseCase(getIt<RequestBuilderRepository>()),
     );
   getIt.registerLazySingleton(
     () => GetRequestVariableStoreUseCase(getIt<RequestBuilderRepository>()),

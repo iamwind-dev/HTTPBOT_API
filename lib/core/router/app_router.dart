@@ -9,8 +9,16 @@ import '../../core/widgets/app_section_placeholder.dart';
 import '../../core/widgets/app_shell_scaffold.dart';
 import '../../features/request_builder/domain/usecases/get_request_draft_use_case.dart';
 import '../../features/request_builder/domain/usecases/get_request_variable_store_use_case.dart';
+import '../../features/request_builder/domain/entities/request_draft.dart';
+import '../../features/request_builder/domain/entities/request_variable_store.dart';
+import '../../features/request_builder/domain/usecases/clear_current_request_draft_session_use_case.dart';
+import '../../features/request_builder/domain/usecases/get_current_request_draft_session_use_case.dart';
+import '../../features/request_builder/domain/usecases/get_saved_request_drafts_use_case.dart';
+import '../../features/request_builder/domain/usecases/save_current_request_draft_session_use_case.dart';
+import '../../features/request_builder/domain/usecases/save_saved_request_drafts_use_case.dart';
 import '../../features/request_builder/presentation/cubit/request_builder_cubit.dart';
 import '../../features/request_builder/presentation/pages/request_builder_page.dart';
+import '../../features/request_builder/presentation/widgets/request_editor_sheet.dart';
 import '../../features/request_builder/presentation/widgets/request_search_field.dart';
 import '../../features/request_builder/presentation/widgets/request_shell_action_button.dart';
 import '../../features/settings/presentation/cubit/settings_cubit.dart';
@@ -40,6 +48,16 @@ abstract final class AppRouter {
                   create: (_) => RequestBuilderCubit(
                     getRequestDraftUseCase,
                     getRequestVariableStoreUseCase,
+                    getCurrentRequestDraftSessionUseCase:
+                        getIt<GetCurrentRequestDraftSessionUseCase>(),
+                    saveCurrentRequestDraftSessionUseCase:
+                        getIt<SaveCurrentRequestDraftSessionUseCase>(),
+                    clearCurrentRequestDraftSessionUseCase:
+                        getIt<ClearCurrentRequestDraftSessionUseCase>(),
+                    getSavedRequestDraftsUseCase:
+                        getIt<GetSavedRequestDraftsUseCase>(),
+                    saveSavedRequestDraftsUseCase:
+                        getIt<SaveSavedRequestDraftsUseCase>(),
                   )..load(),
                   child: _RequestsShell(
                     onTabSelected: (tab) =>
@@ -160,9 +178,38 @@ class _RequestsShell extends StatelessWidget {
     trailing: const _RequestFavoriteButton(),
     bottomSlot: const RequestSearchField(),
     body: const RequestBuilderPage(),
-    floatingActionButton: const RequestShellActionButton(),
+    floatingActionButton: RequestShellActionButton(
+      onImportHar: () => context.read<RequestBuilderCubit>().importHar(),
+      onImportCurl: () => context.read<RequestBuilderCubit>().importCurl(),
+      onNewRequest: () => _openNewRequestEditor(context),
+    ),
     onTabSelected: onTabSelected,
   );
+
+  Future<void> _openNewRequestEditor(BuildContext context) async {
+    final requestBuilderCubit = context.read<RequestBuilderCubit>();
+    final state = requestBuilderCubit.state;
+    final result = await showRequestEditorSheet(
+      context,
+      title: AppStrings.requestsNewRequest,
+      initialDraft: const RequestDraft(),
+      variableStore: state.initialVariableStore ?? const RequestVariableStore(),
+      onDraftChanged: (result) => requestBuilderCubit.saveCurrentDraftSession(
+        title: result.title,
+        draft: result.draft,
+      ),
+      onDraftDiscarded: requestBuilderCubit.discardCurrentDraftSession,
+    );
+
+    if (!context.mounted || result == null) {
+      return;
+    }
+
+    await requestBuilderCubit.saveNewDraft(
+      title: result.title,
+      draft: result.draft,
+    );
+  }
 }
 
 class _WebSocketsShell extends StatelessWidget {
