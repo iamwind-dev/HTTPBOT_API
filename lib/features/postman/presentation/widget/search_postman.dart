@@ -6,8 +6,8 @@ import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_theme_context.dart';
 
-class SearchWebsocket extends StatelessWidget {
-  const SearchWebsocket({super.key});
+class PostmanSearch extends StatelessWidget {
+  const PostmanSearch({super.key});
 
   @override
   Widget build(BuildContext context) {

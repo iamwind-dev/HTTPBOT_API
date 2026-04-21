@@ -6,8 +6,8 @@ import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_theme_context.dart';
 
-class SearchWebsocket extends StatelessWidget {
-  const SearchWebsocket({super.key});
+class CollectionSearch extends StatelessWidget {
+  const CollectionSearch({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -15,7 +15,7 @@ class SearchWebsocket extends StatelessWidget {
 
     return TextField(
       key: const ValueKey<String>(AppWidgetKeys.requestsSearchField),
-    //  onChanged: context.read<RequestBuilderCubit>().updateSearchQuery,
+      //  onChanged: context.read<RequestBuilderCubit>().updateSearchQuery,
       textInputAction: TextInputAction.search,
       decoration: InputDecoration(
         isDense: true,
