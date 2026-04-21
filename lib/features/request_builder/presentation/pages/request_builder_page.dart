@@ -29,7 +29,7 @@ class RequestBuilderPage extends StatelessWidget {
     Widget content = ListView.separated(
       physics: const ClampingScrollPhysics(),
       padding: const EdgeInsets.only(
-        top: AppSpacing.xSmall,
+        top: AppSpacing.xxxSmall,
         bottom: AppSpacing.xxxLarge + AppSpacing.medium,
       ),
       itemCount: visibleEntries.length,

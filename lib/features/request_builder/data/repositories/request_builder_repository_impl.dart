@@ -319,41 +319,79 @@ class RequestBuilderRepositoryImpl implements RequestBuilderRepository {
 
   Map<String, Object?> _requestBodyDraftToJson(RequestBodyDraft body) => {
     'type': body.type.name,
-    'raw': body.raw,
-    'json': body.json,
-    'rawContentType': body.rawContentType,
+    'raw': {
+      'subtype': body.raw.subtype.name,
+      'content': body.raw.content,
+    },
     'formData': body.formData.map(_keyValueItemToJson).toList(growable: false),
     'urlEncoded': body.urlEncoded
         .map(_keyValueItemToJson)
         .toList(growable: false),
     'graphQl': {
       'query': body.graphQl.query,
-      'operationName': body.graphQl.operationName,
       'variables': body.graphQl.variables,
     },
   };
 
-  RequestBodyDraft _requestBodyDraftFromJson(Map<String, dynamic> json) =>
-      RequestBodyDraft(
-        type: _requestBodyTypeFromName(json['type'] as String?),
-        raw: json['raw'] as String? ?? '',
-        json: json['json'] as String? ?? '',
-        rawContentType: json['rawContentType'] as String? ?? 'text/plain',
-        formData: _listFromJson(
-          json['formData'],
-          (value) => _keyValueItemFromJson(value),
-        ),
-        urlEncoded: _listFromJson(
-          json['urlEncoded'],
-          (value) => _keyValueItemFromJson(value),
-        ),
-        graphQl: _graphQlBodyDraftFromJson(_mapFromJson(json['graphQl'])),
+  RequestBodyDraft _requestBodyDraftFromJson(Map<String, dynamic> json) {
+    final legacyTypeName = json['type'] as String?;
+    final bodyType = _requestBodyTypeFromName(legacyTypeName);
+
+    return RequestBodyDraft(
+      type: bodyType,
+      raw: _rawBodyDraftFromJson(
+        bodyType: bodyType,
+        rawJson: json['raw'],
+        legacyJsonBody: json['json'] as String? ?? '',
+        legacyRawContentType: json['rawContentType'] as String? ?? '',
+      ),
+      formData: _listFromJson(
+        json['formData'],
+        (value) => _keyValueItemFromJson(value),
+      ),
+      urlEncoded: _listFromJson(
+        json['urlEncoded'],
+        (value) => _keyValueItemFromJson(value),
+      ),
+      graphQl: _graphQlBodyDraftFromJson(_mapFromJson(json['graphQl'])),
+    );
+  }
+
+  /// Maps both the new raw-body structure and the legacy raw/json payload fields.
+  RawBodyDraft _rawBodyDraftFromJson({
+    required RequestBodyType bodyType,
+    required Object? rawJson,
+    required String legacyJsonBody,
+    required String legacyRawContentType,
+  }) {
+    if (rawJson is Map) {
+      final rawMap = Map<String, dynamic>.from(rawJson);
+      return RawBodyDraft(
+        subtype: _rawBodySubtypeFromName(rawMap['subtype'] as String?),
+        content: rawMap['content'] as String? ?? '',
       );
+    }
+
+    if (bodyType == RequestBodyType.raw) {
+      return RawBodyDraft(
+        subtype: _rawBodySubtypeFromLegacyContentType(legacyRawContentType),
+        content: rawJson as String? ?? '',
+      );
+    }
+
+    if (legacyJsonBody.trim().isNotEmpty) {
+      return RawBodyDraft(
+        subtype: RawBodySubtype.json,
+        content: legacyJsonBody,
+      );
+    }
+
+    return const RawBodyDraft();
+  }
 
   GraphQlBodyDraft _graphQlBodyDraftFromJson(Map<String, dynamic> json) =>
       GraphQlBodyDraft(
         query: json['query'] as String? ?? '',
-        operationName: json['operationName'] as String? ?? '',
         variables: json['variables'] as String? ?? '',
       );
 
@@ -595,7 +633,31 @@ class RequestBuilderRepositoryImpl implements RequestBuilderRepository {
       _enumValueOrFallback(HttpMethod.values, value, HttpMethod.get);
 
   RequestBodyType _requestBodyTypeFromName(String? value) =>
-      _enumValueOrFallback(RequestBodyType.values, value, RequestBodyType.none);
+      switch (value) {
+        'json' => RequestBodyType.raw,
+        _ => _enumValueOrFallback(
+          RequestBodyType.values,
+          value,
+          RequestBodyType.none,
+        ),
+      };
+
+  RawBodySubtype _rawBodySubtypeFromName(String? value) => _enumValueOrFallback(
+    RawBodySubtype.values,
+    value,
+    RawBodySubtype.text,
+  );
+
+  RawBodySubtype _rawBodySubtypeFromLegacyContentType(String value) {
+    final normalized = value.trim().toLowerCase();
+
+    return switch (normalized) {
+      'application/json' => RawBodySubtype.json,
+      'text/xml' || 'application/xml' => RawBodySubtype.xml,
+      'text/html' => RawBodySubtype.html,
+      _ => RawBodySubtype.text,
+    };
+  }
 
   AuthType _authTypeFromName(String? value) =>
       _enumValueOrFallback(AuthType.values, value, AuthType.none);

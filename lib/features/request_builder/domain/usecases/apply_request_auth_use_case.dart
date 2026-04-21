@@ -1,27 +1,56 @@
-import 'dart:convert';
-
 import '../entities/auth_applied_request.dart';
 import '../entities/request_auth_draft.dart';
 import '../entities/request_auth_issue.dart';
 import '../entities/request_draft.dart';
 import '../entities/request_key_value.dart';
 import '../entities/resolved_request.dart';
+import 'build_basic_authorization_header_use_case.dart';
+import 'build_bearer_authorization_header_use_case.dart';
 
 class ApplyRequestAuthUseCase {
-  const ApplyRequestAuthUseCase();
+  const ApplyRequestAuthUseCase({
+    BuildBasicAuthorizationHeaderUseCase
+    buildBasicAuthorizationHeaderUseCase =
+        const BuildBasicAuthorizationHeaderUseCase(),
+    BuildBearerAuthorizationHeaderUseCase
+    buildBearerAuthorizationHeaderUseCase =
+        const BuildBearerAuthorizationHeaderUseCase(),
+  }) : _buildBasicAuthorizationHeaderUseCase =
+           buildBasicAuthorizationHeaderUseCase,
+       _buildBearerAuthorizationHeaderUseCase =
+           buildBearerAuthorizationHeaderUseCase;
+
+  final BuildBasicAuthorizationHeaderUseCase
+  _buildBasicAuthorizationHeaderUseCase;
+  final BuildBearerAuthorizationHeaderUseCase
+  _buildBearerAuthorizationHeaderUseCase;
 
   /// Applies supported auth modes to request headers or query parameters after variable resolution.
   AuthAppliedRequest call({required ResolvedRequest resolvedRequest}) {
-    final applier = _RequestAuthApplier(resolvedRequest: resolvedRequest);
+    final applier = _RequestAuthApplier(
+      resolvedRequest: resolvedRequest,
+      buildBasicAuthorizationHeaderUseCase:
+          _buildBasicAuthorizationHeaderUseCase,
+      buildBearerAuthorizationHeaderUseCase:
+          _buildBearerAuthorizationHeaderUseCase,
+    );
 
     return applier.apply();
   }
 }
 
 class _RequestAuthApplier {
-  const _RequestAuthApplier({required this.resolvedRequest});
+  const _RequestAuthApplier({
+    required this.resolvedRequest,
+    required this.buildBasicAuthorizationHeaderUseCase,
+    required this.buildBearerAuthorizationHeaderUseCase,
+  });
 
   final ResolvedRequest resolvedRequest;
+  final BuildBasicAuthorizationHeaderUseCase
+  buildBasicAuthorizationHeaderUseCase;
+  final BuildBearerAuthorizationHeaderUseCase
+  buildBearerAuthorizationHeaderUseCase;
 
   /// Produces the request shape expected by the executor after auth mutations have been applied.
   AuthAppliedRequest apply() {
@@ -81,13 +110,11 @@ class _RequestAuthApplier {
       return _buildResult(request: resolvedRequest.request, authIssues: issues);
     }
 
-    final credentials = base64Encode(
-      utf8.encode('${basic.username}:${basic.password}'),
-    );
+    final credentials = buildBasicAuthorizationHeaderUseCase(basic);
     final nextHeaders = _upsertHeader(
       resolvedRequest.request.headers,
       key: 'Authorization',
-      value: 'Basic $credentials',
+      value: credentials!,
     );
 
     return _buildResult(
@@ -98,7 +125,7 @@ class _RequestAuthApplier {
     );
   }
 
-  /// Applies a Bearer-style Authorization header using the resolved token and optional prefix.
+  /// Applies the standard Bearer auth header when the resolved token is present.
   AuthAppliedRequest _applyBearerAuth() {
     final bearerToken = resolvedRequest.request.auth.bearerToken;
     final issues = _requireField(
@@ -113,14 +140,13 @@ class _RequestAuthApplier {
       return _buildResult(request: resolvedRequest.request, authIssues: issues);
     }
 
-    final prefix = bearerToken.prefix.trim();
-    final authorizationValue = prefix.isEmpty
-        ? bearerToken.token
-        : '$prefix ${bearerToken.token}';
+    final authorizationValue = buildBearerAuthorizationHeaderUseCase(
+      bearerToken,
+    );
     final nextHeaders = _upsertHeader(
       resolvedRequest.request.headers,
       key: 'Authorization',
-      value: authorizationValue,
+      value: authorizationValue!,
     );
 
     return _buildResult(

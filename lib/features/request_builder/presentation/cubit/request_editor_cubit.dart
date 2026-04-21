@@ -5,13 +5,57 @@ import '../../domain/entities/request_body_draft.dart';
 import '../../domain/entities/request_draft.dart';
 import '../../domain/entities/request_key_value.dart';
 import '../../domain/entities/requests_method.dart';
+import '../../domain/usecases/sync_request_auth_headers_use_case.dart';
+import '../../domain/usecases/sync_request_query_parameters_use_case.dart';
 import 'request_editor_state.dart';
 
 class RequestEditorCubit extends Cubit<RequestEditorState> {
   RequestEditorCubit({
     required String title,
     required RequestDraft initialDraft,
-  }) : super(RequestEditorState(title: title, draft: initialDraft));
+    SyncRequestQueryParametersUseCase queryParametersSyncUseCase =
+        const SyncRequestQueryParametersUseCase(),
+    SyncRequestAuthHeadersUseCase authHeadersSyncUseCase =
+        const SyncRequestAuthHeadersUseCase(),
+  }) : _queryParametersSyncUseCase = queryParametersSyncUseCase,
+       _authHeadersSyncUseCase = authHeadersSyncUseCase,
+       super(
+         _buildInitialState(
+           title: title,
+           initialDraft: initialDraft,
+           queryParametersSyncUseCase: queryParametersSyncUseCase,
+           authHeadersSyncUseCase: authHeadersSyncUseCase,
+         ),
+       );
+
+  final SyncRequestQueryParametersUseCase _queryParametersSyncUseCase;
+  final SyncRequestAuthHeadersUseCase _authHeadersSyncUseCase;
+
+  /// Builds the initial editor state after syncing derived headers from body and auth.
+  static RequestEditorState _buildInitialState({
+    required String title,
+    required RequestDraft initialDraft,
+    required SyncRequestQueryParametersUseCase queryParametersSyncUseCase,
+    required SyncRequestAuthHeadersUseCase authHeadersSyncUseCase,
+  }) {
+    final syncedDraft = initialDraft.copyWith(
+      headers: _syncDerivedHeadersStatic(
+        headers: initialDraft.headers,
+        body: initialDraft.body,
+        auth: initialDraft.auth,
+        authHeadersSyncUseCase: authHeadersSyncUseCase,
+      ),
+    );
+
+    return RequestEditorState(
+      title: title,
+      draft: syncedDraft,
+      queryParametersBaseUrl: queryParametersSyncUseCase.extractBaseUrl(
+        url: syncedDraft.url,
+        queryParameters: syncedDraft.queryParameters,
+      ),
+    );
+  }
 
   void updateTitle(String title) {
     emit(state.copyWith(title: title));
@@ -24,21 +68,52 @@ class RequestEditorCubit extends Cubit<RequestEditorState> {
 
   /// Updates the request URL shown in the main editor field.
   void updateUrl(String url) {
-    emit(state.copyWith(draft: state.draft.copyWith(url: url)));
+    final queryParametersBaseUrl = _queryParametersSyncUseCase.extractBaseUrl(
+      url: url,
+      queryParameters: state.draft.queryParameters,
+    );
+
+    emit(
+      state.copyWith(
+        draft: state.draft.copyWith(
+          url: _queryParametersSyncUseCase.rebuildUrl(
+            baseUrl: queryParametersBaseUrl,
+            queryParameters: state.draft.queryParameters,
+          ),
+        ),
+        queryParametersBaseUrl: queryParametersBaseUrl,
+      ),
+    );
   }
 
   /// Replaces the full query parameter collection after list edits.
   void updateQueryParameters(List<KeyValueItem> queryParameters) {
     emit(
       state.copyWith(
-        draft: state.draft.copyWith(queryParameters: queryParameters),
+        draft: state.draft.copyWith(
+          queryParameters: queryParameters,
+          url: _queryParametersSyncUseCase.rebuildUrl(
+            baseUrl: state.queryParametersBaseUrl,
+            queryParameters: queryParameters,
+          ),
+        ),
       ),
     );
   }
 
   /// Replaces the full header collection after list edits.
   void updateHeaders(List<KeyValueItem> headers) {
-    emit(state.copyWith(draft: state.draft.copyWith(headers: headers)));
+    emit(
+      state.copyWith(
+        draft: state.draft.copyWith(
+          headers: _syncDerivedHeaders(
+            headers: headers,
+            body: state.draft.body,
+            auth: state.draft.auth,
+          ),
+        ),
+      ),
+    );
   }
 
   /// Replaces the body draft after body mode or content changes.
@@ -47,15 +122,55 @@ class RequestEditorCubit extends Cubit<RequestEditorState> {
       state.copyWith(
         draft: state.draft.copyWith(
           body: body,
-          headers: _syncContentTypeHeader(state.draft.headers, body),
+          headers: _syncDerivedHeaders(
+            headers: state.draft.headers,
+            body: body,
+            auth: state.draft.auth,
+          ),
         ),
       ),
     );
   }
 
+  /// Switches the body editor to a new mode while preserving other mode-specific drafts.
+  void updateBodyType(RequestBodyType type) {
+    updateBody(state.draft.body.copyWith(type: type));
+  }
+
+  /// Replaces the URL-encoded item collection used by the active body editor.
+  void updateUrlEncodedBodyItems(List<KeyValueItem> items) {
+    updateBody(state.draft.body.copyWith(urlEncoded: items));
+  }
+
+  /// Replaces the multipart form-data item collection used by the active body editor.
+  void updateFormDataBodyItems(List<KeyValueItem> items) {
+    updateBody(state.draft.body.copyWith(formData: items));
+  }
+
+  /// Updates the raw body draft, including subtype and content, in one place.
+  void updateRawBody(RawBodyDraft raw) {
+    updateBody(state.draft.body.copyWith(raw: raw));
+  }
+
+  /// Updates the GraphQL body draft, including query and variables, in one place.
+  void updateGraphQlBody(GraphQlBodyDraft graphQl) {
+    updateBody(state.draft.body.copyWith(graphQl: graphQl));
+  }
+
   /// Replaces the auth draft after auth mode or credential changes.
   void updateAuth(RequestAuthDraft auth) {
-    emit(state.copyWith(draft: state.draft.copyWith(auth: auth)));
+    emit(
+      state.copyWith(
+        draft: state.draft.copyWith(
+          auth: auth,
+          headers: _syncDerivedHeaders(
+            headers: state.draft.headers,
+            body: state.draft.body,
+            auth: auth,
+          ),
+        ),
+      ),
+    );
   }
 
   /// Updates the timeout using whole seconds to match the current mobile form.
@@ -74,17 +189,43 @@ class RequestEditorCubit extends Cubit<RequestEditorState> {
     emit(state.copyWith(draft: state.draft.copyWith(verifySsl: verifySsl)));
   }
 
-  List<KeyValueItem> _syncContentTypeHeader(
+  /// Applies every header that is derived from body or auth editor state.
+  List<KeyValueItem> _syncDerivedHeaders({
+    required List<KeyValueItem> headers,
+    required RequestBodyDraft body,
+    required RequestAuthDraft auth,
+  }) {
+    return _syncDerivedHeadersStatic(
+      headers: headers,
+      body: body,
+      auth: auth,
+      authHeadersSyncUseCase: _authHeadersSyncUseCase,
+    );
+  }
+
+  /// Applies every header that is derived from body or auth editor state.
+  static List<KeyValueItem> _syncDerivedHeadersStatic({
+    required List<KeyValueItem> headers,
+    required RequestBodyDraft body,
+    required RequestAuthDraft auth,
+    required SyncRequestAuthHeadersUseCase authHeadersSyncUseCase,
+  }) {
+    final contentTypeSyncedHeaders = _syncContentTypeHeader(headers, body);
+
+    return authHeadersSyncUseCase(
+      headers: contentTypeSyncedHeaders,
+      auth: auth,
+    );
+  }
+
+  /// Synchronizes the editor-visible Content-Type header with the active body mode.
+  static List<KeyValueItem> _syncContentTypeHeader(
     List<KeyValueItem> headers,
     RequestBodyDraft body,
   ) {
     final contentType = _contentTypeForBody(body);
-    if (contentType == null) {
-      return headers;
-    }
-
-    var hasContentTypeHeader = false;
     final updatedHeaders = <KeyValueItem>[];
+    var hasContentTypeHeader = false;
 
     for (final header in headers) {
       if (!_isContentTypeHeader(header)) {
@@ -93,6 +234,11 @@ class RequestEditorCubit extends Cubit<RequestEditorState> {
       }
 
       if (hasContentTypeHeader) {
+        continue;
+      }
+
+      if (contentType == null) {
+        hasContentTypeHeader = true;
         continue;
       }
 
@@ -107,7 +253,7 @@ class RequestEditorCubit extends Cubit<RequestEditorState> {
       );
     }
 
-    if (!hasContentTypeHeader) {
+    if (!hasContentTypeHeader && contentType != null) {
       updatedHeaders.add(
         KeyValueItem(key: 'Content-Type', value: contentType, isEnabled: true),
       );
@@ -116,19 +262,16 @@ class RequestEditorCubit extends Cubit<RequestEditorState> {
     return updatedHeaders;
   }
 
-  String? _contentTypeForBody(RequestBodyDraft body) => switch (body.type) {
-    RequestBodyType.json => 'application/json',
+  /// Returns the Content-Type value implied by the currently selected body mode.
+  static String? _contentTypeForBody(RequestBodyDraft body) => switch (body.type) {
     RequestBodyType.xWwwFormUrlEncoded => 'application/x-www-form-urlencoded',
     RequestBodyType.formData => 'multipart/form-data',
     RequestBodyType.graphql => 'application/json',
-    RequestBodyType.raw =>
-      _isJsonContentType(body.rawContentType) ? 'application/json' : null,
+    RequestBodyType.raw => body.raw.syncedContentType,
     RequestBodyType.none => null,
   };
 
-  bool _isContentTypeHeader(KeyValueItem header) =>
+  /// Returns true when the header key matches Content-Type regardless of case.
+  static bool _isContentTypeHeader(KeyValueItem header) =>
       header.key.trim().toLowerCase() == 'content-type';
-
-  bool _isJsonContentType(String contentType) =>
-      contentType.trim().toLowerCase() == 'application/json';
 }

@@ -139,12 +139,10 @@ class RequestExecutionRepositoryImpl implements RequestExecutionRepository {
       case RequestBodyType.formData:
         return headers;
       case RequestBodyType.raw:
-        if (draft.body.rawContentType.trim().isNotEmpty) {
-          headers[Headers.contentTypeHeader] = draft.body.rawContentType;
+        final contentType = draft.body.raw.syncedContentType;
+        if (contentType != null) {
+          headers[Headers.contentTypeHeader] = contentType;
         }
-        return headers;
-      case RequestBodyType.json:
-        headers[Headers.contentTypeHeader] = Headers.jsonContentType;
         return headers;
       case RequestBodyType.xWwwFormUrlEncoded:
         headers[Headers.contentTypeHeader] = Headers.formUrlEncodedContentType;
@@ -165,9 +163,7 @@ class RequestExecutionRepositoryImpl implements RequestExecutionRepository {
       case RequestBodyType.none:
         return null;
       case RequestBodyType.raw:
-        return draft.body.raw;
-      case RequestBodyType.json:
-        return draft.body.json;
+        return draft.body.raw.content;
       case RequestBodyType.xWwwFormUrlEncoded:
         return draft.body.urlEncoded
             .where((item) => item.isEnabled && item.hasKey)
@@ -179,8 +175,6 @@ class RequestExecutionRepositoryImpl implements RequestExecutionRepository {
       case RequestBodyType.graphql:
         return jsonEncode({
           'query': draft.body.graphQl.query,
-          if (draft.body.graphQl.operationName.trim().isNotEmpty)
-            'operationName': draft.body.graphQl.operationName,
           if (draft.body.graphQl.variables.trim().isNotEmpty)
             'variables': _parseGraphQlVariables(draft.body.graphQl.variables),
         });

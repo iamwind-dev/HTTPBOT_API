@@ -181,19 +181,9 @@ class _ResolutionContext {
       case RequestBodyType.raw:
         return RequestBodyDraft(
           type: body.type,
-          raw: resolveText(body.raw, source: 'body.raw'),
-          json: body.json,
-          rawContentType: body.rawContentType,
-          formData: body.formData,
-          urlEncoded: body.urlEncoded,
-          graphQl: body.graphQl,
-        );
-      case RequestBodyType.json:
-        return RequestBodyDraft(
-          type: body.type,
-          raw: body.raw,
-          json: resolveText(body.json, source: 'body.json'),
-          rawContentType: body.rawContentType,
+          raw: body.raw.copyWith(
+            content: resolveText(body.raw.content, source: 'body.raw.content'),
+          ),
           formData: body.formData,
           urlEncoded: body.urlEncoded,
           graphQl: body.graphQl,
@@ -202,8 +192,6 @@ class _ResolutionContext {
         return RequestBodyDraft(
           type: body.type,
           raw: body.raw,
-          json: body.json,
-          rawContentType: body.rawContentType,
           formData: body.formData
               .map((item) => resolveKeyValueItem(item, source: 'body.formData'))
               .toList(growable: false),
@@ -214,8 +202,6 @@ class _ResolutionContext {
         return RequestBodyDraft(
           type: body.type,
           raw: body.raw,
-          json: body.json,
-          rawContentType: body.rawContentType,
           formData: body.formData,
           urlEncoded: body.urlEncoded
               .map(
@@ -228,18 +214,12 @@ class _ResolutionContext {
         return RequestBodyDraft(
           type: body.type,
           raw: body.raw,
-          json: body.json,
-          rawContentType: body.rawContentType,
           formData: body.formData,
           urlEncoded: body.urlEncoded,
           graphQl: GraphQlBodyDraft(
             query: resolveText(
               body.graphQl.query,
               source: 'body.graphQl.query',
-            ),
-            operationName: resolveText(
-              body.graphQl.operationName,
-              source: 'body.graphQl.operationName',
             ),
             variables: resolveText(
               body.graphQl.variables,

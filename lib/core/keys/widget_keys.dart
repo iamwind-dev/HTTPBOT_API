@@ -5,6 +5,7 @@ abstract final class AppWidgetKeys {
   static const requestsListItemPrefix = 'requests_list_item';
   static const requestsEditorSheet = 'requests_editor_sheet';
   static const requestsEditorCloseButton = 'requests_editor_close_button';
+  static const requestsEditorMoreButton = 'requests_editor_more_button';
   static const requestsEditorTitleField = 'requests_editor_title_field';
   static const requestsEditorUrlField = 'requests_editor_url_field';
   static const requestsEditorMethodField = 'requests_editor_method_field';
@@ -13,16 +14,16 @@ abstract final class AppWidgetKeys {
   static const requestsEditorTimeoutField = 'requests_editor_timeout_field';
   static const requestsEditorVerifySslSwitch =
       'requests_editor_verify_ssl_switch';
-  static const requestsEditorRawBodyField = 'requests_editor_raw_body_field';
-  static const requestsEditorJsonBodyField = 'requests_editor_json_body_field';
-  static const requestsEditorRawContentTypeField =
-      'requests_editor_raw_content_type_field';
+  static const requestsEditorRawBodyAction = 'requests_editor_raw_body_action';
+  static const requestsEditorRawBodyEditor = 'requests_editor_raw_body_editor';
+  static const requestsEditorRawSubtypeField =
+      'requests_editor_raw_subtype_field';
   static const requestsEditorGraphQlQueryField =
       'requests_editor_graphql_query_field';
-  static const requestsEditorGraphQlOperationNameField =
-      'requests_editor_graphql_operation_name_field';
   static const requestsEditorGraphQlVariablesField =
       'requests_editor_graphql_variables_field';
+  static const requestsEditorFormDataFileSelector =
+      'requests_editor_form_data_file_selector';
   static const requestsEditorSendButton = 'requests_editor_send_button';
   static const requestsEditorResponseBadge = 'requests_editor_response_badge';
   static const requestsResponseSheet = 'requests_response_sheet';
@@ -61,6 +62,14 @@ abstract final class AppWidgetKeys {
   /// Builds a stable key for a remove button inside a key-value editor row.
   static String requestsEditorKeyValueRemoveButton(String section, int index) =>
       'requests_editor_${section}_${index}_remove_button';
+
+  /// Builds a stable key for an inline option inside a key-value editor row.
+  static String requestsEditorKeyValueOptionField(String section, int index) =>
+      'requests_editor_${section}_${index}_option_field';
+
+  /// Builds a stable key for a row-level action inside a key-value editor row.
+  static String requestsEditorKeyValueActionButton(String section, int index) =>
+      'requests_editor_${section}_${index}_action_button';
 
   /// Builds a stable key for an auth credential field keyed by semantic name.
   static String requestsEditorAuthField(String fieldName) =>

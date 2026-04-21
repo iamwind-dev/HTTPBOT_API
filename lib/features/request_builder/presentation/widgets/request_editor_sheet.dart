@@ -184,8 +184,10 @@ class _RequestEditorSheetState extends State<_RequestEditorSheet> {
 
   Future<void> _handleMoreAction(_RequestEditorMoreAction action) async {
     switch (action) {
-      case _RequestEditorMoreAction.environment:
-        await _openEnvironmentPicker();
+      case _RequestEditorMoreAction.globalVariables:
+        await _openGlobalVariables();
+      case _RequestEditorMoreAction.manageEnvironment:
+        await _openManageEnvironment();
       case _RequestEditorMoreAction.useGraphQl:
         _useGraphQlMode();
       case _RequestEditorMoreAction.viewCurl:
@@ -201,15 +203,16 @@ class _RequestEditorSheetState extends State<_RequestEditorSheet> {
     }
   }
 
-  Future<void> _openEnvironmentPicker() async {
-    // TODO: Open the request environment picker and persist the selected environment.
+  Future<void> _openGlobalVariables() async {
+    // TODO: Open the global variables editor.
+  }
+
+  Future<void> _openManageEnvironment() async {
+    // TODO: Open the environment management screen.
   }
 
   void _useGraphQlMode() {
-    final editorCubit = context.read<RequestEditorCubit>();
-    final body = editorCubit.state.draft.body;
-
-    editorCubit.updateBody(body.copyWith(type: RequestBodyType.graphql));
+    context.read<RequestEditorCubit>().updateBodyType(RequestBodyType.graphql);
   }
 
   Future<void> _viewCurl() async {
@@ -242,29 +245,46 @@ class _RequestEditorSheetState extends State<_RequestEditorSheet> {
       return true;
     }
 
-    final action = await showCupertinoModalPopup<_UnsavedChangesAction>(
+    final action = await showDialog<_UnsavedChangesAction>(
       context: context,
-      builder: (context) => CupertinoActionSheet(
+      barrierColor: context.appColors.modalBarrier,
+      builder: (context) => AlertDialog(
+        backgroundColor: context.appColors.surface,
+        surfaceTintColor: Colors.transparent,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(AppRadius.xxLarge)),
+        ),
         title: const Text('Unsaved Changes'),
-        message: const Text('Do you want to save this request before closing?'),
+        content: const Text('Do you want to save this request before closing?'),
         actions: [
-          CupertinoActionSheetAction(
+          TextButton(
             onPressed: () =>
-                Navigator.of(context).pop(_UnsavedChangesAction.save),
-            child: const Text('Save'),
+                Navigator.of(context).pop(_UnsavedChangesAction.cancel),
+            child: Text(
+              'Cancel',
+              style: TextStyle(color: context.appColors.textSecondary),
+            ),
           ),
-          CupertinoActionSheetAction(
-            isDestructiveAction: true,
+          TextButton(
             onPressed: () =>
                 Navigator.of(context).pop(_UnsavedChangesAction.discard),
-            child: const Text('Discard'),
+            child: Text(
+              'Discard',
+              style: TextStyle(color: context.appColors.methodDelete),
+            ),
+          ),
+          TextButton(
+            onPressed: () =>
+                Navigator.of(context).pop(_UnsavedChangesAction.save),
+            child: Text(
+              'Save',
+              style: TextStyle(
+                color: context.appColors.primary,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
         ],
-        cancelButton: CupertinoActionSheetAction(
-          onPressed: () =>
-              Navigator.of(context).pop(_UnsavedChangesAction.cancel),
-          child: const Text('Cancel'),
-        ),
       ),
     );
 
@@ -412,7 +432,8 @@ class _RequestEditorSheetState extends State<_RequestEditorSheet> {
 enum _UnsavedChangesAction { save, discard, cancel }
 
 enum _RequestEditorMoreAction {
-  environment,
+  globalVariables,
+  manageEnvironment,
   useGraphQl,
   viewCurl,
   exportHar,
@@ -423,7 +444,8 @@ enum _RequestEditorMoreAction {
 
 extension _RequestEditorMoreActionLabel on _RequestEditorMoreAction {
   String get label => switch (this) {
-    _RequestEditorMoreAction.environment => 'Environment',
+    _RequestEditorMoreAction.globalVariables => 'Global Variables',
+    _RequestEditorMoreAction.manageEnvironment => 'Manage Environment',
     _RequestEditorMoreAction.useGraphQl => 'Use GraphQL',
     _RequestEditorMoreAction.viewCurl => 'View curl',
     _RequestEditorMoreAction.exportHar => 'Export as HAR',
@@ -517,25 +539,39 @@ class _RequestEditorMoreButton extends StatelessWidget {
   final ValueChanged<_RequestEditorMoreAction> onSelected;
 
   @override
-  Widget build(BuildContext context) =>
-      PopupMenuButton<_RequestEditorMoreAction>(
-        tooltip: 'More request actions',
-        icon: const Icon(CupertinoIcons.ellipsis),
-        color: context.appColors.surface,
-        elevation: 12,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        constraints: const BoxConstraints(minWidth: 196),
-        position: PopupMenuPosition.under,
-        onSelected: onSelected,
-        itemBuilder: (context) => _RequestEditorMoreAction.values
-            .map(
-              (action) => PopupMenuItem<_RequestEditorMoreAction>(
-                value: action,
-                child: _RequestEditorMoreMenuRow(label: action.label),
-              ),
-            )
-            .toList(growable: false),
-      );
+  Widget build(BuildContext context) => PopupMenuButton<_RequestEditorMoreAction>(
+    key: const ValueKey<String>(AppWidgetKeys.requestsEditorMoreButton),
+    tooltip: 'More request actions',
+    icon: const Icon(CupertinoIcons.ellipsis),
+    color: context.appColors.surface,
+    elevation: 12,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+    constraints: const BoxConstraints(minWidth: 196),
+    position: PopupMenuPosition.under,
+    onSelected: onSelected,
+    itemBuilder: (context) => [
+      PopupMenuItem<_RequestEditorMoreAction>(
+        value: _RequestEditorMoreAction.globalVariables,
+        child: const _RequestEditorMoreMenuRow(label: 'Global Variables'),
+      ),
+      PopupMenuItem<_RequestEditorMoreAction>(
+        value: _RequestEditorMoreAction.manageEnvironment,
+        child: const _RequestEditorMoreMenuRow(label: 'Manage Environment'),
+      ),
+      for (final action in [
+        _RequestEditorMoreAction.useGraphQl,
+        _RequestEditorMoreAction.viewCurl,
+        _RequestEditorMoreAction.exportHar,
+        _RequestEditorMoreAction.cookies,
+        _RequestEditorMoreAction.tests,
+        _RequestEditorMoreAction.settings,
+      ])
+        PopupMenuItem<_RequestEditorMoreAction>(
+          value: action,
+          child: _RequestEditorMoreMenuRow(label: action.label),
+        ),
+    ],
+  );
 }
 
 class _RequestEditorMoreMenuRow extends StatelessWidget {
@@ -606,32 +642,30 @@ class _RequestBasicsSection extends StatelessWidget {
 
   /// Builds the method selector and URL editor for the current request draft.
   @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const _EditorSectionTitle(title: 'Request Name'),
-        const SizedBox(height: AppSpacing.small),
-        _EditorTextField(
-          fieldKey: AppWidgetKeys.requestsEditorTitleField,
-          value: title,
-          label: 'Request Name',
-          hintText: 'Untitled Request',
-          onChanged: context.read<RequestEditorCubit>().updateTitle,
-        ),
-        const SizedBox(height: AppSpacing.large),
-        _EditorTextField(
-          fieldKey: AppWidgetKeys.requestsEditorUrlField,
-          value: draft.url,
-          label: 'URL',
-          hintText: 'https://api.example.com/users/{{user_id}}',
-          keyboardType: TextInputType.url,
-          textInputAction: TextInputAction.go,
-          onChanged: context.read<RequestEditorCubit>().updateUrl,
-        ),
-      ],
-    );
-  }
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const _EditorSectionTitle(title: 'Request Name'),
+      const SizedBox(height: AppSpacing.small),
+      _EditorTextField(
+        fieldKey: AppWidgetKeys.requestsEditorTitleField,
+        value: title,
+        label: 'Request Name',
+        hintText: 'Untitled Request',
+        onChanged: context.read<RequestEditorCubit>().updateTitle,
+      ),
+      const SizedBox(height: AppSpacing.large),
+      _EditorTextField(
+        fieldKey: AppWidgetKeys.requestsEditorUrlField,
+        value: draft.url,
+        label: 'URL',
+        hintText: 'https://api.example.com/users/{{user_id}}',
+        keyboardType: TextInputType.url,
+        textInputAction: TextInputAction.go,
+        onChanged: context.read<RequestEditorCubit>().updateUrl,
+      ),
+    ],
+  );
 }
 
 class _KeyValueSection extends StatelessWidget {
@@ -658,6 +692,8 @@ class _KeyValueSection extends StatelessWidget {
         sectionId: sectionId,
         items: items,
         onItemChanged: (index, item) => _replace(context, index, item),
+        onItemDeleted:
+            sectionId == 'query' ? (index) => _remove(context, index) : null,
         onAddPressed: () => _appendEmptyItem(context),
       ),
     ],
@@ -673,6 +709,12 @@ class _KeyValueSection extends StatelessWidget {
   void _replace(BuildContext context, int index, KeyValueItem item) {
     final updatedItems = [...items];
     updatedItems[index] = item;
+    _commit(context, updatedItems);
+  }
+
+  /// Removes one row after the user confirms a delete action from the inline editor.
+  void _remove(BuildContext context, int index) {
+    final updatedItems = [...items]..removeAt(index);
     _commit(context, updatedItems);
   }
 
@@ -701,12 +743,14 @@ class _KeyValueCard extends StatelessWidget {
     required this.sectionId,
     required this.items,
     required this.onItemChanged,
+    this.onItemDeleted,
     required this.onAddPressed,
   });
 
   final String sectionId;
   final List<KeyValueItem> items;
   final void Function(int index, KeyValueItem item) onItemChanged;
+  final ValueChanged<int>? onItemDeleted;
   final VoidCallback onAddPressed;
 
   @override
@@ -716,7 +760,7 @@ class _KeyValueCard extends StatelessWidget {
     return DecoratedBox(
       decoration: _buildCardDecoration(context),
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.small),
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.xSmall),
         child: Column(
           children: [
             for (var rowIndex = 0; rowIndex < rowCount; rowIndex++) ...[
@@ -726,6 +770,10 @@ class _KeyValueCard extends StatelessWidget {
                   index: rowIndex,
                   item: items[rowIndex],
                   onChanged: (item) => onItemChanged(rowIndex, item),
+                  onDelete:
+                      onItemDeleted == null
+                          ? null
+                          : () => onItemDeleted!(rowIndex),
                 )
               else
                 _AddKeyValueRow(sectionId: sectionId, onPressed: onAddPressed),
@@ -744,72 +792,120 @@ class _KeyValueRow extends StatelessWidget {
     required this.index,
     required this.item,
     required this.onChanged,
+    this.onDelete,
   });
 
   final String sectionId;
   final int index;
   final KeyValueItem item;
   final ValueChanged<KeyValueItem> onChanged;
+  final VoidCallback? onDelete;
+
+  /// Returns true when the row is the Authorization header generated by the auth editor.
+  bool get _isSystemGeneratedAuthHeader =>
+      sectionId == 'headers' && item.isSystemGeneratedAuthorizationHeader;
+
+  /// Returns the badge label for auth-generated Authorization rows.
+  String get _systemGeneratedAuthLabel =>
+      item.systemGeneratedAuthorizationLabel ?? 'Auth';
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(
-      horizontal: AppSpacing.large,
-      vertical: AppSpacing.small,
-    ),
-    child: ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: AppSpacing.xxxLarge),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          _EnabledIndicator(
-            key: ValueKey<String>(
-              AppWidgetKeys.requestsEditorKeyValueToggle(sectionId, index),
-            ),
-            isEnabled: item.isEnabled,
-            onPressed: () =>
-                onChanged(item.copyWith(isEnabled: !item.isEnabled)),
-          ),
-          const SizedBox(width: AppSpacing.large),
-          Expanded(
-            child: _InlineKeyValueTextField(
-              fieldKey: AppWidgetKeys.requestsEditorKeyValueKeyField(
-                sectionId,
-                index,
+  Widget build(BuildContext context) => GestureDetector(
+    onLongPress:
+        onDelete == null || _isSystemGeneratedAuthHeader
+            ? null
+            : () => _showDeleteActionSheet(context),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.large,
+        vertical: AppSpacing.small,
+      ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: AppSpacing.xxxLarge),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            _EnabledIndicator(
+              key: ValueKey<String>(
+                AppWidgetKeys.requestsEditorKeyValueToggle(sectionId, index),
               ),
-              value: item.key,
-              hintText: 'Key',
-              onChanged: (value) => onChanged(item.copyWith(key: value)),
+              isEnabled: item.isEnabled,
+              onPressed:
+                  _isSystemGeneratedAuthHeader
+                      ? null
+                      : () =>
+                          onChanged(item.copyWith(isEnabled: !item.isEnabled)),
             ),
-          ),
-          const SizedBox(width: AppSpacing.large),
-          Expanded(
-            child: _InlineKeyValueTextField(
-              fieldKey: AppWidgetKeys.requestsEditorKeyValueValueField(
-                sectionId,
-                index,
+            const SizedBox(width: AppSpacing.large),
+            Expanded(
+              child: _InlineKeyValueTextField(
+                fieldKey: AppWidgetKeys.requestsEditorKeyValueKeyField(
+                  sectionId,
+                  index,
+                ),
+                value: item.key,
+                hintText: 'Key',
+                readOnly: _isSystemGeneratedAuthHeader,
+                onChanged:
+                    (value) => onChanged(item.copyWith(key: value)),
               ),
-              value: item.value,
-              hintText: 'Value',
-              textAlign: TextAlign.end,
-              onChanged: (value) => onChanged(item.copyWith(value: value)),
             ),
-          ),
-        ],
+            const SizedBox(width: AppSpacing.large),
+            Expanded(
+              child: _InlineKeyValueTextField(
+                fieldKey: AppWidgetKeys.requestsEditorKeyValueValueField(
+                  sectionId,
+                  index,
+                ),
+                value: item.value,
+                hintText: 'Value',
+                textAlign: TextAlign.end,
+                readOnly: _isSystemGeneratedAuthHeader,
+                onChanged:
+                    (value) => onChanged(item.copyWith(value: value)),
+              ),
+            ),
+            if (_isSystemGeneratedAuthHeader) ...[
+              const SizedBox(width: AppSpacing.medium),
+              _SystemGeneratedBadge(label: _systemGeneratedAuthLabel),
+            ],
+          ],
+        ),
       ),
     ),
   );
+
+  /// Shows the minimal query-param row menu and keeps only the delete action.
+  Future<void> _showDeleteActionSheet(BuildContext context) async {
+    final shouldDelete = await showModalBottomSheet<bool>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: ListTile(
+          key: ValueKey<String>(
+            AppWidgetKeys.requestsEditorKeyValueRemoveButton(sectionId, index),
+          ),
+          leading: const Icon(CupertinoIcons.delete),
+          title: const Text('Delete'),
+          onTap: () => Navigator.of(context).pop(true),
+        ),
+      ),
+    );
+
+    if (shouldDelete == true) {
+      onDelete?.call();
+    }
+  }
 }
 
 class _EnabledIndicator extends StatelessWidget {
   const _EnabledIndicator({
     super.key,
     required this.isEnabled,
-    required this.onPressed,
+    this.onPressed,
   });
 
   final bool isEnabled;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -849,6 +945,7 @@ class _InlineKeyValueTextField extends StatefulWidget {
     required this.hintText,
     required this.onChanged,
     this.textAlign = TextAlign.start,
+    this.readOnly = false,
   });
 
   final String fieldKey;
@@ -856,6 +953,7 @@ class _InlineKeyValueTextField extends StatefulWidget {
   final String hintText;
   final ValueChanged<String> onChanged;
   final TextAlign textAlign;
+  final bool readOnly;
 
   @override
   State<_InlineKeyValueTextField> createState() =>
@@ -896,19 +994,53 @@ class _InlineKeyValueTextFieldState extends State<_InlineKeyValueTextField> {
     return TextFormField(
       key: ValueKey<String>(widget.fieldKey),
       controller: _controller,
-      onChanged: widget.onChanged,
+      onChanged: widget.readOnly ? null : widget.onChanged,
+      readOnly: widget.readOnly,
       textAlign: widget.textAlign,
       style: textStyle,
       decoration: InputDecoration(
         isDense: true,
         filled: true,
-        fillColor: Colors.white,
+        fillColor: context.appColors.surface,
         border: InputBorder.none,
         enabledBorder: InputBorder.none,
         focusedBorder: InputBorder.none,
         contentPadding: EdgeInsets.zero,
         hintText: widget.hintText,
         hintStyle: textStyle?.copyWith(color: context.appColors.textSecondary),
+      ),
+    );
+  }
+}
+
+class _SystemGeneratedBadge extends StatelessWidget {
+  const _SystemGeneratedBadge({required this.label});
+
+  final String label;
+
+  /// Marks a row as editor-generated without changing the surrounding card layout.
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.background,
+        borderRadius: const BorderRadius.all(Radius.circular(AppRadius.pill)),
+        border: Border.all(color: colors.border),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.small,
+          vertical: AppSpacing.xSmall,
+        ),
+        child: Text(
+          label,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: colors.textSecondary,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       ),
     );
   }
@@ -996,125 +1128,872 @@ class _BodySection extends StatelessWidget {
       children: [
         const _EditorSectionTitle(title: AppStrings.requestEditorBody),
         const SizedBox(height: AppSpacing.small),
-        _EditorDropdownField<RequestBodyType>(
-          fieldKey: AppWidgetKeys.requestsEditorBodyModeField,
-          label: AppStrings.requestEditorType,
-          value: body.type,
-          items: RequestBodyType.values
-              .map(
-                (type) => DropdownMenuItem<RequestBodyType>(
-                  value: type,
-                  child: Text(type.label),
-                ),
-              )
-              .toList(growable: false),
-          onChanged: (type) {
-            if (type != null) {
-              editorCubit.updateBody(body.copyWith(type: type));
-            }
-          },
-        ),
-        const SizedBox(height: AppSpacing.small),
         if (!draft.method.supportsRequestBody) ...[
-          const _InfoCard(
-            message:
-                'This HTTP method usually ignores bodies, but the editor still lets you configure one.',
-          ),
           const SizedBox(height: AppSpacing.small),
         ],
-        switch (body.type) {
-          RequestBodyType.none => const _InfoCard(
-            message: AppStrings.requestEditorBodyEmptyMessage,
-          ),
-          RequestBodyType.raw => Column(
-            children: [
-              _EditorTextField(
-                fieldKey: AppWidgetKeys.requestsEditorRawContentTypeField,
-                value: body.rawContentType,
-                label: 'Content Type',
-                hintText: 'text/plain',
-                onChanged: (value) => editorCubit.updateBody(
-                  body.copyWith(rawContentType: value),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.small),
-              _EditorTextField(
-                fieldKey: AppWidgetKeys.requestsEditorRawBodyField,
-                value: body.raw,
-                label: 'Raw Body',
-                minLines: 6,
-                maxLines: 10,
-                onChanged: (value) =>
-                    editorCubit.updateBody(body.copyWith(raw: value)),
-              ),
-            ],
-          ),
-          RequestBodyType.json => _EditorTextField(
-            fieldKey: AppWidgetKeys.requestsEditorJsonBodyField,
-            value: body.json,
-            label: 'JSON Body',
-            hintText: '{\n  "userId": "{{user_id}}"\n}',
-            minLines: 8,
-            maxLines: 12,
-            onChanged: (value) =>
-                editorCubit.updateBody(body.copyWith(json: value)),
-          ),
-          RequestBodyType.formData => _KeyValueSection(
-            title: 'Form Data',
-            sectionId: 'form_data',
-            items: body.formData,
-            onItemsChanged: (items) =>
-                editorCubit.updateBody(body.copyWith(formData: items)),
-          ),
-          RequestBodyType.xWwwFormUrlEncoded => _KeyValueSection(
-            title: 'x-www-form-urlencoded',
-            sectionId: 'url_encoded',
-            items: body.urlEncoded,
-            onItemsChanged: (items) =>
-                editorCubit.updateBody(body.copyWith(urlEncoded: items)),
-          ),
-          RequestBodyType.graphql => Column(
-            children: [
-              _EditorTextField(
-                fieldKey: AppWidgetKeys.requestsEditorGraphQlQueryField,
-                value: body.graphQl.query,
-                label: 'Query',
-                minLines: 8,
-                maxLines: 12,
-                onChanged: (value) => editorCubit.updateBody(
-                  body.copyWith(graphQl: body.graphQl.copyWith(query: value)),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.small),
-              _EditorTextField(
-                fieldKey: AppWidgetKeys.requestsEditorGraphQlOperationNameField,
-                value: body.graphQl.operationName,
-                label: 'Operation Name',
-                onChanged: (value) => editorCubit.updateBody(
-                  body.copyWith(
-                    graphQl: body.graphQl.copyWith(operationName: value),
-                  ),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.small),
-              _EditorTextField(
-                fieldKey: AppWidgetKeys.requestsEditorGraphQlVariablesField,
-                value: body.graphQl.variables,
-                label: 'Variables',
-                minLines: 6,
-                maxLines: 10,
-                onChanged: (value) => editorCubit.updateBody(
-                  body.copyWith(
-                    graphQl: body.graphQl.copyWith(variables: value),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        },
+        _BodyModeCard(
+          body: body,
+          onTypeChanged: editorCubit.updateBodyType,
+          onUrlEncodedChanged: editorCubit.updateUrlEncodedBodyItems,
+          onFormDataChanged: editorCubit.updateFormDataBodyItems,
+          onRawChanged: editorCubit.updateRawBody,
+          onGraphQlChanged: editorCubit.updateGraphQlBody,
+        ),
       ],
     );
   }
+}
+
+class _BodyModeCard extends StatelessWidget {
+  const _BodyModeCard({
+    required this.body,
+    required this.onTypeChanged,
+    required this.onUrlEncodedChanged,
+    required this.onFormDataChanged,
+    required this.onRawChanged,
+    required this.onGraphQlChanged,
+  });
+
+  final RequestBodyDraft body;
+  final ValueChanged<RequestBodyType> onTypeChanged;
+  final ValueChanged<List<KeyValueItem>> onUrlEncodedChanged;
+  final ValueChanged<List<KeyValueItem>> onFormDataChanged;
+  final ValueChanged<RawBodyDraft> onRawChanged;
+  final ValueChanged<GraphQlBodyDraft> onGraphQlChanged;
+
+  @override
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: _buildCardDecoration(context),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.small),
+      child: Column(
+        children: [
+          _BodyTypeRow(
+            value: body.type,
+            onChanged: onTypeChanged,
+          ),
+          ...switch (body.type) {
+            RequestBodyType.none => const <Widget>[],
+            RequestBodyType.xWwwFormUrlEncoded => <Widget>[
+              const _KeyValueDivider(),
+              _BodyUrlEncodedList(
+                items: body.urlEncoded,
+                onChanged: onUrlEncodedChanged,
+              ),
+            ],
+            RequestBodyType.formData => <Widget>[
+              const _KeyValueDivider(),
+              _BodyFormDataList(
+                items: body.formData,
+                onChanged: onFormDataChanged,
+              ),
+            ],
+            RequestBodyType.raw => <Widget>[
+              const _KeyValueDivider(),
+              _BodyActionRow(
+                fieldKey: AppWidgetKeys.requestsEditorRawBodyAction,
+                label: 'Update Body',
+                value: _rawBodySummary(body.raw),
+                onTap: () => _openRawBodyEditor(context),
+              ),
+            ],
+            RequestBodyType.graphql => <Widget>[
+              const _KeyValueDivider(),
+              _BodyActionRow(
+                fieldKey: AppWidgetKeys.requestsEditorGraphQlQueryField,
+                label: 'Query',
+                value: _graphQlSummary(body.graphQl.query),
+                onTap: () => _openGraphQlEditor(
+                  context,
+                  label: 'Query',
+                  currentValue: body.graphQl.query,
+                  onSaved: (value) => onGraphQlChanged(
+                    body.graphQl.copyWith(query: value),
+                  ),
+                ),
+              ),
+              const _KeyValueDivider(),
+              _BodyActionRow(
+                fieldKey: AppWidgetKeys.requestsEditorGraphQlVariablesField,
+                label: 'Variables',
+                value: _graphQlSummary(body.graphQl.variables),
+                onTap: () => _openGraphQlEditor(
+                  context,
+                  label: 'Variables',
+                  currentValue: body.graphQl.variables,
+                  onSaved: (value) => onGraphQlChanged(
+                    body.graphQl.copyWith(variables: value),
+                  ),
+                ),
+              ),
+            ],
+          },
+        ],
+      ),
+    ),
+  );
+
+  /// Opens the raw editor sheet so content and subtype can change outside the compact card.
+  Future<void> _openRawBodyEditor(BuildContext context) async {
+    final result = await showRequestModalSheet<_RawBodyEditorResult?>(
+      context,
+      builder: (context) => _RawBodyEditorSheet(initialValue: body.raw),
+    );
+
+    if (result == null) {
+      return;
+    }
+
+    onRawChanged(
+      body.raw.copyWith(
+        subtype: result.subtype,
+        content: result.content,
+      ),
+    );
+  }
+
+  /// Opens the GraphQL text editor sheet for either the query or variables field.
+  Future<void> _openGraphQlEditor(
+    BuildContext context, {
+    required String label,
+    required String currentValue,
+    required ValueChanged<String> onSaved,
+  }) async {
+    final result = await showRequestModalSheet<String?>(
+      context,
+      builder: (context) => _BodyTextEditorSheet(
+        title: label,
+        fieldKey:
+            label == 'Query'
+                ? AppWidgetKeys.requestsEditorGraphQlQueryField
+                : AppWidgetKeys.requestsEditorGraphQlVariablesField,
+        initialValue: currentValue,
+        hintText: label == 'Query' ? 'query GetUsers { users { id } }' : '{\n  "id": "1"\n}',
+      ),
+    );
+
+    if (result == null) {
+      return;
+    }
+
+    onSaved(result);
+  }
+
+  String _rawBodySummary(RawBodyDraft raw) {
+    final trimmed = raw.content.trim();
+    if (trimmed.isEmpty) {
+      return '${raw.subtype.label} • Empty';
+    }
+
+    return '${raw.subtype.label} • ${_truncateSingleLine(trimmed)}';
+  }
+
+  String _graphQlSummary(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) {
+      return 'Empty';
+    }
+
+    return _truncateSingleLine(trimmed);
+  }
+
+  String _truncateSingleLine(String value) {
+    final compact = value.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (compact.length <= 42) {
+      return compact;
+    }
+
+    return '${compact.substring(0, 39)}...';
+  }
+}
+
+class _BodyTypeRow extends StatelessWidget {
+  const _BodyTypeRow({
+    required this.value,
+    required this.onChanged,
+  });
+
+  final RequestBodyType value;
+  final ValueChanged<RequestBodyType> onChanged;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(
+      horizontal: AppSpacing.large,
+      vertical: AppSpacing.medium,
+    ),
+    child: Row(
+      children: [
+        Expanded(
+          child: Text(
+            AppStrings.requestEditorType,
+            style: Theme.of(context).textTheme.bodyLarge,
+          ),
+        ),
+        DropdownButtonHideUnderline(
+          child: DropdownButton<RequestBodyType>(
+            key: const ValueKey<String>(AppWidgetKeys.requestsEditorBodyModeField),
+            value: value,
+            borderRadius: const BorderRadius.all(
+              Radius.circular(AppRadius.xxLarge),
+            ),
+            items: RequestBodyType.values
+                .map(
+                  (type) => DropdownMenuItem<RequestBodyType>(
+                    value: type,
+                    child: Text(type.label),
+                  ),
+                )
+                .toList(growable: false),
+            onChanged: (type) {
+              if (type != null) {
+                onChanged(type);
+              }
+            },
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _BodyActionRow extends StatelessWidget {
+  const _BodyActionRow({
+    required this.fieldKey,
+    required this.label,
+    required this.value,
+    required this.onTap,
+  });
+
+  final String fieldKey;
+  final String label;
+  final String value;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+    final theme = Theme.of(context);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        key: ValueKey<String>(fieldKey),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.large,
+            vertical: AppSpacing.medium,
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(label, style: theme.textTheme.bodyLarge),
+              ),
+              const SizedBox(width: AppSpacing.medium),
+              Flexible(
+                child: Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.end,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: colors.textSecondary,
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.small),
+              Icon(
+                CupertinoIcons.chevron_forward,
+                size: AppSpacing.medium,
+                color: colors.textSecondary,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BodyUrlEncodedList extends StatelessWidget {
+  const _BodyUrlEncodedList({
+    required this.items,
+    required this.onChanged,
+  });
+
+  final List<KeyValueItem> items;
+  final ValueChanged<List<KeyValueItem>> onChanged;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    children: [
+      for (var index = 0; index < items.length; index++) ...[
+        _BodyUrlEncodedRow(
+          index: index,
+          item: items[index],
+          onChanged: (item) => _replace(index, item),
+          onDelete: () => _remove(index),
+        ),
+        const _KeyValueDivider(),
+      ],
+      _AddKeyValueRow(
+        sectionId: 'body_url_encoded',
+        onPressed: () => onChanged([
+          ...items,
+          const KeyValueItem(key: '', value: ''),
+        ]),
+      ),
+    ],
+  );
+
+  void _replace(int index, KeyValueItem item) {
+    final updatedItems = [...items];
+    updatedItems[index] = item;
+    onChanged(updatedItems);
+  }
+
+  void _remove(int index) {
+    final updatedItems = [...items]..removeAt(index);
+    onChanged(updatedItems);
+  }
+}
+
+class _BodyUrlEncodedRow extends StatelessWidget {
+  const _BodyUrlEncodedRow({
+    required this.index,
+    required this.item,
+    required this.onChanged,
+    required this.onDelete,
+  });
+
+  final int index;
+  final KeyValueItem item;
+  final ValueChanged<KeyValueItem> onChanged;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onLongPress: () => _showDeleteActionSheet(context),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.large,
+        vertical: AppSpacing.small,
+      ),
+      child: Row(
+        children: [
+          _EnabledIndicator(
+            key: ValueKey<String>(
+              AppWidgetKeys.requestsEditorKeyValueToggle(
+                'body_url_encoded',
+                index,
+              ),
+            ),
+            isEnabled: item.isEnabled,
+            onPressed: () =>
+                onChanged(item.copyWith(isEnabled: !item.isEnabled)),
+          ),
+          const SizedBox(width: AppSpacing.large),
+          Expanded(
+            child: _InlineKeyValueTextField(
+              fieldKey: AppWidgetKeys.requestsEditorKeyValueKeyField(
+                'body_url_encoded',
+                index,
+              ),
+              value: item.key,
+              hintText: 'Key',
+              onChanged: (value) => onChanged(item.copyWith(key: value)),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.large),
+          Expanded(
+            child: _InlineKeyValueTextField(
+              fieldKey: AppWidgetKeys.requestsEditorKeyValueValueField(
+                'body_url_encoded',
+                index,
+              ),
+              value: item.value,
+              hintText: 'Value',
+              textAlign: TextAlign.end,
+              onChanged: (value) => onChanged(item.copyWith(value: value)),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+
+  /// Shows the minimal row menu used for delete-only long-press actions.
+  Future<void> _showDeleteActionSheet(BuildContext context) async {
+    final shouldDelete = await showModalBottomSheet<bool>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: ListTile(
+          key: ValueKey<String>(
+            AppWidgetKeys.requestsEditorKeyValueRemoveButton(
+              'body_url_encoded',
+              index,
+            ),
+          ),
+          leading: const Icon(CupertinoIcons.delete),
+          title: const Text('Delete'),
+          onTap: () => Navigator.of(context).pop(true),
+        ),
+      ),
+    );
+
+    if (shouldDelete == true) {
+      onDelete();
+    }
+  }
+}
+
+class _BodyFormDataList extends StatelessWidget {
+  const _BodyFormDataList({
+    required this.items,
+    required this.onChanged,
+  });
+
+  final List<KeyValueItem> items;
+  final ValueChanged<List<KeyValueItem>> onChanged;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    children: [
+      for (var index = 0; index < items.length; index++) ...[
+        _BodyFormDataRow(
+          index: index,
+          item: items[index],
+          onChanged: (item) => _replace(index, item),
+          onDelete: () => _remove(index),
+        ),
+        const _KeyValueDivider(),
+      ],
+      _AddKeyValueRow(
+        sectionId: 'body_form_data',
+        onPressed: () => onChanged([
+          ...items,
+          const KeyValueItem(key: '', value: ''),
+        ]),
+      ),
+    ],
+  );
+
+  void _replace(int index, KeyValueItem item) {
+    final updatedItems = [...items];
+    updatedItems[index] = item;
+    onChanged(updatedItems);
+  }
+
+  void _remove(int index) {
+    final updatedItems = [...items]..removeAt(index);
+    onChanged(updatedItems);
+  }
+}
+
+class _BodyFormDataRow extends StatelessWidget {
+  const _BodyFormDataRow({
+    required this.index,
+    required this.item,
+    required this.onChanged,
+    required this.onDelete,
+  });
+
+  final int index;
+  final KeyValueItem item;
+  final ValueChanged<KeyValueItem> onChanged;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onLongPress: () => _showDeleteActionSheet(context),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.large,
+        vertical: AppSpacing.small,
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              _EnabledIndicator(
+                key: ValueKey<String>(
+                  AppWidgetKeys.requestsEditorKeyValueToggle(
+                    'body_form_data',
+                    index,
+                  ),
+                ),
+                isEnabled: item.isEnabled,
+                onPressed: () =>
+                    onChanged(item.copyWith(isEnabled: !item.isEnabled)),
+              ),
+              const SizedBox(width: AppSpacing.large),
+              DropdownButtonHideUnderline(
+                child: DropdownButton<KeyValueItemType>(
+                  key: ValueKey<String>(
+                    AppWidgetKeys.requestsEditorKeyValueOptionField(
+                      'body_form_data',
+                      index,
+                    ),
+                  ),
+                  value: item.type,
+                  borderRadius: const BorderRadius.all(
+                    Radius.circular(AppRadius.xxLarge),
+                  ),
+                  items: KeyValueItemType.values
+                      .map(
+                        (type) => DropdownMenuItem<KeyValueItemType>(
+                          value: type,
+                          child: Text(type == KeyValueItemType.text ? 'Text' : 'File'),
+                        ),
+                      )
+                      .toList(growable: false),
+                  onChanged: (type) {
+                    if (type == null) {
+                      return;
+                    }
+
+                    onChanged(item.copyWith(type: type, value: ''));
+                  },
+                ),
+              ),
+              const SizedBox(width: AppSpacing.large),
+              Expanded(
+                child: _InlineKeyValueTextField(
+                  fieldKey: AppWidgetKeys.requestsEditorKeyValueKeyField(
+                    'body_form_data',
+                    index,
+                  ),
+                  value: item.key,
+                  hintText: 'Key',
+                  onChanged: (value) => onChanged(item.copyWith(key: value)),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.small),
+          if (item.type == KeyValueItemType.text)
+            _InlineKeyValueTextField(
+              fieldKey: AppWidgetKeys.requestsEditorKeyValueValueField(
+                'body_form_data',
+                index,
+              ),
+              value: item.value,
+              hintText: 'Value',
+              onChanged: (value) => onChanged(item.copyWith(value: value)),
+            )
+          else
+            _BodyFileSelectorRow(
+              index: index,
+              value: item.value,
+              onSelected: (value) => onChanged(item.copyWith(value: value)),
+            ),
+        ],
+      ),
+    ),
+  );
+
+  /// Shows the minimal row menu used for delete-only long-press actions.
+  Future<void> _showDeleteActionSheet(BuildContext context) async {
+    final shouldDelete = await showModalBottomSheet<bool>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: ListTile(
+          key: ValueKey<String>(
+            AppWidgetKeys.requestsEditorKeyValueRemoveButton(
+              'body_form_data',
+              index,
+            ),
+          ),
+          leading: const Icon(CupertinoIcons.delete),
+          title: const Text('Delete'),
+          onTap: () => Navigator.of(context).pop(true),
+        ),
+      ),
+    );
+
+    if (shouldDelete == true) {
+      onDelete();
+    }
+  }
+}
+
+class _BodyFileSelectorRow extends StatelessWidget {
+  const _BodyFileSelectorRow({
+    required this.index,
+    required this.value,
+    required this.onSelected,
+  });
+
+  final int index;
+  final String value;
+  final ValueChanged<String> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = context.appColors;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        key: ValueKey<String>(
+          AppWidgetKeys.requestsEditorKeyValueActionButton(
+            'body_form_data',
+            index,
+          ),
+        ),
+        onTap: () => _selectFilePath(context),
+        borderRadius: const BorderRadius.all(Radius.circular(AppRadius.xxLarge)),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.small,
+            vertical: AppSpacing.small,
+          ),
+          child: Row(
+            children: [
+              const Icon(CupertinoIcons.doc, size: AppSpacing.large),
+              const SizedBox(width: AppSpacing.small),
+              Expanded(
+                child: Text(
+                  value.trim().isEmpty ? 'Select File' : value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: value.trim().isEmpty
+                        ? colors.textSecondary
+                        : colors.textPrimary,
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.small),
+              Icon(
+                CupertinoIcons.chevron_forward,
+                size: AppSpacing.medium,
+                color: colors.textSecondary,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Opens a lightweight path-entry sheet so file body items can store a selected local file path.
+  Future<void> _selectFilePath(BuildContext context) async {
+    final result = await showRequestModalSheet<String?>(
+      context,
+      builder: (context) => _BodyTextEditorSheet(
+        title: 'Select File',
+        fieldKey: '${AppWidgetKeys.requestsEditorFormDataFileSelector}_$index',
+        initialValue: value,
+        hintText: 'C:\\\\path\\\\to\\\\file.json',
+        expands: false,
+        minLines: 1,
+        maxLines: 3,
+      ),
+    );
+
+    if (result != null) {
+      onSelected(result);
+    }
+  }
+}
+
+class _RawBodyEditorResult {
+  const _RawBodyEditorResult({
+    required this.subtype,
+    required this.content,
+  });
+
+  final RawBodySubtype subtype;
+  final String content;
+}
+
+class _RawBodyEditorSheet extends StatefulWidget {
+  const _RawBodyEditorSheet({required this.initialValue});
+
+  final RawBodyDraft initialValue;
+
+  @override
+  State<_RawBodyEditorSheet> createState() => _RawBodyEditorSheetState();
+}
+
+class _RawBodyEditorSheetState extends State<_RawBodyEditorSheet> {
+  late final TextEditingController _controller;
+  late RawBodySubtype _selectedSubtype;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialValue.content);
+    _selectedSubtype = widget.initialValue.subtype;
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => RequestModalSheetCard(
+    child: SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.large),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text('Raw Body', style: Theme.of(context).textTheme.titleLarge),
+                const Spacer(),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(
+                    _RawBodyEditorResult(
+                      subtype: _selectedSubtype,
+                      content: _controller.text,
+                    ),
+                  ),
+                  child: const Text('Save'),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.medium),
+            DropdownButtonFormField<RawBodySubtype>(
+              key: const ValueKey<String>(
+                AppWidgetKeys.requestsEditorRawSubtypeField,
+              ),
+              initialValue: _selectedSubtype,
+              decoration: _buildFieldDecoration(context, label: 'Subtype'),
+              items: RawBodySubtype.values
+                  .map(
+                    (subtype) => DropdownMenuItem<RawBodySubtype>(
+                      value: subtype,
+                      child: Text(subtype.label),
+                    ),
+                  )
+                  .toList(growable: false),
+              onChanged: (subtype) {
+                if (subtype != null) {
+                  setState(() {
+                    _selectedSubtype = subtype;
+                  });
+                }
+              },
+            ),
+            const SizedBox(height: AppSpacing.medium),
+            Expanded(
+              child: TextFormField(
+                key: const ValueKey<String>(
+                  AppWidgetKeys.requestsEditorRawBodyEditor,
+                ),
+                controller: _controller,
+                expands: true,
+                minLines: null,
+                maxLines: null,
+                textAlignVertical: TextAlignVertical.top,
+                decoration: _buildFieldDecoration(
+                  context,
+                  label: 'Body',
+                  hintText: _selectedSubtype == RawBodySubtype.json
+                      ? '{\n  "userId": "{{user_id}}"\n}'
+                      : 'Enter request body',
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _BodyTextEditorSheet extends StatefulWidget {
+  const _BodyTextEditorSheet({
+    required this.title,
+    required this.fieldKey,
+    required this.initialValue,
+    this.hintText,
+    this.minLines,
+    this.maxLines,
+    this.expands = true,
+  });
+
+  final String title;
+  final String fieldKey;
+  final String initialValue;
+  final String? hintText;
+  final int? minLines;
+  final int? maxLines;
+  final bool expands;
+
+  @override
+  State<_BodyTextEditorSheet> createState() => _BodyTextEditorSheetState();
+}
+
+class _BodyTextEditorSheetState extends State<_BodyTextEditorSheet> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialValue);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => RequestModalSheetCard(
+    child: SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.large),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text(widget.title, style: Theme.of(context).textTheme.titleLarge),
+                const Spacer(),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(_controller.text),
+                  child: const Text('Save'),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.medium),
+            Expanded(
+              child: TextFormField(
+                key: ValueKey<String>(widget.fieldKey),
+                controller: _controller,
+                minLines: widget.minLines,
+                maxLines: widget.maxLines,
+                expands: widget.expands,
+                textAlignVertical: TextAlignVertical.top,
+                decoration: _buildFieldDecoration(
+                  context,
+                  label: widget.title,
+                  hintText: widget.hintText,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 class _AuthSection extends StatelessWidget {
@@ -1132,28 +2011,48 @@ class _AuthSection extends StatelessWidget {
       children: [
         const _EditorSectionTitle(title: AppStrings.requestEditorAuth),
         const SizedBox(height: AppSpacing.small),
-        _EditorDropdownField<AuthType>(
-          fieldKey: AppWidgetKeys.requestsEditorAuthTypeField,
-          label: AppStrings.requestEditorType,
-          value: auth.type,
-          items: AuthType.values
-              .map(
-                (type) => DropdownMenuItem<AuthType>(
-                  value: type,
-                  child: Text(type.label),
-                ),
-              )
-              .toList(growable: false),
-          onChanged: (type) {
-            if (type != null) {
-              editorCubit.updateAuth(auth.copyWith(type: type));
-            }
-          },
+        DecoratedBox(
+          decoration: _buildCardDecoration(context),
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.medium),
+            child: _EditorDropdownField<AuthType>(
+              fieldKey: AppWidgetKeys.requestsEditorAuthTypeField,
+              label: AppStrings.requestEditorAuth,
+              value: auth.type,
+              items: AuthType.values
+                  .map(
+                    (type) => DropdownMenuItem<AuthType>(
+                      value: type,
+                      child: Text(type.label),
+                    ),
+                  )
+                  .toList(growable: false),
+              onChanged: (type) {
+                if (type != null) {
+                  editorCubit.updateAuth(auth.copyWith(type: type));
+                }
+              },
+            ),
+          ),
         ),
         const SizedBox(height: AppSpacing.small),
         switch (auth.type) {
           AuthType.none => const _InfoCard(
             message: 'No authentication will be applied.',
+          ),
+          AuthType.bearerToken => Column(
+            children: [
+              _EditorTextField(
+                fieldKey: AppWidgetKeys.requestsEditorAuthField('bearer_token'),
+                value: auth.bearerToken.token,
+                label: 'Token',
+                onChanged: (value) => editorCubit.updateAuth(
+                  auth.copyWith(
+                    bearerToken: BearerTokenAuthDraft(token: value),
+                  ),
+                ),
+              ),
+            ],
           ),
           AuthType.basic => Column(
             children: [
@@ -1191,105 +2090,8 @@ class _AuthSection extends StatelessWidget {
               ),
             ],
           ),
-          AuthType.apiKey => Column(
-            children: [
-              _EditorTextField(
-                fieldKey: AppWidgetKeys.requestsEditorAuthField('api_key_name'),
-                value: auth.apiKey.name,
-                label: 'Key Name',
-                onChanged: (value) => editorCubit.updateAuth(
-                  auth.copyWith(
-                    apiKey: ApiKeyAuthDraft(
-                      name: value,
-                      value: auth.apiKey.value,
-                      location: auth.apiKey.location,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.small),
-              _EditorTextField(
-                fieldKey: AppWidgetKeys.requestsEditorAuthField(
-                  'api_key_value',
-                ),
-                value: auth.apiKey.value,
-                label: 'Key Value',
-                onChanged: (value) => editorCubit.updateAuth(
-                  auth.copyWith(
-                    apiKey: ApiKeyAuthDraft(
-                      name: auth.apiKey.name,
-                      value: value,
-                      location: auth.apiKey.location,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.small),
-              _EditorDropdownField<ApiKeyLocation>(
-                fieldKey: AppWidgetKeys.requestsEditorAuthField(
-                  'api_key_location',
-                ),
-                label: 'Location',
-                value: auth.apiKey.location,
-                items: ApiKeyLocation.values
-                    .map(
-                      (location) => DropdownMenuItem<ApiKeyLocation>(
-                        value: location,
-                        child: Text(location.label),
-                      ),
-                    )
-                    .toList(growable: false),
-                onChanged: (location) {
-                  if (location != null) {
-                    editorCubit.updateAuth(
-                      auth.copyWith(
-                        apiKey: ApiKeyAuthDraft(
-                          name: auth.apiKey.name,
-                          value: auth.apiKey.value,
-                          location: location,
-                        ),
-                      ),
-                    );
-                  }
-                },
-              ),
-            ],
-          ),
-          AuthType.bearerToken => Column(
-            children: [
-              _EditorTextField(
-                fieldKey: AppWidgetKeys.requestsEditorAuthField(
-                  'bearer_prefix',
-                ),
-                value: auth.bearerToken.prefix,
-                label: 'Prefix',
-                onChanged: (value) => editorCubit.updateAuth(
-                  auth.copyWith(
-                    bearerToken: BearerTokenAuthDraft(
-                      token: auth.bearerToken.token,
-                      prefix: value,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.small),
-              _EditorTextField(
-                fieldKey: AppWidgetKeys.requestsEditorAuthField('bearer_token'),
-                value: auth.bearerToken.token,
-                label: 'Token',
-                onChanged: (value) => editorCubit.updateAuth(
-                  auth.copyWith(
-                    bearerToken: BearerTokenAuthDraft(
-                      token: value,
-                      prefix: auth.bearerToken.prefix,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
           _ => const _InfoCard(
-            message: AppStrings.requestEditorUnsupportedAuthMessage,
+            message: 'This auth mode is not supported in the request editor yet.',
           ),
         },
       ],
