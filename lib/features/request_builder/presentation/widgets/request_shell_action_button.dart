@@ -26,6 +26,7 @@ class RequestShellActionButton extends StatelessWidget {
 
     return FloatingActionButton(
       key: const ValueKey<String>(AppWidgetKeys.requestsFab),
+      heroTag: AppWidgetKeys.requestsFab,
       tooltip: AppStrings.requestsAddTooltip,
       onPressed: () => _showActionMenu(context),
       backgroundColor: colors.methodGet,

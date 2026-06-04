@@ -2,6 +2,9 @@ abstract final class AppWidgetKeys {
   static const requestsSearchField = 'requests_search_field';
   static const requestsFavoriteButton = 'requests_favorite_button';
   static const requestsFab = 'requests_fab';
+  static const websocketsFab = 'websockets_fab';
+  static const collectionsFab = 'collections_fab';
+  static const postmanFab = 'postman_fab';
   static const requestsListItemPrefix = 'requests_list_item';
   static const requestsEditorSheet = 'requests_editor_sheet';
   static const requestsEditorCloseButton = 'requests_editor_close_button';
@@ -35,6 +38,7 @@ abstract final class AppWidgetKeys {
   static const settingsThemeModeSwitch = 'settings_theme_mode_switch';
   static const requestsTab = 'requests_tab';
   static const websocketsTab = 'websockets_tab';
+  static const websocketsList = 'websockets_list';
   static const collectionsTab = 'collections_tab';
   static const postmanTab = 'postman_tab';
   static const settingsTab = 'settings_tab';
