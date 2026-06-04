@@ -539,39 +539,40 @@ class _RequestEditorMoreButton extends StatelessWidget {
   final ValueChanged<_RequestEditorMoreAction> onSelected;
 
   @override
-  Widget build(BuildContext context) => PopupMenuButton<_RequestEditorMoreAction>(
-    key: const ValueKey<String>(AppWidgetKeys.requestsEditorMoreButton),
-    tooltip: 'More request actions',
-    icon: const Icon(CupertinoIcons.ellipsis),
-    color: context.appColors.surface,
-    elevation: 12,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-    constraints: const BoxConstraints(minWidth: 196),
-    position: PopupMenuPosition.under,
-    onSelected: onSelected,
-    itemBuilder: (context) => [
-      PopupMenuItem<_RequestEditorMoreAction>(
-        value: _RequestEditorMoreAction.globalVariables,
-        child: const _RequestEditorMoreMenuRow(label: 'Global Variables'),
-      ),
-      PopupMenuItem<_RequestEditorMoreAction>(
-        value: _RequestEditorMoreAction.manageEnvironment,
-        child: const _RequestEditorMoreMenuRow(label: 'Manage Environment'),
-      ),
-      for (final action in [
-        _RequestEditorMoreAction.useGraphQl,
-        _RequestEditorMoreAction.viewCurl,
-        _RequestEditorMoreAction.exportHar,
-        _RequestEditorMoreAction.cookies,
-        _RequestEditorMoreAction.tests,
-        _RequestEditorMoreAction.settings,
-      ])
-        PopupMenuItem<_RequestEditorMoreAction>(
-          value: action,
-          child: _RequestEditorMoreMenuRow(label: action.label),
-        ),
-    ],
-  );
+  Widget build(BuildContext context) =>
+      PopupMenuButton<_RequestEditorMoreAction>(
+        key: const ValueKey<String>(AppWidgetKeys.requestsEditorMoreButton),
+        tooltip: 'More request actions',
+        icon: const Icon(CupertinoIcons.ellipsis),
+        color: context.appColors.surface,
+        elevation: 12,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        constraints: const BoxConstraints(minWidth: 196),
+        position: PopupMenuPosition.under,
+        onSelected: onSelected,
+        itemBuilder: (context) => [
+          PopupMenuItem<_RequestEditorMoreAction>(
+            value: _RequestEditorMoreAction.globalVariables,
+            child: const _RequestEditorMoreMenuRow(label: 'Global Variables'),
+          ),
+          PopupMenuItem<_RequestEditorMoreAction>(
+            value: _RequestEditorMoreAction.manageEnvironment,
+            child: const _RequestEditorMoreMenuRow(label: 'Manage Environment'),
+          ),
+          for (final action in [
+            _RequestEditorMoreAction.useGraphQl,
+            _RequestEditorMoreAction.viewCurl,
+            _RequestEditorMoreAction.exportHar,
+            _RequestEditorMoreAction.cookies,
+            _RequestEditorMoreAction.tests,
+            _RequestEditorMoreAction.settings,
+          ])
+            PopupMenuItem<_RequestEditorMoreAction>(
+              value: action,
+              child: _RequestEditorMoreMenuRow(label: action.label),
+            ),
+        ],
+      );
 }
 
 class _RequestEditorMoreMenuRow extends StatelessWidget {
@@ -690,8 +691,9 @@ class _KeyValueSection extends StatelessWidget {
         sectionId: sectionId,
         items: items,
         onItemChanged: (index, item) => _replace(context, index, item),
-        onItemDeleted:
-            sectionId == 'query' ? (index) => _remove(context, index) : null,
+        onItemDeleted: sectionId == 'query'
+            ? (index) => _remove(context, index)
+            : null,
         onAddPressed: () => _appendEmptyItem(context),
       ),
     ],
@@ -761,10 +763,9 @@ class _KeyValueCard extends StatelessWidget {
                   index: rowIndex,
                   item: items[rowIndex],
                   onChanged: (item) => onItemChanged(rowIndex, item),
-                  onDelete:
-                      onItemDeleted == null
-                          ? null
-                          : () => onItemDeleted!(rowIndex),
+                  onDelete: onItemDeleted == null
+                      ? null
+                      : () => onItemDeleted!(rowIndex),
                 )
               else
                 _AddKeyValueRow(sectionId: sectionId, onPressed: onAddPressed),
@@ -808,10 +809,10 @@ class _KeyValueRow extends StatelessWidget {
   Widget build(BuildContext context) => GestureDetector(
     onLongPress:
         !_supportsLongPressActionMenu ||
-                onDelete == null ||
-                _isSystemGeneratedAuthHeader
-            ? null
-            : () => _showKeyValueActionSheet(context),
+            onDelete == null ||
+            _isSystemGeneratedAuthHeader
+        ? null
+        : () => _showKeyValueActionSheet(context),
     child: Padding(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.large,
@@ -827,11 +828,9 @@ class _KeyValueRow extends StatelessWidget {
                 AppWidgetKeys.requestsEditorKeyValueToggle(sectionId, index),
               ),
               isEnabled: item.isEnabled,
-              onPressed:
-                  _isSystemGeneratedAuthHeader
-                      ? null
-                      : () =>
-                          onChanged(item.copyWith(isEnabled: !item.isEnabled)),
+              onPressed: _isSystemGeneratedAuthHeader
+                  ? null
+                  : () => onChanged(item.copyWith(isEnabled: !item.isEnabled)),
             ),
             const SizedBox(width: AppSpacing.large),
             Expanded(
@@ -843,8 +842,7 @@ class _KeyValueRow extends StatelessWidget {
                 value: item.key,
                 hintText: 'Key',
                 readOnly: _isSystemGeneratedAuthHeader,
-                onChanged:
-                    (value) => onChanged(item.copyWith(key: value)),
+                onChanged: (value) => onChanged(item.copyWith(key: value)),
               ),
             ),
             const SizedBox(width: AppSpacing.large),
@@ -858,8 +856,7 @@ class _KeyValueRow extends StatelessWidget {
                 hintText: 'Value',
                 textAlign: TextAlign.end,
                 readOnly: _isSystemGeneratedAuthHeader,
-                onChanged:
-                    (value) => onChanged(item.copyWith(value: value)),
+                onChanged: (value) => onChanged(item.copyWith(value: value)),
               ),
             ),
             if (_isSystemGeneratedAuthHeader) ...[
@@ -909,9 +906,8 @@ class _KeyValueRow extends StatelessWidget {
                         index,
                       ),
                     ),
-                    onTap: () => Navigator.of(
-                      context,
-                    ).pop(_KeyValueRowAction.edit),
+                    onTap: () =>
+                        Navigator.of(context).pop(_KeyValueRowAction.edit),
                   ),
                   const _KeyValueDivider(),
                   _KeyValueActionTile(
@@ -922,9 +918,8 @@ class _KeyValueRow extends StatelessWidget {
                         index,
                       ),
                     ),
-                    onTap: () => Navigator.of(
-                      context,
-                    ).pop(_KeyValueRowAction.delete),
+                    onTap: () =>
+                        Navigator.of(context).pop(_KeyValueRowAction.delete),
                   ),
                 ],
               ),
@@ -965,12 +960,7 @@ class _KeyValueRow extends StatelessWidget {
       return;
     }
 
-    onChanged(
-      item.copyWith(
-        key: result.key,
-        value: result.value,
-      ),
-    );
+    onChanged(item.copyWith(key: result.key, value: result.value));
   }
 }
 
@@ -1006,16 +996,16 @@ class _KeyValueActionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.appColors;
     final isDelete = action == _KeyValueRowAction.delete;
-    final foregroundColor = isDelete
-        ? colors.methodDelete
-        : colors.textPrimary;
+    final foregroundColor = isDelete ? colors.methodDelete : colors.textPrimary;
 
     return Material(
       color: Colors.transparent,
       child: InkWell(
         key: rowKey,
         onTap: onTap,
-        borderRadius: const BorderRadius.all(Radius.circular(AppRadius.xxLarge)),
+        borderRadius: const BorderRadius.all(
+          Radius.circular(AppRadius.xxLarge),
+        ),
         child: Padding(
           padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.large,
@@ -1041,10 +1031,7 @@ class _KeyValueActionTile extends StatelessWidget {
 }
 
 class _KeyValueEditorResult {
-  const _KeyValueEditorResult({
-    required this.key,
-    required this.value,
-  });
+  const _KeyValueEditorResult({required this.key, required this.value});
 
   final String key;
   final String value;
@@ -1101,7 +1088,10 @@ class _KeyValueEditorSheetState extends State<_KeyValueEditorSheet> {
           children: [
             Row(
               children: [
-                Text(widget.title, style: Theme.of(context).textTheme.titleLarge),
+                Text(
+                  widget.title,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
                 const Spacer(),
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(),
@@ -1147,11 +1137,7 @@ class _KeyValueEditorSheetState extends State<_KeyValueEditorSheet> {
 }
 
 class _EnabledIndicator extends StatelessWidget {
-  const _EnabledIndicator({
-    super.key,
-    required this.isEnabled,
-    this.onPressed,
-  });
+  const _EnabledIndicator({super.key, required this.isEnabled, this.onPressed});
 
   final bool isEnabled;
   final VoidCallback? onPressed;
@@ -1377,7 +1363,11 @@ class _BodySection extends StatelessWidget {
       children: [
         const _EditorSectionTitle(title: AppStrings.requestEditorBody),
         const SizedBox(height: AppSpacing.small),
-        if (!draft.method.supportsRequestBody) ...[
+        if (!methodSupportsRequestBody(draft.method)) ...[
+          _InfoCard(
+            message:
+                'Body will not be sent for ${draft.method.wireName} in this version.',
+          ),
           const SizedBox(height: AppSpacing.small),
         ],
         _BodyModeCard(
@@ -1417,10 +1407,7 @@ class _BodyModeCard extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.small),
       child: Column(
         children: [
-          _BodyTypeRow(
-            value: body.type,
-            onChanged: onTypeChanged,
-          ),
+          _BodyTypeRow(value: body.type, onChanged: onTypeChanged),
           ...switch (body.type) {
             RequestBodyType.none => const <Widget>[],
             RequestBodyType.xWwwFormUrlEncoded => <Widget>[
@@ -1456,9 +1443,8 @@ class _BodyModeCard extends StatelessWidget {
                   context,
                   label: 'Query',
                   currentValue: body.graphQl.query,
-                  onSaved: (value) => onGraphQlChanged(
-                    body.graphQl.copyWith(query: value),
-                  ),
+                  onSaved: (value) =>
+                      onGraphQlChanged(body.graphQl.copyWith(query: value)),
                 ),
               ),
               const _KeyValueDivider(),
@@ -1470,9 +1456,8 @@ class _BodyModeCard extends StatelessWidget {
                   context,
                   label: 'Variables',
                   currentValue: body.graphQl.variables,
-                  onSaved: (value) => onGraphQlChanged(
-                    body.graphQl.copyWith(variables: value),
-                  ),
+                  onSaved: (value) =>
+                      onGraphQlChanged(body.graphQl.copyWith(variables: value)),
                 ),
               ),
             ],
@@ -1494,10 +1479,7 @@ class _BodyModeCard extends StatelessWidget {
     }
 
     onRawChanged(
-      body.raw.copyWith(
-        subtype: result.subtype,
-        content: result.content,
-      ),
+      body.raw.copyWith(subtype: result.subtype, content: result.content),
     );
   }
 
@@ -1512,12 +1494,13 @@ class _BodyModeCard extends StatelessWidget {
       context,
       builder: (context) => _BodyTextEditorSheet(
         title: label,
-        fieldKey:
-            label == 'Query'
-                ? AppWidgetKeys.requestsEditorGraphQlQueryField
-                : AppWidgetKeys.requestsEditorGraphQlVariablesField,
+        fieldKey: label == 'Query'
+            ? AppWidgetKeys.requestsEditorGraphQlQueryField
+            : AppWidgetKeys.requestsEditorGraphQlVariablesField,
         initialValue: currentValue,
-        hintText: label == 'Query' ? 'query GetUsers { users { id } }' : '{\n  "id": "1"\n}',
+        hintText: label == 'Query'
+            ? 'query GetUsers { users { id } }'
+            : '{\n  "id": "1"\n}',
       ),
     );
 
@@ -1557,10 +1540,7 @@ class _BodyModeCard extends StatelessWidget {
 }
 
 class _BodyTypeRow extends StatelessWidget {
-  const _BodyTypeRow({
-    required this.value,
-    required this.onChanged,
-  });
+  const _BodyTypeRow({required this.value, required this.onChanged});
 
   final RequestBodyType value;
   final ValueChanged<RequestBodyType> onChanged;
@@ -1581,7 +1561,9 @@ class _BodyTypeRow extends StatelessWidget {
         ),
         DropdownButtonHideUnderline(
           child: DropdownButton<RequestBodyType>(
-            key: const ValueKey<String>(AppWidgetKeys.requestsEditorBodyModeField),
+            key: const ValueKey<String>(
+              AppWidgetKeys.requestsEditorBodyModeField,
+            ),
             value: value,
             borderRadius: const BorderRadius.all(
               Radius.circular(AppRadius.xxLarge),
@@ -1636,9 +1618,7 @@ class _BodyActionRow extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Expanded(
-                child: Text(label, style: theme.textTheme.bodyLarge),
-              ),
+              Expanded(child: Text(label, style: theme.textTheme.bodyLarge)),
               const SizedBox(width: AppSpacing.medium),
               Flexible(
                 child: Text(
@@ -1666,10 +1646,7 @@ class _BodyActionRow extends StatelessWidget {
 }
 
 class _BodyUrlEncodedList extends StatelessWidget {
-  const _BodyUrlEncodedList({
-    required this.items,
-    required this.onChanged,
-  });
+  const _BodyUrlEncodedList({required this.items, required this.onChanged});
 
   final List<KeyValueItem> items;
   final ValueChanged<List<KeyValueItem>> onChanged;
@@ -1688,10 +1665,8 @@ class _BodyUrlEncodedList extends StatelessWidget {
       ],
       _AddKeyValueRow(
         sectionId: 'body_url_encoded',
-        onPressed: () => onChanged([
-          ...items,
-          const KeyValueItem(key: '', value: ''),
-        ]),
+        onPressed: () =>
+            onChanged([...items, const KeyValueItem(key: '', value: '')]),
       ),
     ],
   );
@@ -1801,7 +1776,8 @@ class _BodyUrlEncodedRow extends StatelessWidget {
                         index,
                       ),
                     ),
-                    onTap: () => Navigator.of(context).pop(_KeyValueRowAction.edit),
+                    onTap: () =>
+                        Navigator.of(context).pop(_KeyValueRowAction.edit),
                   ),
                   const _KeyValueDivider(),
                   _KeyValueActionTile(
@@ -1859,10 +1835,7 @@ class _BodyUrlEncodedRow extends StatelessWidget {
 }
 
 class _BodyFormDataList extends StatelessWidget {
-  const _BodyFormDataList({
-    required this.items,
-    required this.onChanged,
-  });
+  const _BodyFormDataList({required this.items, required this.onChanged});
 
   final List<KeyValueItem> items;
   final ValueChanged<List<KeyValueItem>> onChanged;
@@ -1881,10 +1854,8 @@ class _BodyFormDataList extends StatelessWidget {
       ],
       _AddKeyValueRow(
         sectionId: 'body_form_data',
-        onPressed: () => onChanged([
-          ...items,
-          const KeyValueItem(key: '', value: ''),
-        ]),
+        onPressed: () =>
+            onChanged([...items, const KeyValueItem(key: '', value: '')]),
       ),
     ],
   );
@@ -1955,7 +1926,9 @@ class _BodyFormDataRow extends StatelessWidget {
                       .map(
                         (type) => DropdownMenuItem<KeyValueItemType>(
                           value: type,
-                          child: Text(type == KeyValueItemType.text ? 'Text' : 'File'),
+                          child: Text(
+                            type == KeyValueItemType.text ? 'Text' : 'File',
+                          ),
                         ),
                       )
                       .toList(growable: false),
@@ -2032,7 +2005,8 @@ class _BodyFormDataRow extends StatelessWidget {
                         index,
                       ),
                     ),
-                    onTap: () => Navigator.of(context).pop(_KeyValueRowAction.edit),
+                    onTap: () =>
+                        Navigator.of(context).pop(_KeyValueRowAction.edit),
                   ),
                   const _KeyValueDivider(),
                   _KeyValueActionTile(
@@ -2117,7 +2091,9 @@ class _BodyFileSelectorRow extends StatelessWidget {
           ),
         ),
         onTap: () => _selectFilePath(context),
-        borderRadius: const BorderRadius.all(Radius.circular(AppRadius.xxLarge)),
+        borderRadius: const BorderRadius.all(
+          Radius.circular(AppRadius.xxLarge),
+        ),
         child: Padding(
           padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.small,
@@ -2174,10 +2150,7 @@ class _BodyFileSelectorRow extends StatelessWidget {
 }
 
 class _RawBodyEditorResult {
-  const _RawBodyEditorResult({
-    required this.subtype,
-    required this.content,
-  });
+  const _RawBodyEditorResult({required this.subtype, required this.content});
 
   final RawBodySubtype subtype;
   final String content;
@@ -2334,7 +2307,10 @@ class _BodyTextEditorSheetState extends State<_BodyTextEditorSheet> {
           children: [
             Row(
               children: [
-                Text(widget.title, style: Theme.of(context).textTheme.titleLarge),
+                Text(
+                  widget.title,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
                 const Spacer(),
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(),
@@ -2464,7 +2440,8 @@ class _AuthSection extends StatelessWidget {
             ],
           ),
           _ => const _InfoCard(
-            message: 'This auth mode is not supported in the request editor yet.',
+            message:
+                'This auth mode is not supported in the request editor yet.',
           ),
         },
       ],

@@ -1,5 +1,8 @@
+import 'dart:convert';
+
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../domain/entities/request_body_draft.dart';
 import '../../domain/entities/request_draft.dart';
 import '../../domain/usecases/apply_request_auth_use_case.dart';
 import '../../domain/usecases/execute_request_use_case.dart';
@@ -106,6 +109,33 @@ class RequestSendBloc extends Bloc<RequestSendEvent, RequestSendState> {
       return 'Request URL is required before sending.';
     }
 
+    if (draft.body.type == RequestBodyType.graphql) {
+      final validationError = _validateGraphQlVariables(
+        draft.body.graphQl.variables,
+      );
+      if (validationError != null) {
+        return validationError;
+      }
+    }
+
     return null;
+  }
+
+  String? _validateGraphQlVariables(String variables) {
+    final trimmed = variables.trim();
+    if (trimmed.isEmpty) {
+      return null;
+    }
+
+    try {
+      final decoded = jsonDecode(trimmed);
+      if (decoded is Map<String, dynamic>) {
+        return null;
+      }
+    } on FormatException {
+      // Fall through to the shared error message below.
+    }
+
+    return 'GraphQL variables must be a valid JSON object.';
   }
 }

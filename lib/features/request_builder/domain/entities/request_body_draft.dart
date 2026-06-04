@@ -4,13 +4,10 @@ import 'request_key_value.dart';
 
 enum RequestBodyType {
   none('None', plannedForInitialImplementation: true),
-  xWwwFormUrlEncoded(
-    'x-www-form-urlencoded',
-    plannedForInitialImplementation: true,
-  ),
+  xWwwFormUrlEncoded('URL Encoded', plannedForInitialImplementation: true),
   formData('Form Data', plannedForInitialImplementation: true),
   raw('Raw', plannedForInitialImplementation: true),
-  graphql('GraphQL', plannedForInitialImplementation: false);
+  graphql('GraphQL', plannedForInitialImplementation: true);
 
   const RequestBodyType(
     this.label, {
@@ -22,10 +19,10 @@ enum RequestBodyType {
 }
 
 enum RawBodySubtype {
-  text('Text', contentType: ''),
+  text('Text', contentType: 'text/plain'),
   json('JSON', contentType: 'application/json'),
-  xml('XML', contentType: ''),
-  html('HTML', contentType: '');
+  xml('XML', contentType: 'application/xml'),
+  html('HTML', contentType: 'text/html');
 
   const RawBodySubtype(this.label, {required this.contentType});
 
@@ -34,10 +31,7 @@ enum RawBodySubtype {
 }
 
 class RawBodyDraft extends Equatable {
-  const RawBodyDraft({
-    this.subtype = RawBodySubtype.text,
-    this.content = '',
-  });
+  const RawBodyDraft({this.subtype = RawBodySubtype.text, this.content = ''});
 
   final RawBodySubtype subtype;
   final String content;
@@ -50,40 +44,31 @@ class RawBodyDraft extends Equatable {
       subtype.contentType.trim().isEmpty ? null : subtype.contentType;
 
   /// Creates a new raw-body draft with any updated content or subtype applied.
-  RawBodyDraft copyWith({
-    RawBodySubtype? subtype,
-    String? content,
-  }) => RawBodyDraft(
-    subtype: subtype ?? this.subtype,
-    content: content ?? this.content,
-  );
+  RawBodyDraft copyWith({RawBodySubtype? subtype, String? content}) =>
+      RawBodyDraft(
+        subtype: subtype ?? this.subtype,
+        content: content ?? this.content,
+      );
 
   @override
   List<Object> get props => [subtype, content];
 }
 
 class GraphQlBodyDraft extends Equatable {
-  const GraphQlBodyDraft({
-    this.query = '',
-    this.variables = '',
-  });
+  const GraphQlBodyDraft({this.query = '', this.variables = ''});
 
   final String query;
   final String variables;
 
   /// Returns true when any GraphQL-specific input has been provided.
-  bool get hasContent =>
-      query.trim().isNotEmpty ||
-      variables.trim().isNotEmpty;
+  bool get hasContent => query.trim().isNotEmpty || variables.trim().isNotEmpty;
 
   /// Creates a new GraphQL draft with any updated fields applied.
-  GraphQlBodyDraft copyWith({
-    String? query,
-    String? variables,
-  }) => GraphQlBodyDraft(
-    query: query ?? this.query,
-    variables: variables ?? this.variables,
-  );
+  GraphQlBodyDraft copyWith({String? query, String? variables}) =>
+      GraphQlBodyDraft(
+        query: query ?? this.query,
+        variables: variables ?? this.variables,
+      );
 
   @override
   List<Object> get props => [query, variables];
@@ -115,9 +100,14 @@ class RequestBodyDraft extends Equatable {
   bool get hasContent => switch (type) {
     RequestBodyType.none => false,
     RequestBodyType.raw => raw.hasContent,
-    RequestBodyType.formData => formData.any((item) => item.isComplete),
+    RequestBodyType.formData => formData.any(
+      (item) =>
+          item.isEnabled &&
+          item.hasKey &&
+          (item.type != KeyValueItemType.file || item.hasValue),
+    ),
     RequestBodyType.xWwwFormUrlEncoded => urlEncoded.any(
-      (item) => item.isComplete,
+      (item) => item.isEnabled && item.hasKey,
     ),
     RequestBodyType.graphql => graphQl.hasContent,
   };
@@ -138,11 +128,5 @@ class RequestBodyDraft extends Equatable {
   );
 
   @override
-  List<Object> get props => [
-    type,
-    raw,
-    formData,
-    urlEncoded,
-    graphQl,
-  ];
+  List<Object> get props => [type, raw, formData, urlEncoded, graphQl];
 }

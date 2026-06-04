@@ -5,7 +5,7 @@ enum HttpMethod {
   delete('DEL', wireName: 'DELETE', supportsRequestBody: true),
   patch('PAT', wireName: 'PATCH', supportsRequestBody: true),
   head('HEAD', wireName: 'HEAD', supportsRequestBody: false),
-  options('OPT', wireName: 'OPTIONS', supportsRequestBody: true),
+  options('OPT', wireName: 'OPTIONS', supportsRequestBody: false),
   connect('CON', wireName: 'CONNECT', supportsRequestBody: true),
   trace('TRACE', wireName: 'TRACE', supportsRequestBody: false);
 
@@ -19,3 +19,15 @@ enum HttpMethod {
   final String wireName;
   final bool supportsRequestBody;
 }
+
+bool methodSupportsRequestBody(HttpMethod method) => switch (method) {
+  HttpMethod.get => false,
+  HttpMethod.head => false,
+  HttpMethod.options => false,
+  HttpMethod.trace => false,
+  HttpMethod.post => true,
+  HttpMethod.put => true,
+  HttpMethod.patch => true,
+  HttpMethod.delete => true,
+  HttpMethod.connect => true,
+};

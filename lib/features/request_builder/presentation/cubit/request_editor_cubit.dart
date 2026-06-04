@@ -242,19 +242,15 @@ class RequestEditorCubit extends Cubit<RequestEditorState> {
   }
 
   /// Synchronizes the editor-visible Content-Type header with the active body mode.
-  static List<KeyValueItem> _syncContentTypeHeader(
-    {
+  static List<KeyValueItem> _syncContentTypeHeader({
     required HttpMethod method,
     required List<KeyValueItem> headers,
     required RequestBodyDraft body,
   }) {
-    if (!method.supportsRequestBody) {
-      return headers;
-    }
-
     final contentType = _contentTypeForBody(body);
     final updatedHeaders = <KeyValueItem>[];
-    var hasContentTypeHeader = false;
+    var hasManualContentTypeHeader = false;
+    var hasSystemGeneratedContentTypeHeader = false;
 
     for (final header in headers) {
       if (!_isContentTypeHeader(header)) {
@@ -262,29 +258,43 @@ class RequestEditorCubit extends Cubit<RequestEditorState> {
         continue;
       }
 
-      if (hasContentTypeHeader) {
+      if (header.isSystemGeneratedContentTypeHeader) {
+        if (hasSystemGeneratedContentTypeHeader) {
+          continue;
+        }
+
+        hasSystemGeneratedContentTypeHeader = true;
+        if (!methodSupportsRequestBody(method) || contentType == null) {
+          continue;
+        }
+
+        updatedHeaders.add(
+          header.copyWith(
+            key: 'Content-Type',
+            value: contentType,
+            isEnabled: true,
+            type: KeyValueItemType.text,
+            description: bodyContentTypeSystemGeneratedHeaderDescription,
+          ),
+        );
         continue;
       }
 
-      if (contentType == null) {
-        hasContentTypeHeader = true;
-        continue;
-      }
+      hasManualContentTypeHeader = true;
+      updatedHeaders.add(header);
+    }
 
-      hasContentTypeHeader = true;
+    if (methodSupportsRequestBody(method) &&
+        contentType != null &&
+        !hasManualContentTypeHeader &&
+        !hasSystemGeneratedContentTypeHeader) {
       updatedHeaders.add(
-        header.copyWith(
+        KeyValueItem(
           key: 'Content-Type',
           value: contentType,
           isEnabled: true,
-          type: KeyValueItemType.text,
+          description: bodyContentTypeSystemGeneratedHeaderDescription,
         ),
-      );
-    }
-
-    if (!hasContentTypeHeader && contentType != null) {
-      updatedHeaders.add(
-        KeyValueItem(key: 'Content-Type', value: contentType, isEnabled: true),
       );
     }
 
@@ -292,13 +302,15 @@ class RequestEditorCubit extends Cubit<RequestEditorState> {
   }
 
   /// Returns the Content-Type value implied by the currently selected body mode.
-  static String? _contentTypeForBody(RequestBodyDraft body) => switch (body.type) {
-    RequestBodyType.xWwwFormUrlEncoded => 'application/x-www-form-urlencoded',
-    RequestBodyType.formData => 'multipart/form-data',
-    RequestBodyType.graphql => null,
-    RequestBodyType.raw => body.raw.syncedContentType,
-    RequestBodyType.none => null,
-  };
+  static String? _contentTypeForBody(RequestBodyDraft body) =>
+      switch (body.type) {
+        RequestBodyType.xWwwFormUrlEncoded =>
+          'application/x-www-form-urlencoded',
+        RequestBodyType.formData => 'multipart/form-data',
+        RequestBodyType.graphql => 'application/json',
+        RequestBodyType.raw => body.raw.syncedContentType,
+        RequestBodyType.none => null,
+      };
 
   /// Returns true when the header key matches Content-Type regardless of case.
   static bool _isContentTypeHeader(KeyValueItem header) =>
