@@ -3,8 +3,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:httpbot_api/core/widgets/body_empty.dart';
 import 'package:httpbot_api/features/postman/presentation/cubit/postman_cubit.dart';
 import 'package:httpbot_api/features/postman/presentation/cubit/postman_state.dart';
-import 'package:httpbot_api/features/postman/presentation/widget/postman_folder_item.dart';
 import 'package:httpbot_api/features/postman/presentation/model/postman_list_item_model.dart';
+import 'package:httpbot_api/features/postman/presentation/widget/postman_folder_item.dart';
 import 'package:httpbot_api/features/postman/presentation/widget/postman_list_item.dart';
 
 class PostmanScreen extends StatelessWidget {
@@ -20,6 +20,7 @@ class PostmanScreen extends StatelessWidget {
 
         if (state.selectedCollection != null) {
           final folders = state.selectedCollection!.folders;
+
           if (folders.isEmpty) {
             return const BodyEmpty(
               title: 'No Folders',
@@ -33,6 +34,7 @@ class PostmanScreen extends StatelessWidget {
             separatorBuilder: (_, __) => const SizedBox(height: 12),
             itemBuilder: (context, index) {
               final folder = folders[index];
+
               return PostmanFolderItem(folder: folder);
             },
           );
@@ -54,11 +56,11 @@ class PostmanScreen extends StatelessWidget {
 
         final items = state.collections
             .map(
-              (e) => PostmanListItemModel(
-            folderName: e.name,
-            itemCount: e.totalRequestCount,
-          ),
-        )
+              (collection) => PostmanListItemModel(
+                folderName: collection.name,
+                itemCount: collection.totalRequestCount,
+              ),
+            )
             .toList();
 
         return ListView.separated(
@@ -73,8 +75,8 @@ class PostmanScreen extends StatelessWidget {
               item: item,
               onTap: () async {
                 await context.read<PostmanCubit>().loadCollectionDetail(
-                  collection: collection,
-                );
+                      collection: collection,
+                    );
               },
             );
           },

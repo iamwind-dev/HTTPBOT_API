@@ -3,12 +3,12 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../domain/entities/postman_collection_entity.dart';
 import '../../domain/entities/postman_workspace_entity.dart';
 import '../../domain/usecases/get_postman_authenticated_user_usecase.dart';
-import '../../domain/usecases/save_postman_account_usecase.dart';
-import '../../domain/usecases/save_postman_api_key_usecase.dart';
 import '../../domain/usecases/get_postman_collection_detail_usecase.dart';
 import '../../domain/usecases/get_postman_collections_usecase.dart';
 import '../../domain/usecases/get_postman_workspace_detail_usecase.dart';
 import '../../domain/usecases/get_postman_workspaces_usecase.dart';
+import '../../domain/usecases/save_postman_account_usecase.dart';
+import '../../domain/usecases/save_postman_api_key_usecase.dart';
 import 'postman_state.dart';
 
 class PostmanCubit extends Cubit<PostmanState> {
@@ -16,8 +16,7 @@ class PostmanCubit extends Cubit<PostmanState> {
   final GetPostmanWorkspaceDetailUseCase getPostmanWorkspaceDetailUseCase;
   final GetPostmanCollectionsUseCase getPostmanCollectionsUseCase;
   final GetPostmanCollectionDetailUseCase getPostmanCollectionDetailUseCase;
-  final GetPostmanAuthenticatedUserUseCase
-  getPostmanAuthenticatedUserUseCase;
+  final GetPostmanAuthenticatedUserUseCase getPostmanAuthenticatedUserUseCase;
   final SavePostmanAccountUseCase savePostmanAccountUseCase;
   final SavePostmanApiKeyUseCase savePostmanApiKeyUseCase;
 
@@ -50,6 +49,7 @@ class PostmanCubit extends Cubit<PostmanState> {
     try {
       final account = await getPostmanAuthenticatedUserUseCase(apiKey: apiKey);
       final workspaces = await getPostmanWorkspacesUseCase(apiKey: apiKey);
+
       var workspacesWithCollections = await Future.wait(
         workspaces.map((workspace) async {
           try {
@@ -58,7 +58,6 @@ class PostmanCubit extends Cubit<PostmanState> {
               workspaceId: workspace.id,
             );
           } catch (_) {
-            // Keep workspace visible even if one detail request fails.
             return workspace;
           }
         }),
@@ -66,6 +65,7 @@ class PostmanCubit extends Cubit<PostmanState> {
 
       if (workspacesWithCollections.isEmpty) {
         final collections = await getPostmanCollectionsUseCase(apiKey: apiKey);
+
         if (collections.isNotEmpty) {
           workspacesWithCollections = [
             PostmanWorkspaceEntity(
@@ -88,8 +88,10 @@ class PostmanCubit extends Cubit<PostmanState> {
           selectedWorkspaceId: initialWorkspaceId,
         ),
       );
+
       await savePostmanAccountUseCase(account);
       await savePostmanApiKeyUseCase(apiKey);
+
       return true;
     } catch (e) {
       emit(
@@ -98,6 +100,7 @@ class PostmanCubit extends Cubit<PostmanState> {
           errorMessage: e.toString(),
         ),
       );
+
       return false;
     }
   }
@@ -169,6 +172,7 @@ class PostmanCubit extends Cubit<PostmanState> {
 
   Future<bool> importSelectedCollection() async {
     final pickerCollection = state.pickerSelectedCollection;
+
     if (pickerCollection == null) {
       return false;
     }
@@ -203,6 +207,7 @@ class PostmanCubit extends Cubit<PostmanState> {
           errorMessage: e.toString(),
         ),
       );
+
       return false;
     }
   }
@@ -234,9 +239,13 @@ class PostmanCubit extends Cubit<PostmanState> {
   List<PostmanCollectionEntity> _upsertImportedCollection(
     PostmanCollectionEntity collection,
   ) {
-    final nextCollections = List<PostmanCollectionEntity>.from(state.collections);
-    final existingIndex =
-        nextCollections.indexWhere((item) => item.id == collection.id);
+    final nextCollections = List<PostmanCollectionEntity>.from(
+      state.collections,
+    );
+
+    final existingIndex = nextCollections.indexWhere(
+      (item) => item.id == collection.id,
+    );
 
     if (existingIndex >= 0) {
       nextCollections[existingIndex] = collection;

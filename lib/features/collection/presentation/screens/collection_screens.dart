@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:httpbot_api/core/widgets/body_empty.dart';
-import 'package:httpbot_api/features/collection/presentation/widget/collections_list_item.dart';
 import 'package:httpbot_api/features/collection/presentation/model/list_collections.dart';
+import 'package:httpbot_api/features/collection/presentation/widget/collections_list_item.dart';
 
 class CollectionScreen extends StatelessWidget {
   CollectionScreen({super.key});

@@ -31,6 +31,7 @@ class PostmanState {
 
   PostmanWorkspaceEntity? get selectedWorkspace {
     final workspaceId = selectedWorkspaceId;
+
     if (workspaceId == null) {
       return null;
     }
@@ -50,6 +51,7 @@ class PostmanState {
 
   PostmanCollectionEntity? get pickerSelectedCollection {
     final collectionId = pickerSelectedCollectionId;
+
     if (collectionId == null) {
       return null;
     }
@@ -86,18 +88,18 @@ class PostmanState {
       apiKey: apiKey ?? this.apiKey,
       errorMessage: clearErrorMessage
           ? null
-          : (errorMessage ?? this.errorMessage),
+          : errorMessage ?? this.errorMessage,
       workspaces: workspaces ?? this.workspaces,
       selectedWorkspaceId: clearSelectedWorkspace
           ? null
-          : (selectedWorkspaceId ?? this.selectedWorkspaceId),
+          : selectedWorkspaceId ?? this.selectedWorkspaceId,
       collections: collections ?? this.collections,
       pickerSelectedCollectionId: clearPickerSelection
           ? null
-          : (pickerSelectedCollectionId ?? this.pickerSelectedCollectionId),
+          : pickerSelectedCollectionId ?? this.pickerSelectedCollectionId,
       selectedCollection: clearSelectedCollection
           ? null
-          : (selectedCollection ?? this.selectedCollection),
+          : selectedCollection ?? this.selectedCollection,
     );
   }
 }
