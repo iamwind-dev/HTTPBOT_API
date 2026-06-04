@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_radius.dart';
@@ -5,15 +6,37 @@ import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_theme_context.dart';
 import '../models/request_list_item.dart';
 
+enum RequestListItemAction {
+  edit,
+  duplicate,
+  viewCurl,
+  exportHar,
+  favourite,
+  delete,
+}
+
+extension RequestListItemActionLabel on RequestListItemAction {
+  String get label => switch (this) {
+    RequestListItemAction.edit => 'Edit',
+    RequestListItemAction.duplicate => 'Duplicate',
+    RequestListItemAction.viewCurl => 'View curl',
+    RequestListItemAction.exportHar => 'Export as HAR',
+    RequestListItemAction.favourite => 'Favourite',
+    RequestListItemAction.delete => 'Delete',
+  };
+}
+
 class RequestListItemCard extends StatelessWidget {
   const RequestListItemCard({
     super.key,
     required this.item,
     required this.onTap,
+    required this.onActionSelected,
   });
 
   final RequestListItem item;
   final VoidCallback onTap;
+  final ValueChanged<RequestListItemAction> onActionSelected;
 
   /// Builds a tappable request summary card for the requests list.
   @override
@@ -46,9 +69,58 @@ class RequestListItemCard extends StatelessWidget {
                   ],
                 ),
               ),
+              const SizedBox(width: AppSpacing.xSmall),
+              _RequestListItemMoreButton(onSelected: onActionSelected),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _RequestListItemMoreButton extends StatelessWidget {
+  const _RequestListItemMoreButton({required this.onSelected});
+
+  final ValueChanged<RequestListItemAction> onSelected;
+
+  @override
+  Widget build(BuildContext context) => PopupMenuButton<RequestListItemAction>(
+    tooltip: 'More request actions',
+    icon: const Icon(CupertinoIcons.ellipsis),
+    color: context.appColors.surface,
+    elevation: 12,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+    constraints: const BoxConstraints(minWidth: 180),
+    position: PopupMenuPosition.under,
+    onSelected: onSelected,
+    itemBuilder: (context) => RequestListItemAction.values
+        .map(
+          (action) => PopupMenuItem<RequestListItemAction>(
+            value: action,
+            child: _RequestListItemActionRow(action: action),
+          ),
+        )
+        .toList(growable: false),
+  );
+}
+
+class _RequestListItemActionRow extends StatelessWidget {
+  const _RequestListItemActionRow({required this.action});
+
+  final RequestListItemAction action;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+
+    return Text(
+      action.label,
+      style: TextStyle(
+        color: action == RequestListItemAction.delete
+            ? colors.methodDelete
+            : colors.textPrimary,
+        fontWeight: FontWeight.w600,
       ),
     );
   }

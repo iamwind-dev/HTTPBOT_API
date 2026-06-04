@@ -6,5 +6,6 @@ class GetRequestDraftUseCase {
 
   final RequestBuilderRepository _repository;
 
-  RequestDraft call() => _repository.getInitialDraft();
+  /// Loads the current request draft through the domain repository contract.
+  Future<RequestDraft> call() => _repository.getRequestDraft();
 }

@@ -33,7 +33,7 @@ class SettingsSection extends StatelessWidget {
                 SizedBox(width: AppSpacing.medium),
                 Text(
                   section.title!,
-                  style: theme.textTheme.titleLarge?.copyWith(
+                  style: theme.textTheme.titleMedium?.copyWith(
                     color: colors.textSecondary,
                   ),
                 ),
