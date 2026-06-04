@@ -40,6 +40,7 @@ class RequestEditorCubit extends Cubit<RequestEditorState> {
   }) {
     final syncedDraft = initialDraft.copyWith(
       headers: _syncDerivedHeadersStatic(
+        method: initialDraft.method,
         headers: initialDraft.headers,
         body: initialDraft.body,
         auth: initialDraft.auth,
@@ -63,7 +64,19 @@ class RequestEditorCubit extends Cubit<RequestEditorState> {
 
   /// Updates the request method selected in the editor header.
   void updateMethod(HttpMethod method) {
-    emit(state.copyWith(draft: state.draft.copyWith(method: method)));
+    emit(
+      state.copyWith(
+        draft: state.draft.copyWith(
+          method: method,
+          headers: _syncDerivedHeaders(
+            method: method,
+            headers: state.draft.headers,
+            body: state.draft.body,
+            auth: state.draft.auth,
+          ),
+        ),
+      ),
+    );
   }
 
   /// Updates the request URL shown in the main editor field.
@@ -107,6 +120,7 @@ class RequestEditorCubit extends Cubit<RequestEditorState> {
       state.copyWith(
         draft: state.draft.copyWith(
           headers: _syncDerivedHeaders(
+            method: state.draft.method,
             headers: headers,
             body: state.draft.body,
             auth: state.draft.auth,
@@ -123,6 +137,7 @@ class RequestEditorCubit extends Cubit<RequestEditorState> {
         draft: state.draft.copyWith(
           body: body,
           headers: _syncDerivedHeaders(
+            method: state.draft.method,
             headers: state.draft.headers,
             body: body,
             auth: state.draft.auth,
@@ -164,6 +179,7 @@ class RequestEditorCubit extends Cubit<RequestEditorState> {
         draft: state.draft.copyWith(
           auth: auth,
           headers: _syncDerivedHeaders(
+            method: state.draft.method,
             headers: state.draft.headers,
             body: state.draft.body,
             auth: auth,
@@ -191,11 +207,13 @@ class RequestEditorCubit extends Cubit<RequestEditorState> {
 
   /// Applies every header that is derived from body or auth editor state.
   List<KeyValueItem> _syncDerivedHeaders({
+    required HttpMethod method,
     required List<KeyValueItem> headers,
     required RequestBodyDraft body,
     required RequestAuthDraft auth,
   }) {
     return _syncDerivedHeadersStatic(
+      method: method,
       headers: headers,
       body: body,
       auth: auth,
@@ -205,12 +223,17 @@ class RequestEditorCubit extends Cubit<RequestEditorState> {
 
   /// Applies every header that is derived from body or auth editor state.
   static List<KeyValueItem> _syncDerivedHeadersStatic({
+    required HttpMethod method,
     required List<KeyValueItem> headers,
     required RequestBodyDraft body,
     required RequestAuthDraft auth,
     required SyncRequestAuthHeadersUseCase authHeadersSyncUseCase,
   }) {
-    final contentTypeSyncedHeaders = _syncContentTypeHeader(headers, body);
+    final contentTypeSyncedHeaders = _syncContentTypeHeader(
+      method: method,
+      headers: headers,
+      body: body,
+    );
 
     return authHeadersSyncUseCase(
       headers: contentTypeSyncedHeaders,
@@ -220,9 +243,15 @@ class RequestEditorCubit extends Cubit<RequestEditorState> {
 
   /// Synchronizes the editor-visible Content-Type header with the active body mode.
   static List<KeyValueItem> _syncContentTypeHeader(
-    List<KeyValueItem> headers,
-    RequestBodyDraft body,
-  ) {
+    {
+    required HttpMethod method,
+    required List<KeyValueItem> headers,
+    required RequestBodyDraft body,
+  }) {
+    if (!method.supportsRequestBody) {
+      return headers;
+    }
+
     final contentType = _contentTypeForBody(body);
     final updatedHeaders = <KeyValueItem>[];
     var hasContentTypeHeader = false;
@@ -266,7 +295,7 @@ class RequestEditorCubit extends Cubit<RequestEditorState> {
   static String? _contentTypeForBody(RequestBodyDraft body) => switch (body.type) {
     RequestBodyType.xWwwFormUrlEncoded => 'application/x-www-form-urlencoded',
     RequestBodyType.formData => 'multipart/form-data',
-    RequestBodyType.graphql => 'application/json',
+    RequestBodyType.graphql => null,
     RequestBodyType.raw => body.raw.syncedContentType,
     RequestBodyType.none => null,
   };

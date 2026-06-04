@@ -134,6 +134,10 @@ class RequestExecutionRepositoryImpl implements RequestExecutionRepository {
       return headers;
     }
 
+    if (!draft.method.supportsRequestBody) {
+      return headers;
+    }
+
     switch (draft.body.type) {
       case RequestBodyType.none:
       case RequestBodyType.formData:
@@ -148,7 +152,6 @@ class RequestExecutionRepositoryImpl implements RequestExecutionRepository {
         headers[Headers.contentTypeHeader] = Headers.formUrlEncodedContentType;
         return headers;
       case RequestBodyType.graphql:
-        headers[Headers.contentTypeHeader] = Headers.jsonContentType;
         return headers;
     }
   }
@@ -173,11 +176,8 @@ class RequestExecutionRepositoryImpl implements RequestExecutionRepository {
             )
             .join('&');
       case RequestBodyType.graphql:
-        return jsonEncode({
-          'query': draft.body.graphQl.query,
-          if (draft.body.graphQl.variables.trim().isNotEmpty)
-            'variables': _parseGraphQlVariables(draft.body.graphQl.variables),
-        });
+        // TODO: GraphQL mode will convert method to POST and body to JSON in a future phase.
+        return null;
       case RequestBodyType.formData:
         return _buildFormData(draft.body.formData);
     }
@@ -208,15 +208,6 @@ class RequestExecutionRepositoryImpl implements RequestExecutionRepository {
     }
 
     return formData;
-  }
-
-  /// Parses GraphQL variables as JSON when possible and otherwise keeps the raw string.
-  Object _parseGraphQlVariables(String variables) {
-    try {
-      return jsonDecode(variables);
-    } on FormatException {
-      return variables;
-    }
   }
 
   /// Flattens response headers into reusable key/value entities for downstream parsing and UI.

@@ -673,13 +673,11 @@ class _KeyValueSection extends StatelessWidget {
     required this.title,
     required this.sectionId,
     required this.items,
-    this.onItemsChanged,
   });
 
   final String title;
   final String sectionId;
   final List<KeyValueItem> items;
-  final ValueChanged<List<KeyValueItem>>? onItemsChanged;
 
   /// Builds an editable key-value collection for query params, headers, and body fields.
   @override
@@ -720,13 +718,6 @@ class _KeyValueSection extends StatelessWidget {
 
   /// Writes the latest key-value collection back into the editor cubit.
   void _commit(BuildContext context, List<KeyValueItem> updatedItems) {
-    final sectionItemsChanged = onItemsChanged;
-
-    if (sectionItemsChanged != null) {
-      sectionItemsChanged(updatedItems);
-      return;
-    }
-
     final editorCubit = context.read<RequestEditorCubit>();
 
     if (sectionId == 'query') {
@@ -809,12 +800,18 @@ class _KeyValueRow extends StatelessWidget {
   String get _systemGeneratedAuthLabel =>
       item.systemGeneratedAuthorizationLabel ?? 'Auth';
 
+  /// Returns true when this row should expose the dedicated long-press action menu.
+  bool get _supportsLongPressActionMenu => sectionId == 'query';
+
+  /// Builds one inline key-value row and exposes a dedicated action menu on long press.
   @override
   Widget build(BuildContext context) => GestureDetector(
     onLongPress:
-        onDelete == null || _isSystemGeneratedAuthHeader
+        !_supportsLongPressActionMenu ||
+                onDelete == null ||
+                _isSystemGeneratedAuthHeader
             ? null
-            : () => _showDeleteActionSheet(context),
+            : () => _showKeyValueActionSheet(context),
     child: Padding(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.large,
@@ -875,26 +872,278 @@ class _KeyValueRow extends StatelessWidget {
     ),
   );
 
-  /// Shows the minimal query-param row menu and keeps only the delete action.
-  Future<void> _showDeleteActionSheet(BuildContext context) async {
-    final shouldDelete = await showModalBottomSheet<bool>(
+  /// Shows the long-press menu for one editable row and routes actions to edit or delete flows.
+  Future<void> _showKeyValueActionSheet(BuildContext context) async {
+    final action = await showModalBottomSheet<_KeyValueRowAction>(
       context: context,
+      backgroundColor: Colors.transparent,
       builder: (context) => SafeArea(
-        child: ListTile(
-          key: ValueKey<String>(
-            AppWidgetKeys.requestsEditorKeyValueRemoveButton(sectionId, index),
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.large),
+          child: Align(
+            alignment: Alignment.bottomCenter,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: context.appColors.surface,
+                borderRadius: const BorderRadius.all(
+                  Radius.circular(AppRadius.xxLarge),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: context.appColors.modalBarrier.withValues(
+                      alpha: 0.14,
+                    ),
+                    blurRadius: AppSpacing.large,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _KeyValueActionTile(
+                    action: _KeyValueRowAction.edit,
+                    rowKey: ValueKey<String>(
+                      AppWidgetKeys.requestsEditorKeyValueActionButton(
+                        sectionId,
+                        index,
+                      ),
+                    ),
+                    onTap: () => Navigator.of(
+                      context,
+                    ).pop(_KeyValueRowAction.edit),
+                  ),
+                  const _KeyValueDivider(),
+                  _KeyValueActionTile(
+                    action: _KeyValueRowAction.delete,
+                    rowKey: ValueKey<String>(
+                      AppWidgetKeys.requestsEditorKeyValueRemoveButton(
+                        sectionId,
+                        index,
+                      ),
+                    ),
+                    onTap: () => Navigator.of(
+                      context,
+                    ).pop(_KeyValueRowAction.delete),
+                  ),
+                ],
+              ),
+            ),
           ),
-          leading: const Icon(CupertinoIcons.delete),
-          title: const Text('Delete'),
-          onTap: () => Navigator.of(context).pop(true),
         ),
       ),
     );
 
-    if (shouldDelete == true) {
-      onDelete?.call();
+    if (!context.mounted) {
+      return;
+    }
+
+    switch (action) {
+      case _KeyValueRowAction.edit:
+        await _showEditSheet(context);
+      case _KeyValueRowAction.delete:
+        onDelete?.call();
+      case null:
+        return;
     }
   }
+
+  /// Opens a focused editor sheet for the selected query-param row and saves the updated pair.
+  Future<void> _showEditSheet(BuildContext context) async {
+    final result = await showRequestModalSheet<_KeyValueEditorResult?>(
+      context,
+      builder: (context) => _KeyValueEditorSheet(
+        title: 'Edit Query Param',
+        sectionId: sectionId,
+        index: index,
+        initialItem: item,
+        valueLabel: 'Value',
+      ),
+    );
+
+    if (result == null) {
+      return;
+    }
+
+    onChanged(
+      item.copyWith(
+        key: result.key,
+        value: result.value,
+      ),
+    );
+  }
+}
+
+enum _KeyValueRowAction { edit, delete }
+
+extension _KeyValueRowActionPresentation on _KeyValueRowAction {
+  /// Returns the visible label for one key-value action row.
+  String get label => switch (this) {
+    _KeyValueRowAction.edit => 'Edit',
+    _KeyValueRowAction.delete => 'Delete',
+  };
+
+  /// Returns the action icon used by the long-press menu.
+  IconData get icon => switch (this) {
+    _KeyValueRowAction.edit => CupertinoIcons.pencil,
+    _KeyValueRowAction.delete => CupertinoIcons.delete,
+  };
+}
+
+class _KeyValueActionTile extends StatelessWidget {
+  const _KeyValueActionTile({
+    required this.action,
+    required this.rowKey,
+    required this.onTap,
+  });
+
+  final _KeyValueRowAction action;
+  final Key rowKey;
+  final VoidCallback onTap;
+
+  /// Builds one action row inside the query-param long-press menu.
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+    final isDelete = action == _KeyValueRowAction.delete;
+    final foregroundColor = isDelete
+        ? colors.methodDelete
+        : colors.textPrimary;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        key: rowKey,
+        onTap: onTap,
+        borderRadius: const BorderRadius.all(Radius.circular(AppRadius.xxLarge)),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.large,
+            vertical: AppSpacing.medium,
+          ),
+          child: Row(
+            children: [
+              Text(
+                action.label,
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  color: foregroundColor,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const Spacer(),
+              Icon(action.icon, color: foregroundColor, size: AppSpacing.large),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _KeyValueEditorResult {
+  const _KeyValueEditorResult({
+    required this.key,
+    required this.value,
+  });
+
+  final String key;
+  final String value;
+}
+
+class _KeyValueEditorSheet extends StatefulWidget {
+  const _KeyValueEditorSheet({
+    required this.title,
+    required this.sectionId,
+    required this.index,
+    required this.initialItem,
+    this.valueLabel = 'Value',
+    this.valueHintText,
+  });
+
+  final String title;
+  final String sectionId;
+  final int index;
+  final KeyValueItem initialItem;
+  final String valueLabel;
+  final String? valueHintText;
+
+  @override
+  State<_KeyValueEditorSheet> createState() => _KeyValueEditorSheetState();
+}
+
+class _KeyValueEditorSheetState extends State<_KeyValueEditorSheet> {
+  late final TextEditingController _keyController;
+  late final TextEditingController _valueController;
+
+  @override
+  void initState() {
+    super.initState();
+    _keyController = TextEditingController(text: widget.initialItem.key);
+    _valueController = TextEditingController(text: widget.initialItem.value);
+  }
+
+  @override
+  void dispose() {
+    _keyController.dispose();
+    _valueController.dispose();
+    super.dispose();
+  }
+
+  /// Builds the key-value editor sheet used by long-press Edit actions.
+  @override
+  Widget build(BuildContext context) => RequestModalSheetCard(
+    child: SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.large),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Text(widget.title, style: Theme.of(context).textTheme.titleLarge),
+                const Spacer(),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(
+                    _KeyValueEditorResult(
+                      key: _keyController.text,
+                      value: _valueController.text,
+                    ),
+                  ),
+                  child: const Text('Save'),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.medium),
+            _EditorTextField(
+              fieldKey: AppWidgetKeys.requestsEditorKeyValueKeyField(
+                widget.sectionId,
+                widget.index,
+              ),
+              value: widget.initialItem.key,
+              label: 'Key',
+              onChanged: (value) => _keyController.text = value,
+            ),
+            const SizedBox(height: AppSpacing.small),
+            _EditorTextField(
+              fieldKey: AppWidgetKeys.requestsEditorKeyValueValueField(
+                widget.sectionId,
+                widget.index,
+              ),
+              value: widget.initialItem.value,
+              label: widget.valueLabel,
+              hintText: widget.valueHintText,
+              onChanged: (value) => _valueController.text = value,
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 class _EnabledIndicator extends StatelessWidget {
@@ -1472,9 +1721,10 @@ class _BodyUrlEncodedRow extends StatelessWidget {
   final ValueChanged<KeyValueItem> onChanged;
   final VoidCallback onDelete;
 
+  /// Builds one URL-encoded body row and exposes edit/delete actions on long press.
   @override
   Widget build(BuildContext context) => GestureDetector(
-    onLongPress: () => _showDeleteActionSheet(context),
+    onLongPress: () => _showActionSheet(context),
     child: Padding(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.large,
@@ -1523,28 +1773,88 @@ class _BodyUrlEncodedRow extends StatelessWidget {
     ),
   );
 
-  /// Shows the minimal row menu used for delete-only long-press actions.
-  Future<void> _showDeleteActionSheet(BuildContext context) async {
-    final shouldDelete = await showModalBottomSheet<bool>(
+  /// Shows the long-press menu for one URL-encoded row and routes actions to edit or delete flows.
+  Future<void> _showActionSheet(BuildContext context) async {
+    final action = await showModalBottomSheet<_KeyValueRowAction>(
       context: context,
+      backgroundColor: Colors.transparent,
       builder: (context) => SafeArea(
-        child: ListTile(
-          key: ValueKey<String>(
-            AppWidgetKeys.requestsEditorKeyValueRemoveButton(
-              'body_url_encoded',
-              index,
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.large),
+          child: Align(
+            alignment: Alignment.bottomCenter,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: context.appColors.surface,
+                borderRadius: const BorderRadius.all(
+                  Radius.circular(AppRadius.xxLarge),
+                ),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _KeyValueActionTile(
+                    action: _KeyValueRowAction.edit,
+                    rowKey: ValueKey<String>(
+                      AppWidgetKeys.requestsEditorKeyValueActionButton(
+                        'body_url_encoded',
+                        index,
+                      ),
+                    ),
+                    onTap: () => Navigator.of(context).pop(_KeyValueRowAction.edit),
+                  ),
+                  const _KeyValueDivider(),
+                  _KeyValueActionTile(
+                    action: _KeyValueRowAction.delete,
+                    rowKey: ValueKey<String>(
+                      AppWidgetKeys.requestsEditorKeyValueRemoveButton(
+                        'body_url_encoded',
+                        index,
+                      ),
+                    ),
+                    onTap: () =>
+                        Navigator.of(context).pop(_KeyValueRowAction.delete),
+                  ),
+                ],
+              ),
             ),
           ),
-          leading: const Icon(CupertinoIcons.delete),
-          title: const Text('Delete'),
-          onTap: () => Navigator.of(context).pop(true),
         ),
       ),
     );
 
-    if (shouldDelete == true) {
-      onDelete();
+    if (!context.mounted) {
+      return;
     }
+
+    switch (action) {
+      case _KeyValueRowAction.edit:
+        await _showEditSheet(context);
+      case _KeyValueRowAction.delete:
+        onDelete();
+      case null:
+        return;
+    }
+  }
+
+  /// Opens the focused editor sheet for the selected URL-encoded row.
+  Future<void> _showEditSheet(BuildContext context) async {
+    final result = await showRequestModalSheet<_KeyValueEditorResult?>(
+      context,
+      builder: (context) => _KeyValueEditorSheet(
+        title: 'Edit URL Encoded Field',
+        sectionId: 'body_url_encoded',
+        index: index,
+        initialItem: item,
+        valueLabel: 'Value',
+      ),
+    );
+
+    if (result == null) {
+      return;
+    }
+
+    onChanged(item.copyWith(key: result.key, value: result.value));
   }
 }
 
@@ -1604,9 +1914,10 @@ class _BodyFormDataRow extends StatelessWidget {
   final ValueChanged<KeyValueItem> onChanged;
   final VoidCallback onDelete;
 
+  /// Builds one form-data row and exposes edit/delete actions on long press.
   @override
   Widget build(BuildContext context) => GestureDetector(
-    onLongPress: () => _showDeleteActionSheet(context),
+    onLongPress: () => _showActionSheet(context),
     child: Padding(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.large,
@@ -1693,28 +2004,90 @@ class _BodyFormDataRow extends StatelessWidget {
     ),
   );
 
-  /// Shows the minimal row menu used for delete-only long-press actions.
-  Future<void> _showDeleteActionSheet(BuildContext context) async {
-    final shouldDelete = await showModalBottomSheet<bool>(
+  /// Shows the long-press menu for one form-data row and routes actions to edit or delete flows.
+  Future<void> _showActionSheet(BuildContext context) async {
+    final action = await showModalBottomSheet<_KeyValueRowAction>(
       context: context,
+      backgroundColor: Colors.transparent,
       builder: (context) => SafeArea(
-        child: ListTile(
-          key: ValueKey<String>(
-            AppWidgetKeys.requestsEditorKeyValueRemoveButton(
-              'body_form_data',
-              index,
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.large),
+          child: Align(
+            alignment: Alignment.bottomCenter,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: context.appColors.surface,
+                borderRadius: const BorderRadius.all(
+                  Radius.circular(AppRadius.xxLarge),
+                ),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _KeyValueActionTile(
+                    action: _KeyValueRowAction.edit,
+                    rowKey: ValueKey<String>(
+                      AppWidgetKeys.requestsEditorKeyValueActionButton(
+                        'body_form_data',
+                        index,
+                      ),
+                    ),
+                    onTap: () => Navigator.of(context).pop(_KeyValueRowAction.edit),
+                  ),
+                  const _KeyValueDivider(),
+                  _KeyValueActionTile(
+                    action: _KeyValueRowAction.delete,
+                    rowKey: ValueKey<String>(
+                      AppWidgetKeys.requestsEditorKeyValueRemoveButton(
+                        'body_form_data',
+                        index,
+                      ),
+                    ),
+                    onTap: () =>
+                        Navigator.of(context).pop(_KeyValueRowAction.delete),
+                  ),
+                ],
+              ),
             ),
           ),
-          leading: const Icon(CupertinoIcons.delete),
-          title: const Text('Delete'),
-          onTap: () => Navigator.of(context).pop(true),
         ),
       ),
     );
 
-    if (shouldDelete == true) {
-      onDelete();
+    if (!context.mounted) {
+      return;
     }
+
+    switch (action) {
+      case _KeyValueRowAction.edit:
+        await _showEditSheet(context);
+      case _KeyValueRowAction.delete:
+        onDelete();
+      case null:
+        return;
+    }
+  }
+
+  /// Opens the focused editor sheet for the selected form-data row.
+  Future<void> _showEditSheet(BuildContext context) async {
+    final isFileItem = item.type == KeyValueItemType.file;
+    final result = await showRequestModalSheet<_KeyValueEditorResult?>(
+      context,
+      builder: (context) => _KeyValueEditorSheet(
+        title: isFileItem ? 'Edit Form Data File' : 'Edit Form Data Field',
+        sectionId: 'body_form_data',
+        index: index,
+        initialItem: item,
+        valueLabel: isFileItem ? 'File Path' : 'Value',
+        valueHintText: isFileItem ? 'C:\\path\\to\\file.json' : null,
+      ),
+    );
+
+    if (result == null) {
+      return;
+    }
+
+    onChanged(item.copyWith(key: result.key, value: result.value));
   }
 }
 
@@ -2287,8 +2660,6 @@ class _EditorTextField extends StatefulWidget {
     this.hintText,
     this.keyboardType,
     this.textInputAction,
-    this.minLines = 1,
-    this.maxLines = 1,
     this.obscureText = false,
   });
 
@@ -2299,8 +2670,6 @@ class _EditorTextField extends StatefulWidget {
   final String? hintText;
   final TextInputType? keyboardType;
   final TextInputAction? textInputAction;
-  final int minLines;
-  final int maxLines;
   final bool obscureText;
 
   @override
@@ -2342,8 +2711,6 @@ class _EditorTextFieldState extends State<_EditorTextField> {
     onChanged: widget.onChanged,
     keyboardType: widget.keyboardType,
     textInputAction: widget.textInputAction,
-    minLines: widget.minLines,
-    maxLines: widget.maxLines,
     obscureText: widget.obscureText,
     decoration: _buildFieldDecoration(
       context,
