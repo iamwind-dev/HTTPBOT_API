@@ -53,7 +53,6 @@ extension AppShellTabX on AppShellTab {
       width: AppSpacing.large,
       height: AppSpacing.large,
       colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
-      
     ),
     AppShellTab.settings => Assets.icons.settingsIc.svg(
       width: AppSpacing.large,
