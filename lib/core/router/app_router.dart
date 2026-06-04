@@ -14,7 +14,6 @@ import 'package:httpbot_api/features/web_sockets/presentation/widget/websocket_s
 import '../../core/constants/app_strings.dart';
 import '../../core/keys/widget_keys.dart';
 import '../../core/theme/app_theme_context.dart';
-import '../../core/widgets/app_section_placeholder.dart';
 import '../../core/widgets/app_shell_scaffold.dart';
 import '../../features/request_builder/domain/entities/request_draft.dart';
 import '../../features/request_builder/domain/entities/request_variable_store.dart';
@@ -371,29 +370,6 @@ class _PostmanShell extends StatelessWidget {
           floatingActionButton: const PostmanShellActionButton(),
           onTabSelected: onTabSelected,
         ),
-      );
-}
-
-class _StaticTabShell extends StatelessWidget {
-  const _StaticTabShell({
-    required this.currentTab,
-    required this.title,
-    required this.message,
-    required this.onTabSelected,
-  });
-
-  final AppShellTab currentTab;
-  final String title;
-  final String message;
-  final ValueChanged<AppShellTab> onTabSelected;
-
-  // Provide the same shell structure as Requests while allowing screens to omit header actions.
-  @override
-  Widget build(BuildContext context) => AppShellScaffold(
-        currentTab: currentTab,
-        title: title,
-        body: AppSectionPlaceholder(title: title, message: message),
-        onTabSelected: onTabSelected,
       );
 }
 
