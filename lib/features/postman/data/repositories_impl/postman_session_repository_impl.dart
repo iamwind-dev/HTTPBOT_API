@@ -1,72 +1,39 @@
-import 'dart:convert';
-
-import 'package:shared_preferences/shared_preferences.dart';
-
 import '../../domain/entities/postman_account_entity.dart';
 import '../../domain/repositories/postman_session_repository.dart';
+import '../datasources/postman_local_datasource.dart';
 
 class PostmanSessionRepositoryImpl implements PostmanSessionRepository {
-  static const _postmanApiKeyKey = 'postman_api_key';
-  static const _postmanAccountKey = 'postman_account';
+  final PostmanLocalDataSource localDataSource;
+
+  PostmanSessionRepositoryImpl(this.localDataSource);
 
   @override
-  Future<String?> loadApiKey() async {
-    final preferences = await SharedPreferences.getInstance();
-    return preferences.getString(_postmanApiKeyKey);
+  Future<String?> loadApiKey() {
+    return localDataSource.loadApiKey();
   }
 
   @override
-  Future<void> saveApiKey(String apiKey) async {
-    final preferences = await SharedPreferences.getInstance();
-    await preferences.setString(_postmanApiKeyKey, apiKey);
+  Future<void> saveApiKey(String apiKey) {
+    return localDataSource.saveApiKey(apiKey);
   }
 
   @override
-  Future<PostmanAccountEntity?> loadAccount() async {
-    final preferences = await SharedPreferences.getInstance();
-    final rawValue = preferences.getString(_postmanAccountKey);
-
-    if (rawValue == null || rawValue.isEmpty) {
-      return null;
-    }
-
-    final json = jsonDecode(rawValue);
-    if (json is! Map) {
-      return null;
-    }
-
-    final map = Map<String, dynamic>.from(json);
-    return PostmanAccountEntity(
-      id: map['id']?.toString() ?? '',
-      username: map['username']?.toString() ?? '',
-      email: map['email']?.toString() ?? '',
-      fullName: map['fullName']?.toString() ?? '',
-      avatarUrl: map['avatarUrl']?.toString() ?? '',
-    );
+  Future<PostmanAccountEntity?> loadAccount() {
+    return localDataSource.loadAccount();
   }
 
   @override
-  Future<void> saveAccount(PostmanAccountEntity account) async {
-    final preferences = await SharedPreferences.getInstance();
-    final rawValue = jsonEncode({
-      'id': account.id,
-      'username': account.username,
-      'email': account.email,
-      'fullName': account.fullName,
-      'avatarUrl': account.avatarUrl,
-    });
-    await preferences.setString(_postmanAccountKey, rawValue);
+  Future<void> saveAccount(PostmanAccountEntity account) {
+    return localDataSource.saveAccount(account);
   }
 
   @override
-  Future<void> clearApiKey() async {
-    final preferences = await SharedPreferences.getInstance();
-    await preferences.remove(_postmanApiKeyKey);
+  Future<void> clearApiKey() {
+    return localDataSource.clearApiKey();
   }
 
   @override
-  Future<void> clearAccount() async {
-    final preferences = await SharedPreferences.getInstance();
-    await preferences.remove(_postmanAccountKey);
+  Future<void> clearAccount() {
+    return localDataSource.clearAccount();
   }
 }

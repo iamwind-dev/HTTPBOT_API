@@ -25,4 +25,16 @@ abstract class CollectionRepository {
     required String apiKey,
     required String collectionId,
   });
+
+  Future<List<PostmanWorkspaceEntity>> loadCachedWorkspaces();
+
+  Future<void> saveCachedWorkspaces(List<PostmanWorkspaceEntity> workspaces);
+
+  Future<void> clearCachedWorkspaces();
+
+  Future<List<PostmanCollectionEntity>> loadCachedCollections();
+
+  Future<void> saveCachedCollections(List<PostmanCollectionEntity> collections);
+
+  Future<void> clearCachedCollections();
 }

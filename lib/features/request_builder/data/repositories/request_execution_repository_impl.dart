@@ -4,11 +4,13 @@ import 'package:dio/dio.dart';
 
 import '../../../../core/network/dio_client.dart';
 import '../mappers/request_body_mapper.dart';
+import '../mappers/request_headers_mapper.dart';
 import '../../domain/entities/auth_applied_request.dart';
 import '../../domain/entities/request_draft.dart';
 import '../../domain/entities/request_execution_result.dart';
 import '../../domain/entities/request_key_value.dart';
 import '../../domain/entities/requests_method.dart';
+import '../../domain/helpers/header_method_policy.dart';
 import '../../domain/repositories/request_execution_repository.dart';
 
 class RequestExecutionRepositoryImpl implements RequestExecutionRepository {
@@ -134,24 +136,18 @@ class RequestExecutionRepositoryImpl implements RequestExecutionRepository {
     required RequestBodyPayload payload,
     required bool canSendBody,
   }) {
-    final headers = <String, String>{};
+    final headers = buildEnabledHeaders(draft.headers);
+    final canAutoAttachContentType =
+        shouldAutoAttachContentTypeForMethod(draft.method) &&
+        canSendBody &&
+        payload.contentType != null;
+    final finalHeaders = applyAutoContentTypeIfNeeded(
+      headers: headers,
+      contentType: payload.contentType,
+      canAutoAttachContentType: canAutoAttachContentType,
+    );
 
-    for (final item in draft.headers.where(
-      (item) => item.isEnabled && item.hasKey,
-    )) {
-      headers[item.key] = item.value;
-    }
-
-    if (!canSendBody || payload.contentType == null) {
-      return headers;
-    }
-
-    if (_containsHeader(headers, Headers.contentTypeHeader)) {
-      return headers;
-    }
-
-    headers[Headers.contentTypeHeader] = payload.contentType!;
-    return headers;
+    return Map<String, String>.from(finalHeaders);
   }
 
   /// Flattens response headers into reusable key/value entities for downstream parsing and UI.
@@ -248,8 +244,4 @@ class RequestExecutionRepositoryImpl implements RequestExecutionRepository {
       _ => '',
     };
   }
-
-  /// Returns true when a header key already exists ignoring case differences.
-  bool _containsHeader(Map<String, String> headers, String key) => headers.keys
-      .any((existingKey) => existingKey.toLowerCase() == key.toLowerCase());
 }

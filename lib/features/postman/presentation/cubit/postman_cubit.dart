@@ -1,8 +1,14 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../domain/entities/postman_account_entity.dart';
 import '../../domain/entities/postman_collection_entity.dart';
 import '../../domain/entities/postman_workspace_entity.dart';
+import '../../domain/usecases/load_cached_postman_collections_usecase.dart';
+import '../../domain/usecases/load_cached_postman_workspaces_usecase.dart';
+import '../../domain/usecases/load_postman_api_key_usecase.dart';
 import '../../domain/usecases/get_postman_authenticated_user_usecase.dart';
+import '../../domain/usecases/save_cached_postman_collections_usecase.dart';
+import '../../domain/usecases/save_cached_postman_workspaces_usecase.dart';
 import '../../domain/usecases/save_postman_account_usecase.dart';
 import '../../domain/usecases/save_postman_api_key_usecase.dart';
 import '../../domain/usecases/get_postman_collection_detail_usecase.dart';
@@ -18,8 +24,15 @@ class PostmanCubit extends Cubit<PostmanState> {
   final GetPostmanCollectionDetailUseCase getPostmanCollectionDetailUseCase;
   final GetPostmanAuthenticatedUserUseCase
   getPostmanAuthenticatedUserUseCase;
+  final LoadPostmanApiKeyUseCase loadPostmanApiKeyUseCase;
+  final LoadCachedPostmanWorkspacesUseCase loadCachedPostmanWorkspacesUseCase;
+  final LoadCachedPostmanCollectionsUseCase
+      loadCachedPostmanCollectionsUseCase;
   final SavePostmanAccountUseCase savePostmanAccountUseCase;
   final SavePostmanApiKeyUseCase savePostmanApiKeyUseCase;
+  final SaveCachedPostmanWorkspacesUseCase saveCachedPostmanWorkspacesUseCase;
+  final SaveCachedPostmanCollectionsUseCase
+      saveCachedPostmanCollectionsUseCase;
 
   PostmanCubit({
     required this.getPostmanWorkspacesUseCase,
@@ -27,9 +40,46 @@ class PostmanCubit extends Cubit<PostmanState> {
     required this.getPostmanCollectionsUseCase,
     required this.getPostmanCollectionDetailUseCase,
     required this.getPostmanAuthenticatedUserUseCase,
+    required this.loadPostmanApiKeyUseCase,
+    required this.loadCachedPostmanWorkspacesUseCase,
+    required this.loadCachedPostmanCollectionsUseCase,
     required this.savePostmanAccountUseCase,
     required this.savePostmanApiKeyUseCase,
+    required this.saveCachedPostmanWorkspacesUseCase,
+    required this.saveCachedPostmanCollectionsUseCase,
   }) : super(const PostmanState());
+
+  Future<void> load() async {
+    emit(
+      state.copyWith(
+        isLoadingCollections: true,
+        clearErrorMessage: true,
+      ),
+    );
+
+    try {
+      final apiKey = await loadPostmanApiKeyUseCase() ?? '';
+      final workspaces = await loadCachedPostmanWorkspacesUseCase();
+      final collections = await loadCachedPostmanCollectionsUseCase();
+
+      emit(
+        state.copyWith(
+          isLoadingCollections: false,
+          apiKey: apiKey,
+          workspaces: workspaces,
+          collections: collections,
+          selectedWorkspaceId: _resolveInitialWorkspaceId(workspaces),
+        ),
+      );
+    } catch (e) {
+      emit(
+        state.copyWith(
+          isLoadingCollections: false,
+          errorMessage: e.toString(),
+        ),
+      );
+    }
+  }
 
   Future<bool> linkPostman({
     required String apiKey,
@@ -84,12 +134,20 @@ class PostmanCubit extends Cubit<PostmanState> {
       emit(
         state.copyWith(
           isLoadingCollections: false,
+          apiKey: apiKey,
           workspaces: workspacesWithCollections,
+          collections: const [],
+          clearSelectedCollection: true,
+          clearPickerSelection: true,
           selectedWorkspaceId: initialWorkspaceId,
         ),
       );
-      await savePostmanAccountUseCase(account);
-      await savePostmanApiKeyUseCase(apiKey);
+      await _persistLinkedSession(
+        apiKey: apiKey,
+        account: account,
+        workspaces: workspacesWithCollections,
+        collections: const [],
+      );
       return true;
     } catch (e) {
       emit(
@@ -118,13 +176,16 @@ class PostmanCubit extends Cubit<PostmanState> {
         apiKey: state.apiKey,
         collectionId: collection.id,
       );
+      final nextCollections = _upsertImportedCollection(result);
 
       emit(
         state.copyWith(
           isLoadingCollectionDetail: false,
           selectedCollection: result,
+          collections: nextCollections,
         ),
       );
+      await saveCachedPostmanCollectionsUseCase(nextCollections);
     } catch (e) {
       emit(
         state.copyWith(
@@ -185,15 +246,17 @@ class PostmanCubit extends Cubit<PostmanState> {
         apiKey: state.apiKey,
         collectionId: pickerCollection.id,
       );
+      final nextCollections = _upsertImportedCollection(result);
 
       emit(
         state.copyWith(
           isLoadingCollectionDetail: false,
-          collections: _upsertImportedCollection(result),
+          collections: nextCollections,
           selectedCollection: result,
           clearPickerSelection: true,
         ),
       );
+      await saveCachedPostmanCollectionsUseCase(nextCollections);
 
       return true;
     } catch (e) {
@@ -209,6 +272,18 @@ class PostmanCubit extends Cubit<PostmanState> {
 
   void clearSelectedCollection() {
     emit(state.copyWith(clearSelectedCollection: true));
+  }
+
+  Future<void> _persistLinkedSession({
+    required String apiKey,
+    required PostmanAccountEntity account,
+    required List<PostmanWorkspaceEntity> workspaces,
+    required List<PostmanCollectionEntity> collections,
+  }) async {
+    await savePostmanAccountUseCase(account);
+    await savePostmanApiKeyUseCase(apiKey);
+    await saveCachedPostmanWorkspacesUseCase(workspaces);
+    await saveCachedPostmanCollectionsUseCase(collections);
   }
 
   String? _resolveInitialWorkspaceId(List<PostmanWorkspaceEntity> workspaces) {

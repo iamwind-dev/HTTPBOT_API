@@ -31,13 +31,19 @@ import '../../features/request_builder/presentation/widgets/request_search_field
 import '../../features/request_builder/presentation/widgets/request_shell_action_button.dart';
 import '../../features/postman/domain/usecases/clear_postman_account_usecase.dart';
 import '../../features/postman/domain/usecases/clear_postman_api_key_usecase.dart';
+import '../../features/postman/domain/usecases/clear_cached_postman_collections_usecase.dart';
+import '../../features/postman/domain/usecases/clear_cached_postman_workspaces_usecase.dart';
 import '../../features/postman/domain/usecases/get_postman_authenticated_user_usecase.dart';
 import '../../features/postman/domain/usecases/get_postman_collection_detail_usecase.dart';
 import '../../features/postman/domain/usecases/get_postman_collections_usecase.dart';
 import '../../features/postman/domain/usecases/get_postman_workspace_detail_usecase.dart';
 import '../../features/postman/domain/usecases/get_postman_workspaces_usecase.dart';
+import '../../features/postman/domain/usecases/load_cached_postman_collections_usecase.dart';
+import '../../features/postman/domain/usecases/load_cached_postman_workspaces_usecase.dart';
 import '../../features/postman/domain/usecases/load_postman_account_usecase.dart';
 import '../../features/postman/domain/usecases/load_postman_api_key_usecase.dart';
+import '../../features/postman/domain/usecases/save_cached_postman_collections_usecase.dart';
+import '../../features/postman/domain/usecases/save_cached_postman_workspaces_usecase.dart';
 import '../../features/postman/domain/usecases/save_postman_account_usecase.dart';
 import '../../features/postman/domain/usecases/save_postman_api_key_usecase.dart';
 import '../../features/postman/presentation/cubit/postman_account_cubit.dart';
@@ -62,10 +68,22 @@ abstract final class AppRouter {
     required GetPostmanCollectionDetailUseCase getPostmanCollectionDetailUseCase,
     required SavePostmanApiKeyUseCase savePostmanApiKeyUseCase,
     required SavePostmanAccountUseCase savePostmanAccountUseCase,
+    required SaveCachedPostmanWorkspacesUseCase
+        saveCachedPostmanWorkspacesUseCase,
+    required SaveCachedPostmanCollectionsUseCase
+        saveCachedPostmanCollectionsUseCase,
     required LoadPostmanApiKeyUseCase loadPostmanApiKeyUseCase,
     required LoadPostmanAccountUseCase loadPostmanAccountUseCase,
+    required LoadCachedPostmanWorkspacesUseCase
+        loadCachedPostmanWorkspacesUseCase,
+    required LoadCachedPostmanCollectionsUseCase
+        loadCachedPostmanCollectionsUseCase,
     required ClearPostmanApiKeyUseCase clearPostmanApiKeyUseCase,
     required ClearPostmanAccountUseCase clearPostmanAccountUseCase,
+    required ClearCachedPostmanWorkspacesUseCase
+        clearCachedPostmanWorkspacesUseCase,
+    required ClearCachedPostmanCollectionsUseCase
+        clearCachedPostmanCollectionsUseCase,
     required GetPostmanAuthenticatedUserUseCase
         getPostmanAuthenticatedUserUseCase,
     String? initialLocation,
@@ -141,9 +159,18 @@ abstract final class AppRouter {
                             getPostmanCollectionDetailUseCase,
                         getPostmanAuthenticatedUserUseCase:
                             getPostmanAuthenticatedUserUseCase,
+                        loadPostmanApiKeyUseCase: loadPostmanApiKeyUseCase,
+                        loadCachedPostmanWorkspacesUseCase:
+                            loadCachedPostmanWorkspacesUseCase,
+                        loadCachedPostmanCollectionsUseCase:
+                            loadCachedPostmanCollectionsUseCase,
                         savePostmanAccountUseCase: savePostmanAccountUseCase,
                         savePostmanApiKeyUseCase: savePostmanApiKeyUseCase,
-                      ),
+                        saveCachedPostmanWorkspacesUseCase:
+                            saveCachedPostmanWorkspacesUseCase,
+                        saveCachedPostmanCollectionsUseCase:
+                            saveCachedPostmanCollectionsUseCase,
+                      )..load(),
                       child: _PostmanShell(
                         onTabSelected: (tab) =>
                             _handleShellTabSelection(context, tab),
@@ -187,6 +214,10 @@ abstract final class AppRouter {
                                   clearPostmanApiKeyUseCase,
                               clearPostmanAccountUseCase:
                                   clearPostmanAccountUseCase,
+                              clearCachedPostmanWorkspacesUseCase:
+                                  clearCachedPostmanWorkspacesUseCase,
+                              clearCachedPostmanCollectionsUseCase:
+                                  clearCachedPostmanCollectionsUseCase,
                             ),
                             onTabSelected: (tab) =>
                                 _handleShellTabSelection(context, tab),
@@ -213,10 +244,22 @@ abstract final class AppRouter {
         getIt<GetPostmanCollectionDetailUseCase>(),
     savePostmanApiKeyUseCase: getIt<SavePostmanApiKeyUseCase>(),
     savePostmanAccountUseCase: getIt<SavePostmanAccountUseCase>(),
+    saveCachedPostmanWorkspacesUseCase:
+        getIt<SaveCachedPostmanWorkspacesUseCase>(),
+    saveCachedPostmanCollectionsUseCase:
+        getIt<SaveCachedPostmanCollectionsUseCase>(),
     loadPostmanApiKeyUseCase: getIt<LoadPostmanApiKeyUseCase>(),
     loadPostmanAccountUseCase: getIt<LoadPostmanAccountUseCase>(),
+    loadCachedPostmanWorkspacesUseCase:
+        getIt<LoadCachedPostmanWorkspacesUseCase>(),
+    loadCachedPostmanCollectionsUseCase:
+        getIt<LoadCachedPostmanCollectionsUseCase>(),
     clearPostmanApiKeyUseCase: getIt<ClearPostmanApiKeyUseCase>(),
     clearPostmanAccountUseCase: getIt<ClearPostmanAccountUseCase>(),
+    clearCachedPostmanWorkspacesUseCase:
+        getIt<ClearCachedPostmanWorkspacesUseCase>(),
+    clearCachedPostmanCollectionsUseCase:
+        getIt<ClearCachedPostmanCollectionsUseCase>(),
     getPostmanAuthenticatedUserUseCase:
         getIt<GetPostmanAuthenticatedUserUseCase>(),
   );
@@ -249,6 +292,10 @@ abstract final class AppRouter {
     required LoadPostmanAccountUseCase loadPostmanAccountUseCase,
     required ClearPostmanApiKeyUseCase clearPostmanApiKeyUseCase,
     required ClearPostmanAccountUseCase clearPostmanAccountUseCase,
+    required ClearCachedPostmanWorkspacesUseCase
+        clearCachedPostmanWorkspacesUseCase,
+    required ClearCachedPostmanCollectionsUseCase
+        clearCachedPostmanCollectionsUseCase,
   }) {
     if (itemId == 'postman-account') {
       return BlocProvider(
@@ -257,6 +304,10 @@ abstract final class AppRouter {
           loadPostmanAccountUseCase: loadPostmanAccountUseCase,
           clearPostmanApiKeyUseCase: clearPostmanApiKeyUseCase,
           clearPostmanAccountUseCase: clearPostmanAccountUseCase,
+          clearCachedPostmanWorkspacesUseCase:
+              clearCachedPostmanWorkspacesUseCase,
+          clearCachedPostmanCollectionsUseCase:
+              clearCachedPostmanCollectionsUseCase,
         )..load(),
         child: const PostmanAccountScreen(),
       );

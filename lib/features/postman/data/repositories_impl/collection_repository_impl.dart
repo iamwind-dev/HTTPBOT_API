@@ -1,13 +1,15 @@
 import '../../domain/entities/postman_account_entity.dart';
 import '../../domain/entities/postman_collection_entity.dart';
-import '../../domain/repositories/collection_repository.dart';
 import '../../domain/entities/postman_workspace_entity.dart';
+import '../../domain/repositories/collection_repository.dart';
+import '../datasources/postman_local_datasource.dart';
 import '../datasources/postman_remote_datasource.dart';
 
 class CollectionRepositoryImpl implements CollectionRepository {
   final PostmanRemoteDataSource remoteDataSource;
+  final PostmanLocalDataSource localDataSource;
 
-  CollectionRepositoryImpl(this.remoteDataSource);
+  CollectionRepositoryImpl(this.remoteDataSource, this.localDataSource);
 
   @override
   Future<PostmanAccountEntity> getAuthenticatedUser({
@@ -55,5 +57,35 @@ class CollectionRepositoryImpl implements CollectionRepository {
       collectionId: collectionId,
     );
     return result.toEntity();
+  }
+
+  @override
+  Future<List<PostmanWorkspaceEntity>> loadCachedWorkspaces() {
+    return localDataSource.loadWorkspaces();
+  }
+
+  @override
+  Future<void> saveCachedWorkspaces(List<PostmanWorkspaceEntity> workspaces) {
+    return localDataSource.saveWorkspaces(workspaces);
+  }
+
+  @override
+  Future<void> clearCachedWorkspaces() {
+    return localDataSource.clearWorkspaces();
+  }
+
+  @override
+  Future<List<PostmanCollectionEntity>> loadCachedCollections() {
+    return localDataSource.loadCollections();
+  }
+
+  @override
+  Future<void> saveCachedCollections(List<PostmanCollectionEntity> collections) {
+    return localDataSource.saveCollections(collections);
+  }
+
+  @override
+  Future<void> clearCachedCollections() {
+    return localDataSource.clearCollections();
   }
 }

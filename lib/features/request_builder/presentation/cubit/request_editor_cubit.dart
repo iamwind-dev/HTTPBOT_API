@@ -130,6 +130,36 @@ class RequestEditorCubit extends Cubit<RequestEditorState> {
     );
   }
 
+  void addHeader() {
+    updateHeaders([...state.draft.headers, const KeyValueItem(key: '', value: '')]);
+  }
+
+  void updateHeader(int index, KeyValueItem header) {
+    final updatedHeaders = [...state.draft.headers];
+    updatedHeaders[index] = header;
+    updateHeaders(updatedHeaders);
+  }
+
+  void removeHeader(int index) {
+    final updatedHeaders = [...state.draft.headers]..removeAt(index);
+    updateHeaders(updatedHeaders);
+  }
+
+  void toggleHeaderEnabled(int index) {
+    final header = state.draft.headers[index];
+    updateHeader(index, header.copyWith(isEnabled: !header.isEnabled));
+  }
+
+  void updateHeaderKey(int index, String key) {
+    final header = state.draft.headers[index];
+    updateHeader(index, header.copyWith(key: key));
+  }
+
+  void updateHeaderValue(int index, String value) {
+    final header = state.draft.headers[index];
+    updateHeader(index, header.copyWith(value: value));
+  }
+
   /// Replaces the body draft after body mode or content changes.
   void updateBody(RequestBodyDraft body) {
     emit(
@@ -229,90 +259,13 @@ class RequestEditorCubit extends Cubit<RequestEditorState> {
     required RequestAuthDraft auth,
     required SyncRequestAuthHeadersUseCase authHeadersSyncUseCase,
   }) {
-    final contentTypeSyncedHeaders = _syncContentTypeHeader(
-      method: method,
-      headers: headers,
-      body: body,
-    );
+    final contentTypeSyncedHeaders = headers
+        .where((header) => !header.isSystemGeneratedContentTypeHeader)
+        .toList(growable: false);
 
     return authHeadersSyncUseCase(
       headers: contentTypeSyncedHeaders,
       auth: auth,
     );
   }
-
-  /// Synchronizes the editor-visible Content-Type header with the active body mode.
-  static List<KeyValueItem> _syncContentTypeHeader({
-    required HttpMethod method,
-    required List<KeyValueItem> headers,
-    required RequestBodyDraft body,
-  }) {
-    final contentType = _contentTypeForBody(body);
-    final updatedHeaders = <KeyValueItem>[];
-    var hasManualContentTypeHeader = false;
-    var hasSystemGeneratedContentTypeHeader = false;
-
-    for (final header in headers) {
-      if (!_isContentTypeHeader(header)) {
-        updatedHeaders.add(header);
-        continue;
-      }
-
-      if (header.isSystemGeneratedContentTypeHeader) {
-        if (hasSystemGeneratedContentTypeHeader) {
-          continue;
-        }
-
-        hasSystemGeneratedContentTypeHeader = true;
-        if (!methodSupportsRequestBody(method) || contentType == null) {
-          continue;
-        }
-
-        updatedHeaders.add(
-          header.copyWith(
-            key: 'Content-Type',
-            value: contentType,
-            isEnabled: true,
-            type: KeyValueItemType.text,
-            description: bodyContentTypeSystemGeneratedHeaderDescription,
-          ),
-        );
-        continue;
-      }
-
-      hasManualContentTypeHeader = true;
-      updatedHeaders.add(header);
-    }
-
-    if (methodSupportsRequestBody(method) &&
-        contentType != null &&
-        !hasManualContentTypeHeader &&
-        !hasSystemGeneratedContentTypeHeader) {
-      updatedHeaders.add(
-        KeyValueItem(
-          key: 'Content-Type',
-          value: contentType,
-          isEnabled: true,
-          description: bodyContentTypeSystemGeneratedHeaderDescription,
-        ),
-      );
-    }
-
-    return updatedHeaders;
-  }
-
-  /// Returns the Content-Type value implied by the currently selected body mode.
-  static String? _contentTypeForBody(RequestBodyDraft body) =>
-      switch (body.type) {
-        RequestBodyType.xWwwFormUrlEncoded =>
-          'application/x-www-form-urlencoded',
-        RequestBodyType.formData => 'multipart/form-data',
-        RequestBodyType.graphql => 'application/json',
-        RequestBodyType.raw => body.raw.syncedContentType,
-        RequestBodyType.none => null,
-      };
-
-  /// Returns true when the header key matches Content-Type regardless of case.
-  static bool _isContentTypeHeader(KeyValueItem header) =>
-      header.key.trim().toLowerCase() == 'content-type';
 }

@@ -2,6 +2,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../domain/usecases/clear_postman_account_usecase.dart';
 import '../../domain/usecases/clear_postman_api_key_usecase.dart';
+import '../../domain/usecases/clear_cached_postman_collections_usecase.dart';
+import '../../domain/usecases/clear_cached_postman_workspaces_usecase.dart';
 import '../../domain/usecases/load_postman_account_usecase.dart';
 import '../../domain/usecases/load_postman_api_key_usecase.dart';
 import 'postman_account_state.dart';
@@ -11,12 +13,18 @@ class PostmanAccountCubit extends Cubit<PostmanAccountState> {
   final LoadPostmanAccountUseCase loadPostmanAccountUseCase;
   final ClearPostmanApiKeyUseCase clearPostmanApiKeyUseCase;
   final ClearPostmanAccountUseCase clearPostmanAccountUseCase;
+  final ClearCachedPostmanWorkspacesUseCase
+      clearCachedPostmanWorkspacesUseCase;
+  final ClearCachedPostmanCollectionsUseCase
+      clearCachedPostmanCollectionsUseCase;
 
   PostmanAccountCubit({
     required this.loadPostmanApiKeyUseCase,
     required this.loadPostmanAccountUseCase,
     required this.clearPostmanApiKeyUseCase,
     required this.clearPostmanAccountUseCase,
+    required this.clearCachedPostmanWorkspacesUseCase,
+    required this.clearCachedPostmanCollectionsUseCase,
   }) : super(const PostmanAccountState());
 
   Future<void> load() async {
@@ -59,6 +67,8 @@ class PostmanAccountCubit extends Cubit<PostmanAccountState> {
 
     await clearPostmanAccountUseCase();
     await clearPostmanApiKeyUseCase();
+    await clearCachedPostmanWorkspacesUseCase();
+    await clearCachedPostmanCollectionsUseCase();
 
     emit(
       const PostmanAccountState(),
