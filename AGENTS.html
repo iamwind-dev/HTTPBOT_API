@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AGENTS.md — HTTPBot Flutter Project Guide</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #c9d1d9;
+    --heading: #58a6ff;
+    --accent: #f0883e;
+    --code-bg: #1f2428;
+    --code-text: #79c0ff;
+    --critical-bg: #2d1416;
+    --critical-border: #f85149;
+    --muted: #8b949e;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.65;
+    font-size: 16px;
+  }
+  .container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 48px 24px 96px;
+  }
+  header.page-header {
+    border-bottom: 2px solid var(--border);
+    padding-bottom: 24px;
+    margin-bottom: 32px;
+  }
+  header.page-header h1 {
+    margin: 0 0 8px;
+    font-size: 2.2rem;
+    color: #fff;
+  }
+  header.page-header p {
+    margin: 0;
+    color: var(--muted);
+  }
+  h2 {
+    color: var(--heading);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 8px;
+    margin-top: 48px;
+    font-size: 1.6rem;
+  }
+  h3 {
+    color: var(--accent);
+    margin-top: 32px;
+    font-size: 1.25rem;
+  }
+  h4 {
+    color: #d2a8ff;
+    margin-top: 24px;
+    font-size: 1.05rem;
+  }
+  code {
+    background: var(--code-bg);
+    color: var(--code-text);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: "SF Mono", "Fira Code", Consolas, monospace;
+    font-size: 0.88em;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    overflow-x: auto;
+  }
+  pre code {
+    background: none;
+    padding: 0;
+    color: var(--text);
+  }
+  ul, ol { padding-left: 24px; }
+  li { margin: 6px 0; }
+  a { color: var(--heading); }
+  blockquote {
+    border-left: 4px solid var(--accent);
+    margin: 16px 0;
+    padding: 8px 16px;
+    background: var(--surface);
+    color: var(--muted);
+  }
+  .critical {
+    background: var(--critical-bg);
+    border: 1px solid var(--critical-border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin: 20px 0;
+  }
+  .critical strong { color: #ff7b72; }
+  hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 40px 0;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 16px 0;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 8px 12px;
+    text-align: left;
+  }
+  th { background: var(--surface); color: var(--heading); }
+  .toc {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 24px;
+    margin-bottom: 40px;
+  }
+  .toc h2 { margin-top: 0; border: none; }
+  .toc ul { list-style: none; padding-left: 0; columns: 2; }
+  .toc a { text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .bad { color: #ff7b72; }
+  .good { color: #7ee787; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<header class="page-header">
+  <h1>AGENTS.md</h1>
+  <p>Architectural guidance for the HTTPBot-inspired Flutter HTTP client.</p>
+</header>
+
+<nav class="toc">
+  <h2>Contents</h2>
+  <ul>
+    <li><a href="#overview">Project Overview</a></li>
+    <li><a href="#stack">Tech Stack</a></li>
+    <li><a href="#architecture">Architecture Rules</a></li>
+    <li><a href="#folders">Expected Folder Structure</a></li>
+    <li><a href="#boundaries">Feature Boundaries</a></li>
+    <li><a href="#state">State Management Rules</a></li>
+    <li><a href="#networking">Networking Rules</a></li>
+    <li><a href="#errors">Error Handling</a></li>
+    <li><a href="#request-builder">Request Builder Requirements</a></li>
+    <li><a href="#data-model">Data Model Rules</a></li>
+    <li><a href="#persistence">Persistence Rules</a></li>
+    <li><a href="#routing">Routing Rules</a></li>
+    <li><a href="#di">Dependency Injection Rules</a></li>
+    <li><a href="#ui">UI Rules</a></li>
+    <li><a href="#style">Code Style</a></li>
+    <li><a href="#naming">Naming</a></li>
+    <li><a href="#testing">Testing Expectations</a></li>
+    <li><a href="#do">What Codex Should Do</a></li>
+    <li><a href="#dont">What Codex Must Not Do</a></li>
+    <li><a href="#branch">Branch Sync &amp; Conflict Avoidance</a></li>
+    <li><a href="#done">Completion Criteria</a></li>
+    <li><a href="#output">Preferred Output Style</a></li>
+    <li><a href="#notes">Notes for This Repository</a></li>
+  </ul>
+</nav>
+
+<h2 id="overview">Project Overview</h2>
+<p>This repository contains a Flutter application inspired by HTTPBot: a mobile app for creating, sending, testing, saving, and inspecting HTTP requests.</p>
+<p>Primary goals:</p>
+<ul>
+  <li>Build a clean, maintainable Flutter codebase</li>
+  <li>Use Clean Architecture</li>
+  <li>Use BLoC/Cubit for state management</li>
+  <li>Keep networking, persistence, and UI concerns separated</li>
+  <li>Make generated code production-oriented, not demo-style</li>
+</ul>
+
+<h2 id="stack">Tech Stack</h2>
+<ul>
+  <li>Flutter</li>
+  <li>Dart</li>
+  <li>flutter_bloc / bloc</li>
+  <li>go_router</li>
+  <li>dio</li>
+  <li>get_it</li>
+  <li>injectable (optional if DI generation is used)</li>
+  <li>equatable</li>
+  <li>json_serializable / freezed (only if already adopted in repo)</li>
+</ul>
+
+<h2 id="architecture">Architecture Rules</h2>
+<p>Follow <strong>Clean Architecture</strong> strictly.</p>
+
+<h3>1. Presentation</h3>
+<p>Contains: pages, widgets, bloc / cubit / state, controllers strictly related to UI behavior.</p>
+<p>Presentation layer:</p>
+<ul>
+  <li>must not call Dio directly</li>
+  <li>must not contain raw JSON parsing</li>
+  <li>must not access local storage directly</li>
+  <li>depends only on domain layer abstractions</li>
+</ul>
+
+<h3>2. Domain</h3>
+<p>Contains: entities, repository contracts, use cases.</p>
+<p>Domain layer:</p>
+<ul>
+  <li>must be pure Dart</li>
+  <li>must not depend on Flutter UI packages</li>
+  <li>must not depend on Dio or concrete data sources</li>
+  <li>defines business rules</li>
+</ul>
+
+<h3>3. Data</h3>
+<p>Contains: models, repository implementations, remote data sources, local data sources, DTO mapping.</p>
+<p>Data layer:</p>
+<ul>
+  <li>implements domain contracts</li>
+  <li>handles serialization/deserialization</li>
+  <li>handles API response mapping</li>
+  <li>handles persistence details</li>
+</ul>
+
+<h3>4. Core</h3>
+<p>Contains shared app-wide utilities: constants, themes, errors/failures, network client setup, interceptors, environment config, base result types, helpers.</p>
+
+<h2 id="folders">Expected Folder Structure</h2>
+<p>Use this structure unless the repo already has a different established pattern.</p>
+<pre><code>lib/
+  core/
+    constants/
+    errors/
+    network/
+    utils/
+    services/
+    theme/
+    router/
+
+  features/
+    request_builder/
+      data/
+        datasources/
+        models/
+        repositories/
+      domain/
+        entities/
+        repositories/
+        usecases/
+      presentation/
+        blocs/
+        cubits/
+        pages/
+        widgets/
+
+    request_history/
+      data/
+      domain/
+      presentation/
+
+    collections/
+      data/
+      domain/
+      presentation/
+
+    environments/
+      data/
+      domain/
+      presentation/
+
+  injection/
+  main.dart</code></pre>
+<p>If a feature becomes large, keep all code for that feature inside its own folder.</p>
+
+<h2 id="boundaries">Feature Boundaries</h2>
+<p>Every feature should be self-contained. Examples of features:</p>
+<ul>
+  <li>request_builder</li>
+  <li>response_viewer</li>
+  <li>request_history</li>
+  <li>collections</li>
+  <li>environments</li>
+  <li>authentication</li>
+  <li>settings</li>
+</ul>
+<p>Do not mix unrelated logic across features unless it belongs in <code>core/</code>.</p>
+
+<h2 id="state">State Management Rules</h2>
+<p>Use BLoC/Cubit.</p>
+<h3>When to use Cubit</h3>
+<ul>
+  <li>simple UI states</li>
+  <li>toggles</li>
+  <li>filters</li>
+  <li>tab index</li>
+  <li>lightweight local orchestration</li>
+</ul>
+<h3>When to use Bloc</h3>
+<ul>
+  <li>form submission workflows</li>
+  <li>async request pipelines</li>
+  <li>complex state transitions</li>
+  <li>multi-event flows</li>
+  <li>retry / cancel / refresh behavior</li>
+</ul>
+<h3>State rules</h3>
+<ul>
+  <li>states must be immutable</li>
+  <li>use Equatable where appropriate</li>
+  <li>avoid giant state classes</li>
+  <li>split state by feature responsibility</li>
+  <li>prefer explicit states over boolean explosion</li>
+</ul>
+<p><span class="bad">Bad:</span> one state with many flags like isLoading, isSuccess, isError, isEmpty, isSubmitted.</p>
+<p><span class="good">Better:</span> sealed-style or clearly separated state classes, or a compact immutable state with well-defined status enum.</p>
+
+<h2 id="networking">Networking Rules</h2>
+<p>Use dio for HTTP. All HTTP logic must:</p>
+<ul>
+  <li>live in data layer</li>
+  <li>be wrapped by data sources or repositories</li>
+  <li>return mapped models/entities, not raw Response</li>
+</ul>
+<p>Do not:</p>
+<ul>
+  <li>call Dio inside widgets</li>
+  <li>hardcode URLs inside presentation layer</li>
+  <li>scatter headers/auth logic throughout the app</li>
+</ul>
+<p>Prefer:</p>
+<ul>
+  <li>one configured Dio instance</li>
+  <li>interceptors for logging, headers, auth token injection</li>
+  <li>centralized timeout configuration</li>
+  <li>typed request/response models where reasonable</li>
+</ul>
+
+<h2 id="errors">Error Handling</h2>
+<p>Convert low-level exceptions into app-level failures. Examples:</p>
+<ul>
+  <li>timeout &rarr; NetworkFailure</li>
+  <li>401 &rarr; UnauthorizedFailure</li>
+  <li>404 &rarr; NotFoundFailure</li>
+  <li>invalid response &rarr; ParsingFailure</li>
+</ul>
+<p>Never leak raw Dio exceptions into UI.</p>
+
+<h2 id="request-builder">Request Builder Requirements</h2>
+<p>This project is HTTPBot-like, so generated code should preserve these product expectations:</p>
+<h3>Request composing</h3>
+<p>Support as separate concepts: method, base URL / full URL, path, query params, headers, body, auth, timeout.</p>
+<h3>Body modes</h3>
+<p>Design body handling so it can support: none, raw text, JSON, form-data, x-www-form-urlencoded.</p>
+<h3>Auth modes</h3>
+<p>Design auth handling so it can support: none, bearer token, basic auth, api key.</p>
+<h3>Response handling</h3>
+<p>Response-related code should make room for: status code, headers, duration, response body, pretty JSON display, error state, request metadata.</p>
+<p>Do not collapse everything into one unstructured map.</p>
+
+<h2 id="data-model">Data Model Rules</h2>
+<p>Differentiate clearly:</p>
+<ul>
+  <li><strong>Entity:</strong> domain object used by business logic</li>
+  <li><strong>Model/DTO:</strong> data-layer object for serialization</li>
+  <li><strong>Request payload object:</strong> object used to construct API calls</li>
+</ul>
+<h3>Mapping</h3>
+<ul>
+  <li>map models to entities in data layer</li>
+  <li>do not use DTOs directly in UI</li>
+  <li>keep fromJson / toJson out of domain entities unless repo already uses that pattern consistently</li>
+</ul>
+
+<h2 id="persistence">Persistence Rules</h2>
+<p>If the app stores history, collections, or environments:</p>
+<ul>
+  <li>persistence code belongs in data layer</li>
+  <li>storage mechanism may be shared_preferences, hive, isar, sqlite, etc.</li>
+  <li>repository abstracts storage from domain/presentation</li>
+</ul>
+<p>Stored objects should be versionable and easy to migrate.</p>
+
+<h2 id="routing">Routing Rules</h2>
+<p>Use go_router if routing is already based on it. Routing should be:</p>
+<ul>
+  <li>centralized</li>
+  <li>typed as much as practical</li>
+  <li>feature-aware</li>
+</ul>
+<p>Avoid pushing raw navigation logic deep into widgets repeatedly. Pages should receive only the data they need.</p>
+
+<h2 id="di">Dependency Injection Rules</h2>
+<p>Use get_it consistently.</p>
+<ul>
+  <li>register repositories behind interfaces</li>
+  <li>register use cases explicitly</li>
+  <li>register data sources separately</li>
+  <li>do not instantiate repositories inside widgets</li>
+  <li>do not instantiate Dio ad hoc in features</li>
+</ul>
+<p>If using injectable, keep annotations consistent and do not mix manual and generated DI randomly.</p>
+
+<h2 id="ui">UI Rules</h2>
+<p>The UI should be clean and developer-tool styled. Preferred traits:</p>
+<ul>
+  <li>clear spacing</li>
+  <li>readable hierarchy</li>
+  <li>minimal clutter</li>
+  <li>consistent input components</li>
+  <li>reusable section widgets</li>
+  <li>reusable request/response panels</li>
+</ul>
+<p>Avoid:</p>
+<ul>
+  <li>deeply nested giant build methods</li>
+  <li>repeated widget trees across pages</li>
+  <li>business logic inside widget builders</li>
+</ul>
+<p>Prefer:</p>
+<ul>
+  <li>extracting reusable widgets</li>
+  <li>feature-specific widgets under each feature</li>
+  <li>using const constructors wherever possible</li>
+  <li>keeping page widgets focused on composition</li>
+</ul>
+
+<h2 id="style">Code Style</h2>
+<ul>
+  <li>Follow analysis_options.yaml</li>
+  <li>Prefer small focused files</li>
+  <li>Prefer descriptive names over short names</li>
+  <li>Keep functions short</li>
+  <li>Keep widgets small</li>
+  <li>Avoid unnecessary comments</li>
+  <li>Add comments only when intent is not obvious</li>
+  <li>For every new or modified function, add a brief comment or docstring immediately above it explaining the function's purpose and any non-obvious reasoning</li>
+  <li>Do not introduce dead code</li>
+  <li>Do not leave TODOs unless explicitly requested</li>
+</ul>
+
+<h2 id="naming">Naming</h2>
+<h3>Files</h3>
+<p>Use snake_case:</p>
+<pre><code>request_history_page.dart
+send_request_usecase.dart
+request_collection_repository_impl.dart</code></pre>
+<h3>Classes</h3>
+<p>Use PascalCase:</p>
+<pre><code>RequestHistoryPage
+SendRequestUseCase</code></pre>
+<h3>Variables and methods</h3>
+<p>Use camelCase:</p>
+<pre><code>buildRequestPayload
+loadSavedCollections</code></pre>
+
+<h2 id="testing">Testing Expectations</h2>
+<p>When adding or changing code, prefer tests where the repo already supports them.</p>
+<h3>Priorities</h3>
+<ul>
+  <li>unit tests for use cases</li>
+  <li>bloc/cubit tests</li>
+  <li>repository tests</li>
+  <li>widget tests for important flows</li>
+</ul>
+<h3>Test rules</h3>
+<ul>
+  <li>test behavior, not implementation details</li>
+  <li>mock repository contracts, not low-level libraries unless needed</li>
+  <li>cover success and failure paths</li>
+</ul>
+
+<h2 id="do">What Codex Should Do</h2>
+<p>When making changes:</p>
+<ul>
+  <li>inspect nearby files for local patterns</li>
+  <li>follow existing architectural conventions</li>
+  <li>preserve feature boundaries</li>
+  <li>avoid broad refactors unless necessary</li>
+  <li>update only what is needed for the task</li>
+  <li>ensure imports stay clean</li>
+  <li>ensure code compiles logically</li>
+</ul>
+<p>If adding a new feature:</p>
+<ol>
+  <li>create feature folder in features/</li>
+  <li>define domain entities/contracts first</li>
+  <li>implement data sources and repository implementation</li>
+  <li>add use cases</li>
+  <li>add bloc/cubit</li>
+  <li>add page/widgets</li>
+  <li>wire DI</li>
+  <li>wire routing</li>
+</ol>
+
+<h2 id="dont">What Codex Must Not Do</h2>
+<ul>
+  <li>Do not put API calls directly in UI</li>
+  <li>Do not bypass repository abstractions</li>
+  <li>Do not mix unrelated features in one folder</li>
+  <li>Do not add massive files with multiple responsibilities</li>
+  <li>Do not introduce new state management libraries</li>
+  <li>Do not replace architecture without explicit instruction</li>
+  <li>Do not use mock/demo data in production code paths unless requested</li>
+  <li>Do not silently break existing public interfaces</li>
+</ul>
+
+<h2 id="branch">Branch Sync And Conflict Avoidance</h2>
+<p>Before starting any new task branch:</p>
+<ul>
+  <li>use <code>develop</code> as the default base branch for new work unless the task explicitly says otherwise</li>
+  <li>always sync the base branch first: <code>git fetch origin</code>, <code>git checkout develop</code>, <code>git pull --ff-only</code></li>
+  <li>always create the new branch from the freshly updated base branch, not from an older feature branch</li>
+  <li>use one branch for one task; if upstream changed significantly, create a fresh branch instead of reviving a stale one</li>
+</ul>
+<p>While coding on a feature branch:</p>
+<ul>
+  <li>read the latest version of any file before editing if that file may have changed from a recent pull</li>
+  <li>do not overwrite, delete, or revert code that came from upstream without understanding and integrating it</li>
+  <li>keep changes scoped to the task to reduce overlap with other branches</li>
+  <li>prefer <code>git fetch origin</code> + <code>git rebase origin/develop</code> to absorb upstream updates; avoid merge commits from <code>develop</code> into feature branches</li>
+</ul>
+<p>Before pushing or opening a PR:</p>
+<ul>
+  <li>re-sync with upstream and resolve conflicts locally before adding more changes</li>
+  <li>if the same file was changed both locally and upstream, re-read the final merged file and verify the latest upstream behavior is still preserved</li>
+  <li>when unsure, prefer a new clean branch from updated <code>develop</code> and re-apply the minimal diff instead of forcing a messy conflict resolution</li>
+</ul>
+
+<h2 id="done">Completion Criteria</h2>
+<p>A task is considered complete only when:</p>
+<ul>
+  <li>code matches repository architecture</li>
+  <li>imports are clean</li>
+  <li>no obvious unused code remains</li>
+  <li>state flow is coherent</li>
+  <li>error handling is present</li>
+  <li>DI/routing is updated if required</li>
+  <li>solution is maintainable, not just quick</li>
+</ul>
+
+<h2 id="output">Preferred Output Style for Changes</h2>
+<p>When generating code:</p>
+<ul>
+  <li>produce complete files or precise edits</li>
+  <li>keep code ready to paste</li>
+  <li>avoid pseudo-code</li>
+  <li>avoid placeholder logic unless explicitly requested</li>
+  <li>keep implementation realistic for production Flutter apps</li>
+</ul>
+
+<h2 id="notes">Notes for This Repository</h2>
+<p>Assume this app will eventually support:</p>
+<ul>
+  <li>sending HTTP requests</li>
+  <li>saving request history</li>
+  <li>managing collections</li>
+  <li>environment variables</li>
+  <li>inspecting structured responses</li>
+  <li>possibly importing/exporting request configs</li>
+</ul>
+<p>Design new code with those extensions in mind.</p>
+
+<div class="critical">
+  <strong>⚠ Gatekeeper Constraint (Zero-Trust).</strong>
+  The original AGENTS.md also embeds a Skills Index with a Zero-Trust protocol: before writing code, the agent must read the applicable <code>SKILL.md</code> files, log a pre-write audit, and run a post-write self-scan. That section (the auto-generated skills table between the <code>SKILLS_INDEX</code> markers) is tooling-specific and is omitted from this HTML rendering of the human-readable guidance.
+</div>
+
+<hr>
+<p style="color: var(--muted); font-size: 0.85rem; text-align: center;">
+  Rendered from AGENTS.md &middot; HTTPBot Flutter project
+</p>
+
+</div>
+</body>
+</html>
