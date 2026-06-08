@@ -100,18 +100,18 @@ class _RequestEditorSheet extends StatefulWidget {
     this.onDraftDiscarded,
   });
 
-  final String initialTitle;
-  final RequestDraft initialDraft;
-  final RequestVariableStore variableStore;
   final Future<void> Function()? onDraftDiscarded;
+  final RequestDraft initialDraft;
+  final String initialTitle;
+  final RequestVariableStore variableStore;
 
   @override
   State<_RequestEditorSheet> createState() => _RequestEditorSheetState();
 }
 
 class _RequestEditorSheetState extends State<_RequestEditorSheet> {
-  RequestEditorResponseBadgeData? _lastResponseBadge;
   bool _isClosing = false;
+  RequestEditorResponseBadgeData? _lastResponseBadge;
 
   /// Lets the method badge in the header update the request method in place.
   Future<void> _openMethodPicker(HttpMethod currentMethod) async {
@@ -479,11 +479,11 @@ class _EditorHeader extends StatelessWidget {
     required this.onClose,
   });
 
-  final String title;
   final String method;
+  final VoidCallback onClose;
   final VoidCallback onMethodPressed;
   final ValueChanged<_RequestEditorMoreAction> onMoreActionSelected;
-  final VoidCallback onClose;
+  final String title;
 
   /// Builds the editor toolbar with the current request identity and close action.
   @override
@@ -539,39 +539,40 @@ class _RequestEditorMoreButton extends StatelessWidget {
   final ValueChanged<_RequestEditorMoreAction> onSelected;
 
   @override
-  Widget build(BuildContext context) => PopupMenuButton<_RequestEditorMoreAction>(
-    key: const ValueKey<String>(AppWidgetKeys.requestsEditorMoreButton),
-    tooltip: 'More request actions',
-    icon: const Icon(CupertinoIcons.ellipsis),
-    color: context.appColors.surface,
-    elevation: 12,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-    constraints: const BoxConstraints(minWidth: 196),
-    position: PopupMenuPosition.under,
-    onSelected: onSelected,
-    itemBuilder: (context) => [
-      PopupMenuItem<_RequestEditorMoreAction>(
-        value: _RequestEditorMoreAction.globalVariables,
-        child: const _RequestEditorMoreMenuRow(label: 'Global Variables'),
-      ),
-      PopupMenuItem<_RequestEditorMoreAction>(
-        value: _RequestEditorMoreAction.manageEnvironment,
-        child: const _RequestEditorMoreMenuRow(label: 'Manage Environment'),
-      ),
-      for (final action in [
-        _RequestEditorMoreAction.useGraphQl,
-        _RequestEditorMoreAction.viewCurl,
-        _RequestEditorMoreAction.exportHar,
-        _RequestEditorMoreAction.cookies,
-        _RequestEditorMoreAction.tests,
-        _RequestEditorMoreAction.settings,
-      ])
-        PopupMenuItem<_RequestEditorMoreAction>(
-          value: action,
-          child: _RequestEditorMoreMenuRow(label: action.label),
-        ),
-    ],
-  );
+  Widget build(BuildContext context) =>
+      PopupMenuButton<_RequestEditorMoreAction>(
+        key: const ValueKey<String>(AppWidgetKeys.requestsEditorMoreButton),
+        tooltip: 'More request actions',
+        icon: const Icon(CupertinoIcons.ellipsis),
+        color: context.appColors.surface,
+        elevation: 12,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        constraints: const BoxConstraints(minWidth: 196),
+        position: PopupMenuPosition.under,
+        onSelected: onSelected,
+        itemBuilder: (context) => [
+          PopupMenuItem<_RequestEditorMoreAction>(
+            value: _RequestEditorMoreAction.globalVariables,
+            child: const _RequestEditorMoreMenuRow(label: 'Global Variables'),
+          ),
+          PopupMenuItem<_RequestEditorMoreAction>(
+            value: _RequestEditorMoreAction.manageEnvironment,
+            child: const _RequestEditorMoreMenuRow(label: 'Manage Environment'),
+          ),
+          for (final action in [
+            _RequestEditorMoreAction.useGraphQl,
+            _RequestEditorMoreAction.viewCurl,
+            _RequestEditorMoreAction.exportHar,
+            _RequestEditorMoreAction.cookies,
+            _RequestEditorMoreAction.tests,
+            _RequestEditorMoreAction.settings,
+          ])
+            PopupMenuItem<_RequestEditorMoreAction>(
+              value: action,
+              child: _RequestEditorMoreMenuRow(label: action.label),
+            ),
+        ],
+      );
 }
 
 class _RequestEditorMoreMenuRow extends StatelessWidget {
@@ -637,8 +638,8 @@ class _EditorSectionTitle extends StatelessWidget {
 class _RequestBasicsSection extends StatelessWidget {
   const _RequestBasicsSection({required this.title, required this.draft});
 
-  final String title;
   final RequestDraft draft;
+  final String title;
 
   /// Builds the method selector and URL editor for the current request draft.
   @override
@@ -675,27 +676,9 @@ class _KeyValueSection extends StatelessWidget {
     required this.items,
   });
 
-  final String title;
-  final String sectionId;
   final List<KeyValueItem> items;
-
-  /// Builds an editable key-value collection for query params, headers, and body fields.
-  @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      _EditorSectionTitle(title: title),
-      const SizedBox(height: AppSpacing.small),
-      _KeyValueCard(
-        sectionId: sectionId,
-        items: items,
-        onItemChanged: (index, item) => _replace(context, index, item),
-        onItemDeleted:
-            sectionId == 'query' ? (index) => _remove(context, index) : null,
-        onAddPressed: () => _appendEmptyItem(context),
-      ),
-    ],
-  );
+  final String sectionId;
+  final String title;
 
   /// Adds a new empty row to the key-value collection.
   void _appendEmptyItem(BuildContext context) {
@@ -727,6 +710,25 @@ class _KeyValueSection extends StatelessWidget {
 
     editorCubit.updateHeaders(updatedItems);
   }
+
+  /// Builds an editable key-value collection for query params, headers, and body fields.
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      _EditorSectionTitle(title: title),
+      const SizedBox(height: AppSpacing.small),
+      _KeyValueCard(
+        sectionId: sectionId,
+        items: items,
+        onItemChanged: (index, item) => _replace(context, index, item),
+        onItemDeleted: sectionId == 'query' || sectionId == 'headers'
+            ? (index) => _remove(context, index)
+            : null,
+        onAddPressed: () => _appendEmptyItem(context),
+      ),
+    ],
+  );
 }
 
 class _KeyValueCard extends StatelessWidget {
@@ -738,11 +740,11 @@ class _KeyValueCard extends StatelessWidget {
     required this.onAddPressed,
   });
 
-  final String sectionId;
   final List<KeyValueItem> items;
+  final VoidCallback onAddPressed;
   final void Function(int index, KeyValueItem item) onItemChanged;
   final ValueChanged<int>? onItemDeleted;
-  final VoidCallback onAddPressed;
+  final String sectionId;
 
   @override
   Widget build(BuildContext context) {
@@ -761,10 +763,9 @@ class _KeyValueCard extends StatelessWidget {
                   index: rowIndex,
                   item: items[rowIndex],
                   onChanged: (item) => onItemChanged(rowIndex, item),
-                  onDelete:
-                      onItemDeleted == null
-                          ? null
-                          : () => onItemDeleted!(rowIndex),
+                  onDelete: onItemDeleted == null
+                      ? null
+                      : () => onItemDeleted!(rowIndex),
                 )
               else
                 _AddKeyValueRow(sectionId: sectionId, onPressed: onAddPressed),
@@ -786,11 +787,11 @@ class _KeyValueRow extends StatelessWidget {
     this.onDelete,
   });
 
-  final String sectionId;
   final int index;
   final KeyValueItem item;
   final ValueChanged<KeyValueItem> onChanged;
   final VoidCallback? onDelete;
+  final String sectionId;
 
   /// Returns true when the row is the Authorization header generated by the auth editor.
   bool get _isSystemGeneratedAuthHeader =>
@@ -801,76 +802,8 @@ class _KeyValueRow extends StatelessWidget {
       item.systemGeneratedAuthorizationLabel ?? 'Auth';
 
   /// Returns true when this row should expose the dedicated long-press action menu.
-  bool get _supportsLongPressActionMenu => sectionId == 'query';
-
-  /// Builds one inline key-value row and exposes a dedicated action menu on long press.
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-    onLongPress:
-        !_supportsLongPressActionMenu ||
-                onDelete == null ||
-                _isSystemGeneratedAuthHeader
-            ? null
-            : () => _showKeyValueActionSheet(context),
-    child: Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.large,
-        vertical: AppSpacing.small,
-      ),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: AppSpacing.xxxLarge),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            _EnabledIndicator(
-              key: ValueKey<String>(
-                AppWidgetKeys.requestsEditorKeyValueToggle(sectionId, index),
-              ),
-              isEnabled: item.isEnabled,
-              onPressed:
-                  _isSystemGeneratedAuthHeader
-                      ? null
-                      : () =>
-                          onChanged(item.copyWith(isEnabled: !item.isEnabled)),
-            ),
-            const SizedBox(width: AppSpacing.large),
-            Expanded(
-              child: _InlineKeyValueTextField(
-                fieldKey: AppWidgetKeys.requestsEditorKeyValueKeyField(
-                  sectionId,
-                  index,
-                ),
-                value: item.key,
-                hintText: 'Key',
-                readOnly: _isSystemGeneratedAuthHeader,
-                onChanged:
-                    (value) => onChanged(item.copyWith(key: value)),
-              ),
-            ),
-            const SizedBox(width: AppSpacing.large),
-            Expanded(
-              child: _InlineKeyValueTextField(
-                fieldKey: AppWidgetKeys.requestsEditorKeyValueValueField(
-                  sectionId,
-                  index,
-                ),
-                value: item.value,
-                hintText: 'Value',
-                textAlign: TextAlign.end,
-                readOnly: _isSystemGeneratedAuthHeader,
-                onChanged:
-                    (value) => onChanged(item.copyWith(value: value)),
-              ),
-            ),
-            if (_isSystemGeneratedAuthHeader) ...[
-              const SizedBox(width: AppSpacing.medium),
-              _SystemGeneratedBadge(label: _systemGeneratedAuthLabel),
-            ],
-          ],
-        ),
-      ),
-    ),
-  );
+  bool get _supportsLongPressActionMenu =>
+      sectionId == 'query' || sectionId == 'headers';
 
   /// Shows the long-press menu for one editable row and routes actions to edit or delete flows.
   Future<void> _showKeyValueActionSheet(BuildContext context) async {
@@ -909,9 +842,8 @@ class _KeyValueRow extends StatelessWidget {
                         index,
                       ),
                     ),
-                    onTap: () => Navigator.of(
-                      context,
-                    ).pop(_KeyValueRowAction.edit),
+                    onTap: () =>
+                        Navigator.of(context).pop(_KeyValueRowAction.edit),
                   ),
                   const _KeyValueDivider(),
                   _KeyValueActionTile(
@@ -922,9 +854,8 @@ class _KeyValueRow extends StatelessWidget {
                         index,
                       ),
                     ),
-                    onTap: () => Navigator.of(
-                      context,
-                    ).pop(_KeyValueRowAction.delete),
+                    onTap: () =>
+                        Navigator.of(context).pop(_KeyValueRowAction.delete),
                   ),
                 ],
               ),
@@ -953,7 +884,7 @@ class _KeyValueRow extends StatelessWidget {
     final result = await showRequestModalSheet<_KeyValueEditorResult?>(
       context,
       builder: (context) => _KeyValueEditorSheet(
-        title: 'Edit Query Param',
+        title: sectionId == 'headers' ? 'Edit Header' : 'Edit Query Param',
         sectionId: sectionId,
         index: index,
         initialItem: item,
@@ -965,13 +896,73 @@ class _KeyValueRow extends StatelessWidget {
       return;
     }
 
-    onChanged(
-      item.copyWith(
-        key: result.key,
-        value: result.value,
-      ),
-    );
+    onChanged(item.copyWith(key: result.key, value: result.value));
   }
+
+  /// Builds one inline key-value row and exposes a dedicated action menu on long press.
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onLongPress:
+        !_supportsLongPressActionMenu ||
+            onDelete == null ||
+            _isSystemGeneratedAuthHeader
+        ? null
+        : () => _showKeyValueActionSheet(context),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.large,
+        vertical: AppSpacing.small,
+      ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: AppSpacing.xxxLarge),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            _EnabledIndicator(
+              key: ValueKey<String>(
+                AppWidgetKeys.requestsEditorKeyValueToggle(sectionId, index),
+              ),
+              isEnabled: item.isEnabled,
+              onPressed: _isSystemGeneratedAuthHeader
+                  ? null
+                  : () => onChanged(item.copyWith(isEnabled: !item.isEnabled)),
+            ),
+            const SizedBox(width: AppSpacing.large),
+            Expanded(
+              child: _InlineKeyValueTextField(
+                fieldKey: AppWidgetKeys.requestsEditorKeyValueKeyField(
+                  sectionId,
+                  index,
+                ),
+                value: item.key,
+                hintText: 'Key',
+                readOnly: _isSystemGeneratedAuthHeader,
+                onChanged: (value) => onChanged(item.copyWith(key: value)),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.large),
+            Expanded(
+              child: _InlineKeyValueTextField(
+                fieldKey: AppWidgetKeys.requestsEditorKeyValueValueField(
+                  sectionId,
+                  index,
+                ),
+                value: item.value,
+                hintText: 'Value',
+                textAlign: TextAlign.end,
+                readOnly: _isSystemGeneratedAuthHeader,
+                onChanged: (value) => onChanged(item.copyWith(value: value)),
+              ),
+            ),
+            if (_isSystemGeneratedAuthHeader) ...[
+              const SizedBox(width: AppSpacing.medium),
+              _SystemGeneratedBadge(label: _systemGeneratedAuthLabel),
+            ],
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 enum _KeyValueRowAction { edit, delete }
@@ -998,24 +989,24 @@ class _KeyValueActionTile extends StatelessWidget {
   });
 
   final _KeyValueRowAction action;
-  final Key rowKey;
   final VoidCallback onTap;
+  final Key rowKey;
 
   /// Builds one action row inside the query-param long-press menu.
   @override
   Widget build(BuildContext context) {
     final colors = context.appColors;
     final isDelete = action == _KeyValueRowAction.delete;
-    final foregroundColor = isDelete
-        ? colors.methodDelete
-        : colors.textPrimary;
+    final foregroundColor = isDelete ? colors.methodDelete : colors.textPrimary;
 
     return Material(
       color: Colors.transparent,
       child: InkWell(
         key: rowKey,
         onTap: onTap,
-        borderRadius: const BorderRadius.all(Radius.circular(AppRadius.xxLarge)),
+        borderRadius: const BorderRadius.all(
+          Radius.circular(AppRadius.xxLarge),
+        ),
         child: Padding(
           padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.large,
@@ -1041,10 +1032,7 @@ class _KeyValueActionTile extends StatelessWidget {
 }
 
 class _KeyValueEditorResult {
-  const _KeyValueEditorResult({
-    required this.key,
-    required this.value,
-  });
+  const _KeyValueEditorResult({required this.key, required this.value});
 
   final String key;
   final String value;
@@ -1060,12 +1048,12 @@ class _KeyValueEditorSheet extends StatefulWidget {
     this.valueHintText,
   });
 
-  final String title;
-  final String sectionId;
   final int index;
   final KeyValueItem initialItem;
-  final String valueLabel;
+  final String sectionId;
+  final String title;
   final String? valueHintText;
+  final String valueLabel;
 
   @override
   State<_KeyValueEditorSheet> createState() => _KeyValueEditorSheetState();
@@ -1076,17 +1064,17 @@ class _KeyValueEditorSheetState extends State<_KeyValueEditorSheet> {
   late final TextEditingController _valueController;
 
   @override
-  void initState() {
-    super.initState();
-    _keyController = TextEditingController(text: widget.initialItem.key);
-    _valueController = TextEditingController(text: widget.initialItem.value);
-  }
-
-  @override
   void dispose() {
     _keyController.dispose();
     _valueController.dispose();
     super.dispose();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _keyController = TextEditingController(text: widget.initialItem.key);
+    _valueController = TextEditingController(text: widget.initialItem.value);
   }
 
   /// Builds the key-value editor sheet used by long-press Edit actions.
@@ -1101,7 +1089,10 @@ class _KeyValueEditorSheetState extends State<_KeyValueEditorSheet> {
           children: [
             Row(
               children: [
-                Text(widget.title, style: Theme.of(context).textTheme.titleLarge),
+                Text(
+                  widget.title,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
                 const Spacer(),
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(),
@@ -1147,11 +1138,7 @@ class _KeyValueEditorSheetState extends State<_KeyValueEditorSheet> {
 }
 
 class _EnabledIndicator extends StatelessWidget {
-  const _EnabledIndicator({
-    super.key,
-    required this.isEnabled,
-    this.onPressed,
-  });
+  const _EnabledIndicator({super.key, required this.isEnabled, this.onPressed});
 
   final bool isEnabled;
   final VoidCallback? onPressed;
@@ -1198,11 +1185,11 @@ class _InlineKeyValueTextField extends StatefulWidget {
   });
 
   final String fieldKey;
-  final String value;
   final String hintText;
   final ValueChanged<String> onChanged;
-  final TextAlign textAlign;
   final bool readOnly;
+  final TextAlign textAlign;
+  final String value;
 
   @override
   State<_InlineKeyValueTextField> createState() =>
@@ -1211,12 +1198,6 @@ class _InlineKeyValueTextField extends StatefulWidget {
 
 class _InlineKeyValueTextFieldState extends State<_InlineKeyValueTextField> {
   late final TextEditingController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = TextEditingController(text: widget.value);
-  }
 
   @override
   void didUpdateWidget(covariant _InlineKeyValueTextField oldWidget) {
@@ -1234,6 +1215,12 @@ class _InlineKeyValueTextFieldState extends State<_InlineKeyValueTextField> {
   void dispose() {
     _controller.dispose();
     super.dispose();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.value);
   }
 
   @override
@@ -1298,8 +1285,8 @@ class _SystemGeneratedBadge extends StatelessWidget {
 class _AddKeyValueRow extends StatelessWidget {
   const _AddKeyValueRow({required this.sectionId, required this.onPressed});
 
-  final String sectionId;
   final VoidCallback onPressed;
+  final String sectionId;
 
   @override
   Widget build(BuildContext context) {
@@ -1377,7 +1364,11 @@ class _BodySection extends StatelessWidget {
       children: [
         const _EditorSectionTitle(title: AppStrings.requestEditorBody),
         const SizedBox(height: AppSpacing.small),
-        if (!draft.method.supportsRequestBody) ...[
+        if (!methodSupportsRequestBody(draft.method)) ...[
+          _InfoCard(
+            message:
+                'Body will not be sent for ${draft.method.wireName} in this version.',
+          ),
           const SizedBox(height: AppSpacing.small),
         ],
         _BodyModeCard(
@@ -1404,83 +1395,11 @@ class _BodyModeCard extends StatelessWidget {
   });
 
   final RequestBodyDraft body;
+  final ValueChanged<List<KeyValueItem>> onFormDataChanged;
+  final ValueChanged<GraphQlBodyDraft> onGraphQlChanged;
+  final ValueChanged<RawBodyDraft> onRawChanged;
   final ValueChanged<RequestBodyType> onTypeChanged;
   final ValueChanged<List<KeyValueItem>> onUrlEncodedChanged;
-  final ValueChanged<List<KeyValueItem>> onFormDataChanged;
-  final ValueChanged<RawBodyDraft> onRawChanged;
-  final ValueChanged<GraphQlBodyDraft> onGraphQlChanged;
-
-  @override
-  Widget build(BuildContext context) => DecoratedBox(
-    decoration: _buildCardDecoration(context),
-    child: Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.small),
-      child: Column(
-        children: [
-          _BodyTypeRow(
-            value: body.type,
-            onChanged: onTypeChanged,
-          ),
-          ...switch (body.type) {
-            RequestBodyType.none => const <Widget>[],
-            RequestBodyType.xWwwFormUrlEncoded => <Widget>[
-              const _KeyValueDivider(),
-              _BodyUrlEncodedList(
-                items: body.urlEncoded,
-                onChanged: onUrlEncodedChanged,
-              ),
-            ],
-            RequestBodyType.formData => <Widget>[
-              const _KeyValueDivider(),
-              _BodyFormDataList(
-                items: body.formData,
-                onChanged: onFormDataChanged,
-              ),
-            ],
-            RequestBodyType.raw => <Widget>[
-              const _KeyValueDivider(),
-              _BodyActionRow(
-                fieldKey: AppWidgetKeys.requestsEditorRawBodyAction,
-                label: 'Update Body',
-                value: _rawBodySummary(body.raw),
-                onTap: () => _openRawBodyEditor(context),
-              ),
-            ],
-            RequestBodyType.graphql => <Widget>[
-              const _KeyValueDivider(),
-              _BodyActionRow(
-                fieldKey: AppWidgetKeys.requestsEditorGraphQlQueryField,
-                label: 'Query',
-                value: _graphQlSummary(body.graphQl.query),
-                onTap: () => _openGraphQlEditor(
-                  context,
-                  label: 'Query',
-                  currentValue: body.graphQl.query,
-                  onSaved: (value) => onGraphQlChanged(
-                    body.graphQl.copyWith(query: value),
-                  ),
-                ),
-              ),
-              const _KeyValueDivider(),
-              _BodyActionRow(
-                fieldKey: AppWidgetKeys.requestsEditorGraphQlVariablesField,
-                label: 'Variables',
-                value: _graphQlSummary(body.graphQl.variables),
-                onTap: () => _openGraphQlEditor(
-                  context,
-                  label: 'Variables',
-                  currentValue: body.graphQl.variables,
-                  onSaved: (value) => onGraphQlChanged(
-                    body.graphQl.copyWith(variables: value),
-                  ),
-                ),
-              ),
-            ],
-          },
-        ],
-      ),
-    ),
-  );
 
   /// Opens the raw editor sheet so content and subtype can change outside the compact card.
   Future<void> _openRawBodyEditor(BuildContext context) async {
@@ -1494,10 +1413,7 @@ class _BodyModeCard extends StatelessWidget {
     }
 
     onRawChanged(
-      body.raw.copyWith(
-        subtype: result.subtype,
-        content: result.content,
-      ),
+      body.raw.copyWith(subtype: result.subtype, content: result.content),
     );
   }
 
@@ -1512,12 +1428,13 @@ class _BodyModeCard extends StatelessWidget {
       context,
       builder: (context) => _BodyTextEditorSheet(
         title: label,
-        fieldKey:
-            label == 'Query'
-                ? AppWidgetKeys.requestsEditorGraphQlQueryField
-                : AppWidgetKeys.requestsEditorGraphQlVariablesField,
+        fieldKey: label == 'Query'
+            ? AppWidgetKeys.requestsEditorGraphQlQueryField
+            : AppWidgetKeys.requestsEditorGraphQlVariablesField,
         initialValue: currentValue,
-        hintText: label == 'Query' ? 'query GetUsers { users { id } }' : '{\n  "id": "1"\n}',
+        hintText: label == 'Query'
+            ? 'query GetUsers { users { id } }'
+            : '{\n  "id": "1"\n}',
       ),
     );
 
@@ -1554,16 +1471,80 @@ class _BodyModeCard extends StatelessWidget {
 
     return '${compact.substring(0, 39)}...';
   }
+
+  @override
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: _buildCardDecoration(context),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.small),
+      child: Column(
+        children: [
+          _BodyTypeRow(value: body.type, onChanged: onTypeChanged),
+          ...switch (body.type) {
+            RequestBodyType.none => const <Widget>[],
+            RequestBodyType.xWwwFormUrlEncoded => <Widget>[
+              const _KeyValueDivider(),
+              _BodyUrlEncodedList(
+                items: body.urlEncoded,
+                onChanged: onUrlEncodedChanged,
+              ),
+            ],
+            RequestBodyType.formData => <Widget>[
+              const _KeyValueDivider(),
+              _BodyFormDataList(
+                items: body.formData,
+                onChanged: onFormDataChanged,
+              ),
+            ],
+            RequestBodyType.raw => <Widget>[
+              const _KeyValueDivider(),
+              _BodyActionRow(
+                fieldKey: AppWidgetKeys.requestsEditorRawBodyAction,
+                label: 'Update Body',
+                value: _rawBodySummary(body.raw),
+                onTap: () => _openRawBodyEditor(context),
+              ),
+            ],
+            RequestBodyType.graphql => <Widget>[
+              const _KeyValueDivider(),
+              _BodyActionRow(
+                fieldKey: AppWidgetKeys.requestsEditorGraphQlQueryField,
+                label: 'Query',
+                value: _graphQlSummary(body.graphQl.query),
+                onTap: () => _openGraphQlEditor(
+                  context,
+                  label: 'Query',
+                  currentValue: body.graphQl.query,
+                  onSaved: (value) =>
+                      onGraphQlChanged(body.graphQl.copyWith(query: value)),
+                ),
+              ),
+              const _KeyValueDivider(),
+              _BodyActionRow(
+                fieldKey: AppWidgetKeys.requestsEditorGraphQlVariablesField,
+                label: 'Variables',
+                value: _graphQlSummary(body.graphQl.variables),
+                onTap: () => _openGraphQlEditor(
+                  context,
+                  label: 'Variables',
+                  currentValue: body.graphQl.variables,
+                  onSaved: (value) =>
+                      onGraphQlChanged(body.graphQl.copyWith(variables: value)),
+                ),
+              ),
+            ],
+          },
+        ],
+      ),
+    ),
+  );
 }
 
 class _BodyTypeRow extends StatelessWidget {
-  const _BodyTypeRow({
-    required this.value,
-    required this.onChanged,
-  });
+  const _BodyTypeRow({required this.value, required this.onChanged});
 
-  final RequestBodyType value;
   final ValueChanged<RequestBodyType> onChanged;
+  final RequestBodyType value;
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -1581,7 +1562,9 @@ class _BodyTypeRow extends StatelessWidget {
         ),
         DropdownButtonHideUnderline(
           child: DropdownButton<RequestBodyType>(
-            key: const ValueKey<String>(AppWidgetKeys.requestsEditorBodyModeField),
+            key: const ValueKey<String>(
+              AppWidgetKeys.requestsEditorBodyModeField,
+            ),
             value: value,
             borderRadius: const BorderRadius.all(
               Radius.circular(AppRadius.xxLarge),
@@ -1616,8 +1599,8 @@ class _BodyActionRow extends StatelessWidget {
 
   final String fieldKey;
   final String label;
-  final String value;
   final VoidCallback onTap;
+  final String value;
 
   @override
   Widget build(BuildContext context) {
@@ -1636,9 +1619,7 @@ class _BodyActionRow extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Expanded(
-                child: Text(label, style: theme.textTheme.bodyLarge),
-              ),
+              Expanded(child: Text(label, style: theme.textTheme.bodyLarge)),
               const SizedBox(width: AppSpacing.medium),
               Flexible(
                 child: Text(
@@ -1666,13 +1647,21 @@ class _BodyActionRow extends StatelessWidget {
 }
 
 class _BodyUrlEncodedList extends StatelessWidget {
-  const _BodyUrlEncodedList({
-    required this.items,
-    required this.onChanged,
-  });
+  const _BodyUrlEncodedList({required this.items, required this.onChanged});
 
   final List<KeyValueItem> items;
   final ValueChanged<List<KeyValueItem>> onChanged;
+
+  void _replace(int index, KeyValueItem item) {
+    final updatedItems = [...items];
+    updatedItems[index] = item;
+    onChanged(updatedItems);
+  }
+
+  void _remove(int index) {
+    final updatedItems = [...items]..removeAt(index);
+    onChanged(updatedItems);
+  }
 
   @override
   Widget build(BuildContext context) => Column(
@@ -1688,24 +1677,11 @@ class _BodyUrlEncodedList extends StatelessWidget {
       ],
       _AddKeyValueRow(
         sectionId: 'body_url_encoded',
-        onPressed: () => onChanged([
-          ...items,
-          const KeyValueItem(key: '', value: ''),
-        ]),
+        onPressed: () =>
+            onChanged([...items, const KeyValueItem(key: '', value: '')]),
       ),
     ],
   );
-
-  void _replace(int index, KeyValueItem item) {
-    final updatedItems = [...items];
-    updatedItems[index] = item;
-    onChanged(updatedItems);
-  }
-
-  void _remove(int index) {
-    final updatedItems = [...items]..removeAt(index);
-    onChanged(updatedItems);
-  }
 }
 
 class _BodyUrlEncodedRow extends StatelessWidget {
@@ -1720,58 +1696,6 @@ class _BodyUrlEncodedRow extends StatelessWidget {
   final KeyValueItem item;
   final ValueChanged<KeyValueItem> onChanged;
   final VoidCallback onDelete;
-
-  /// Builds one URL-encoded body row and exposes edit/delete actions on long press.
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-    onLongPress: () => _showActionSheet(context),
-    child: Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.large,
-        vertical: AppSpacing.small,
-      ),
-      child: Row(
-        children: [
-          _EnabledIndicator(
-            key: ValueKey<String>(
-              AppWidgetKeys.requestsEditorKeyValueToggle(
-                'body_url_encoded',
-                index,
-              ),
-            ),
-            isEnabled: item.isEnabled,
-            onPressed: () =>
-                onChanged(item.copyWith(isEnabled: !item.isEnabled)),
-          ),
-          const SizedBox(width: AppSpacing.large),
-          Expanded(
-            child: _InlineKeyValueTextField(
-              fieldKey: AppWidgetKeys.requestsEditorKeyValueKeyField(
-                'body_url_encoded',
-                index,
-              ),
-              value: item.key,
-              hintText: 'Key',
-              onChanged: (value) => onChanged(item.copyWith(key: value)),
-            ),
-          ),
-          const SizedBox(width: AppSpacing.large),
-          Expanded(
-            child: _InlineKeyValueTextField(
-              fieldKey: AppWidgetKeys.requestsEditorKeyValueValueField(
-                'body_url_encoded',
-                index,
-              ),
-              value: item.value,
-              hintText: 'Value',
-              textAlign: TextAlign.end,
-              onChanged: (value) => onChanged(item.copyWith(value: value)),
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
 
   /// Shows the long-press menu for one URL-encoded row and routes actions to edit or delete flows.
   Future<void> _showActionSheet(BuildContext context) async {
@@ -1801,7 +1725,8 @@ class _BodyUrlEncodedRow extends StatelessWidget {
                         index,
                       ),
                     ),
-                    onTap: () => Navigator.of(context).pop(_KeyValueRowAction.edit),
+                    onTap: () =>
+                        Navigator.of(context).pop(_KeyValueRowAction.edit),
                   ),
                   const _KeyValueDivider(),
                   _KeyValueActionTile(
@@ -1856,16 +1781,76 @@ class _BodyUrlEncodedRow extends StatelessWidget {
 
     onChanged(item.copyWith(key: result.key, value: result.value));
   }
+
+  /// Builds one URL-encoded body row and exposes edit/delete actions on long press.
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onLongPress: () => _showActionSheet(context),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.large,
+        vertical: AppSpacing.small,
+      ),
+      child: Row(
+        children: [
+          _EnabledIndicator(
+            key: ValueKey<String>(
+              AppWidgetKeys.requestsEditorKeyValueToggle(
+                'body_url_encoded',
+                index,
+              ),
+            ),
+            isEnabled: item.isEnabled,
+            onPressed: () =>
+                onChanged(item.copyWith(isEnabled: !item.isEnabled)),
+          ),
+          const SizedBox(width: AppSpacing.large),
+          Expanded(
+            child: _InlineKeyValueTextField(
+              fieldKey: AppWidgetKeys.requestsEditorKeyValueKeyField(
+                'body_url_encoded',
+                index,
+              ),
+              value: item.key,
+              hintText: 'Key',
+              onChanged: (value) => onChanged(item.copyWith(key: value)),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.large),
+          Expanded(
+            child: _InlineKeyValueTextField(
+              fieldKey: AppWidgetKeys.requestsEditorKeyValueValueField(
+                'body_url_encoded',
+                index,
+              ),
+              value: item.value,
+              hintText: 'Value',
+              textAlign: TextAlign.end,
+              onChanged: (value) => onChanged(item.copyWith(value: value)),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 class _BodyFormDataList extends StatelessWidget {
-  const _BodyFormDataList({
-    required this.items,
-    required this.onChanged,
-  });
+  const _BodyFormDataList({required this.items, required this.onChanged});
 
   final List<KeyValueItem> items;
   final ValueChanged<List<KeyValueItem>> onChanged;
+
+  void _replace(int index, KeyValueItem item) {
+    final updatedItems = [...items];
+    updatedItems[index] = item;
+    onChanged(updatedItems);
+  }
+
+  void _remove(int index) {
+    final updatedItems = [...items]..removeAt(index);
+    onChanged(updatedItems);
+  }
 
   @override
   Widget build(BuildContext context) => Column(
@@ -1881,24 +1866,11 @@ class _BodyFormDataList extends StatelessWidget {
       ],
       _AddKeyValueRow(
         sectionId: 'body_form_data',
-        onPressed: () => onChanged([
-          ...items,
-          const KeyValueItem(key: '', value: ''),
-        ]),
+        onPressed: () =>
+            onChanged([...items, const KeyValueItem(key: '', value: '')]),
       ),
     ],
   );
-
-  void _replace(int index, KeyValueItem item) {
-    final updatedItems = [...items];
-    updatedItems[index] = item;
-    onChanged(updatedItems);
-  }
-
-  void _remove(int index) {
-    final updatedItems = [...items]..removeAt(index);
-    onChanged(updatedItems);
-  }
 }
 
 class _BodyFormDataRow extends StatelessWidget {
@@ -1913,96 +1885,6 @@ class _BodyFormDataRow extends StatelessWidget {
   final KeyValueItem item;
   final ValueChanged<KeyValueItem> onChanged;
   final VoidCallback onDelete;
-
-  /// Builds one form-data row and exposes edit/delete actions on long press.
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-    onLongPress: () => _showActionSheet(context),
-    child: Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.large,
-        vertical: AppSpacing.small,
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              _EnabledIndicator(
-                key: ValueKey<String>(
-                  AppWidgetKeys.requestsEditorKeyValueToggle(
-                    'body_form_data',
-                    index,
-                  ),
-                ),
-                isEnabled: item.isEnabled,
-                onPressed: () =>
-                    onChanged(item.copyWith(isEnabled: !item.isEnabled)),
-              ),
-              const SizedBox(width: AppSpacing.large),
-              DropdownButtonHideUnderline(
-                child: DropdownButton<KeyValueItemType>(
-                  key: ValueKey<String>(
-                    AppWidgetKeys.requestsEditorKeyValueOptionField(
-                      'body_form_data',
-                      index,
-                    ),
-                  ),
-                  value: item.type,
-                  borderRadius: const BorderRadius.all(
-                    Radius.circular(AppRadius.xxLarge),
-                  ),
-                  items: KeyValueItemType.values
-                      .map(
-                        (type) => DropdownMenuItem<KeyValueItemType>(
-                          value: type,
-                          child: Text(type == KeyValueItemType.text ? 'Text' : 'File'),
-                        ),
-                      )
-                      .toList(growable: false),
-                  onChanged: (type) {
-                    if (type == null) {
-                      return;
-                    }
-
-                    onChanged(item.copyWith(type: type, value: ''));
-                  },
-                ),
-              ),
-              const SizedBox(width: AppSpacing.large),
-              Expanded(
-                child: _InlineKeyValueTextField(
-                  fieldKey: AppWidgetKeys.requestsEditorKeyValueKeyField(
-                    'body_form_data',
-                    index,
-                  ),
-                  value: item.key,
-                  hintText: 'Key',
-                  onChanged: (value) => onChanged(item.copyWith(key: value)),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.small),
-          if (item.type == KeyValueItemType.text)
-            _InlineKeyValueTextField(
-              fieldKey: AppWidgetKeys.requestsEditorKeyValueValueField(
-                'body_form_data',
-                index,
-              ),
-              value: item.value,
-              hintText: 'Value',
-              onChanged: (value) => onChanged(item.copyWith(value: value)),
-            )
-          else
-            _BodyFileSelectorRow(
-              index: index,
-              value: item.value,
-              onSelected: (value) => onChanged(item.copyWith(value: value)),
-            ),
-        ],
-      ),
-    ),
-  );
 
   /// Shows the long-press menu for one form-data row and routes actions to edit or delete flows.
   Future<void> _showActionSheet(BuildContext context) async {
@@ -2032,7 +1914,8 @@ class _BodyFormDataRow extends StatelessWidget {
                         index,
                       ),
                     ),
-                    onTap: () => Navigator.of(context).pop(_KeyValueRowAction.edit),
+                    onTap: () =>
+                        Navigator.of(context).pop(_KeyValueRowAction.edit),
                   ),
                   const _KeyValueDivider(),
                   _KeyValueActionTile(
@@ -2089,6 +1972,98 @@ class _BodyFormDataRow extends StatelessWidget {
 
     onChanged(item.copyWith(key: result.key, value: result.value));
   }
+
+  /// Builds one form-data row and exposes edit/delete actions on long press.
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onLongPress: () => _showActionSheet(context),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.large,
+        vertical: AppSpacing.small,
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              _EnabledIndicator(
+                key: ValueKey<String>(
+                  AppWidgetKeys.requestsEditorKeyValueToggle(
+                    'body_form_data',
+                    index,
+                  ),
+                ),
+                isEnabled: item.isEnabled,
+                onPressed: () =>
+                    onChanged(item.copyWith(isEnabled: !item.isEnabled)),
+              ),
+              const SizedBox(width: AppSpacing.large),
+              DropdownButtonHideUnderline(
+                child: DropdownButton<KeyValueItemType>(
+                  key: ValueKey<String>(
+                    AppWidgetKeys.requestsEditorKeyValueOptionField(
+                      'body_form_data',
+                      index,
+                    ),
+                  ),
+                  value: item.type,
+                  borderRadius: const BorderRadius.all(
+                    Radius.circular(AppRadius.xxLarge),
+                  ),
+                  items: KeyValueItemType.values
+                      .map(
+                        (type) => DropdownMenuItem<KeyValueItemType>(
+                          value: type,
+                          child: Text(
+                            type == KeyValueItemType.text ? 'Text' : 'File',
+                          ),
+                        ),
+                      )
+                      .toList(growable: false),
+                  onChanged: (type) {
+                    if (type == null) {
+                      return;
+                    }
+
+                    onChanged(item.copyWith(type: type, value: ''));
+                  },
+                ),
+              ),
+              const SizedBox(width: AppSpacing.large),
+              Expanded(
+                child: _InlineKeyValueTextField(
+                  fieldKey: AppWidgetKeys.requestsEditorKeyValueKeyField(
+                    'body_form_data',
+                    index,
+                  ),
+                  value: item.key,
+                  hintText: 'Key',
+                  onChanged: (value) => onChanged(item.copyWith(key: value)),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.small),
+          if (item.type == KeyValueItemType.text)
+            _InlineKeyValueTextField(
+              fieldKey: AppWidgetKeys.requestsEditorKeyValueValueField(
+                'body_form_data',
+                index,
+              ),
+              value: item.value,
+              hintText: 'Value',
+              onChanged: (value) => onChanged(item.copyWith(value: value)),
+            )
+          else
+            _BodyFileSelectorRow(
+              index: index,
+              value: item.value,
+              onSelected: (value) => onChanged(item.copyWith(value: value)),
+            ),
+        ],
+      ),
+    ),
+  );
 }
 
 class _BodyFileSelectorRow extends StatelessWidget {
@@ -2099,8 +2074,28 @@ class _BodyFileSelectorRow extends StatelessWidget {
   });
 
   final int index;
-  final String value;
   final ValueChanged<String> onSelected;
+  final String value;
+
+  /// Opens a lightweight path-entry sheet so file body items can store a selected local file path.
+  Future<void> _selectFilePath(BuildContext context) async {
+    final result = await showRequestModalSheet<String?>(
+      context,
+      builder: (context) => _BodyTextEditorSheet(
+        title: 'Select File',
+        fieldKey: '${AppWidgetKeys.requestsEditorFormDataFileSelector}_$index',
+        initialValue: value,
+        hintText: 'C:\\\\path\\\\to\\\\file.json',
+        expands: false,
+        minLines: 1,
+        maxLines: 3,
+      ),
+    );
+
+    if (result != null) {
+      onSelected(result);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -2117,7 +2112,9 @@ class _BodyFileSelectorRow extends StatelessWidget {
           ),
         ),
         onTap: () => _selectFilePath(context),
-        borderRadius: const BorderRadius.all(Radius.circular(AppRadius.xxLarge)),
+        borderRadius: const BorderRadius.all(
+          Radius.circular(AppRadius.xxLarge),
+        ),
         child: Padding(
           padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.small,
@@ -2151,36 +2148,13 @@ class _BodyFileSelectorRow extends StatelessWidget {
       ),
     );
   }
-
-  /// Opens a lightweight path-entry sheet so file body items can store a selected local file path.
-  Future<void> _selectFilePath(BuildContext context) async {
-    final result = await showRequestModalSheet<String?>(
-      context,
-      builder: (context) => _BodyTextEditorSheet(
-        title: 'Select File',
-        fieldKey: '${AppWidgetKeys.requestsEditorFormDataFileSelector}_$index',
-        initialValue: value,
-        hintText: 'C:\\\\path\\\\to\\\\file.json',
-        expands: false,
-        minLines: 1,
-        maxLines: 3,
-      ),
-    );
-
-    if (result != null) {
-      onSelected(result);
-    }
-  }
 }
 
 class _RawBodyEditorResult {
-  const _RawBodyEditorResult({
-    required this.subtype,
-    required this.content,
-  });
+  const _RawBodyEditorResult({required this.subtype, required this.content});
 
-  final RawBodySubtype subtype;
   final String content;
+  final RawBodySubtype subtype;
 }
 
 class _RawBodyEditorSheet extends StatefulWidget {
@@ -2197,16 +2171,16 @@ class _RawBodyEditorSheetState extends State<_RawBodyEditorSheet> {
   late RawBodySubtype _selectedSubtype;
 
   @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   void initState() {
     super.initState();
     _controller = TextEditingController(text: widget.initialValue.content);
     _selectedSubtype = widget.initialValue.subtype;
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
   }
 
   @override
@@ -2297,13 +2271,13 @@ class _BodyTextEditorSheet extends StatefulWidget {
     this.expands = true,
   });
 
-  final String title;
-  final String fieldKey;
-  final String initialValue;
-  final String? hintText;
-  final int? minLines;
-  final int? maxLines;
   final bool expands;
+  final String fieldKey;
+  final String? hintText;
+  final String initialValue;
+  final int? maxLines;
+  final int? minLines;
+  final String title;
 
   @override
   State<_BodyTextEditorSheet> createState() => _BodyTextEditorSheetState();
@@ -2313,15 +2287,15 @@ class _BodyTextEditorSheetState extends State<_BodyTextEditorSheet> {
   late final TextEditingController _controller;
 
   @override
-  void initState() {
-    super.initState();
-    _controller = TextEditingController(text: widget.initialValue);
-  }
-
-  @override
   void dispose() {
     _controller.dispose();
     super.dispose();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialValue);
   }
 
   @override
@@ -2334,7 +2308,10 @@ class _BodyTextEditorSheetState extends State<_BodyTextEditorSheet> {
           children: [
             Row(
               children: [
-                Text(widget.title, style: Theme.of(context).textTheme.titleLarge),
+                Text(
+                  widget.title,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
                 const Spacer(),
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(),
@@ -2464,7 +2441,8 @@ class _AuthSection extends StatelessWidget {
             ],
           ),
           _ => const _InfoCard(
-            message: 'This auth mode is not supported in the request editor yet.',
+            message:
+                'This auth mode is not supported in the request editor yet.',
           ),
         },
       ],
@@ -2535,8 +2513,8 @@ class _OptionsSection extends StatelessWidget {
 class _SendButton extends StatelessWidget {
   const _SendButton({required this.onPressed, this.isLoading = false});
 
-  final VoidCallback onPressed;
   final bool isLoading;
+  final VoidCallback onPressed;
 
   /// Draws the floating send affordance at the bottom of the editor.
   @override
@@ -2633,10 +2611,10 @@ class _EditorDropdownField<T> extends StatelessWidget {
   });
 
   final String fieldKey;
-  final String label;
-  final T value;
   final List<DropdownMenuItem<T>> items;
+  final String label;
   final ValueChanged<T?> onChanged;
+  final T value;
 
   /// Renders a dropdown field using the shared editor input styling.
   @override
@@ -2664,13 +2642,13 @@ class _EditorTextField extends StatefulWidget {
   });
 
   final String fieldKey;
-  final String value;
-  final String label;
-  final ValueChanged<String> onChanged;
   final String? hintText;
   final TextInputType? keyboardType;
-  final TextInputAction? textInputAction;
+  final String label;
   final bool obscureText;
+  final ValueChanged<String> onChanged;
+  final TextInputAction? textInputAction;
+  final String value;
 
   @override
   State<_EditorTextField> createState() => _EditorTextFieldState();
@@ -2678,12 +2656,6 @@ class _EditorTextField extends StatefulWidget {
 
 class _EditorTextFieldState extends State<_EditorTextField> {
   late final TextEditingController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = TextEditingController(text: widget.value);
-  }
 
   @override
   void didUpdateWidget(covariant _EditorTextField oldWidget) {
@@ -2701,6 +2673,12 @@ class _EditorTextFieldState extends State<_EditorTextField> {
   void dispose() {
     _controller.dispose();
     super.dispose();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.value);
   }
 
   /// Renders a controlled text field that stays synchronized with immutable cubit state.

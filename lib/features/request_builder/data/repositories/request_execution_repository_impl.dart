@@ -1,14 +1,14 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:dio/dio.dart';
 
 import '../../../../core/network/dio_client.dart';
+import '../mappers/request_body_mapper.dart';
 import '../../domain/entities/auth_applied_request.dart';
-import '../../domain/entities/request_body_draft.dart';
 import '../../domain/entities/request_draft.dart';
 import '../../domain/entities/request_execution_result.dart';
 import '../../domain/entities/request_key_value.dart';
+import '../../domain/entities/requests_method.dart';
 import '../../domain/repositories/request_execution_repository.dart';
 
 class RequestExecutionRepositoryImpl implements RequestExecutionRepository {
@@ -27,12 +27,20 @@ class RequestExecutionRepositoryImpl implements RequestExecutionRepository {
       timeout: draft.timeout,
       verifySsl: draft.verifySsl,
     );
-    final headers = _buildHeaders(draft);
+    final canSendBody = methodSupportsRequestBody(draft.method);
+    final payload = canSendBody
+        ? await buildRequestBodyPayload(draft.body)
+        : const RequestBodyPayload();
+    final headers = _buildHeaders(
+      draft,
+      payload: payload,
+      canSendBody: canSendBody,
+    );
 
     try {
       final response = await dio.request<List<int>>(
         _buildExecutionUrl(draft.url, draft.queryParameters),
-        data: await _buildBody(draft),
+        data: canSendBody ? payload.data : null,
         options: Options(
           method: draft.method.wireName,
           headers: headers,
@@ -121,7 +129,11 @@ class RequestExecutionRepositoryImpl implements RequestExecutionRepository {
   }
 
   /// Converts enabled request headers into a transport header map and adds default content types when needed.
-  Map<String, String> _buildHeaders(RequestDraft draft) {
+  Map<String, String> _buildHeaders(
+    RequestDraft draft, {
+    required RequestBodyPayload payload,
+    required bool canSendBody,
+  }) {
     final headers = <String, String>{};
 
     for (final item in draft.headers.where(
@@ -130,84 +142,16 @@ class RequestExecutionRepositoryImpl implements RequestExecutionRepository {
       headers[item.key] = item.value;
     }
 
+    if (!canSendBody || payload.contentType == null) {
+      return headers;
+    }
+
     if (_containsHeader(headers, Headers.contentTypeHeader)) {
       return headers;
     }
 
-    if (!draft.method.supportsRequestBody) {
-      return headers;
-    }
-
-    switch (draft.body.type) {
-      case RequestBodyType.none:
-      case RequestBodyType.formData:
-        return headers;
-      case RequestBodyType.raw:
-        final contentType = draft.body.raw.syncedContentType;
-        if (contentType != null) {
-          headers[Headers.contentTypeHeader] = contentType;
-        }
-        return headers;
-      case RequestBodyType.xWwwFormUrlEncoded:
-        headers[Headers.contentTypeHeader] = Headers.formUrlEncodedContentType;
-        return headers;
-      case RequestBodyType.graphql:
-        return headers;
-    }
-  }
-
-  /// Returns the request body object expected by Dio for the active body mode.
-  Future<Object?> _buildBody(RequestDraft draft) async {
-    if (!draft.method.supportsRequestBody || !draft.body.hasContent) {
-      return null;
-    }
-
-    switch (draft.body.type) {
-      case RequestBodyType.none:
-        return null;
-      case RequestBodyType.raw:
-        return draft.body.raw.content;
-      case RequestBodyType.xWwwFormUrlEncoded:
-        return draft.body.urlEncoded
-            .where((item) => item.isEnabled && item.hasKey)
-            .map(
-              (item) =>
-                  '${Uri.encodeQueryComponent(item.key)}=${Uri.encodeQueryComponent(item.value)}',
-            )
-            .join('&');
-      case RequestBodyType.graphql:
-        // TODO: GraphQL mode will convert method to POST and body to JSON in a future phase.
-        return null;
-      case RequestBodyType.formData:
-        return _buildFormData(draft.body.formData);
-    }
-  }
-
-  /// Builds multipart form data, supporting both text fields and file paths.
-  Future<FormData> _buildFormData(List<KeyValueItem> items) async {
-    final formData = FormData();
-
-    for (final item in items.where((item) => item.isEnabled && item.hasKey)) {
-      if (item.type == KeyValueItemType.file) {
-        final filePath = item.value.trim();
-        if (filePath.isEmpty) {
-          continue;
-        }
-
-        final filename = filePath.split(Platform.pathSeparator).last;
-        formData.files.add(
-          MapEntry(
-            item.key,
-            await MultipartFile.fromFile(filePath, filename: filename),
-          ),
-        );
-        continue;
-      }
-
-      formData.fields.add(MapEntry(item.key, item.value));
-    }
-
-    return formData;
+    headers[Headers.contentTypeHeader] = payload.contentType!;
+    return headers;
   }
 
   /// Flattens response headers into reusable key/value entities for downstream parsing and UI.
