@@ -5,11 +5,13 @@ class PostmanFolderModel {
   final String id;
   final String name;
   final List<PostmanRequestModel> requests;
+  final List<PostmanFolderModel> folders;
 
   const PostmanFolderModel({
     required this.id,
     required this.name,
-    required this.requests,
+    this.requests = const [],
+    this.folders = const [],
   });
 
   factory PostmanFolderModel.fromCollectionItem(Map<String, dynamic> json) {
@@ -19,15 +21,18 @@ class PostmanFolderModel {
 
     final requests = children
         .where((item) => item['request'] != null)
-        .map((item) => PostmanRequestModel.fromJson(
-      Map<String, dynamic>.from(item),
-    ))
+        .map((item) => PostmanRequestModel.fromJson(Map<String, dynamic>.from(item)))
+        .toList();
+    final folders = children
+        .where((item) => item['item'] != null)
+        .map((item) => PostmanFolderModel.fromCollectionItem(Map<String, dynamic>.from(item)))
         .toList();
 
     return PostmanFolderModel(
       id: json['id']?.toString() ?? json['name']?.toString() ?? '',
       name: json['name']?.toString() ?? '',
       requests: requests,
+      folders: folders,
     );
   }
 
@@ -36,6 +41,7 @@ class PostmanFolderModel {
       id: id,
       name: name,
       requests: requests.map((e) => e.toEntity()).toList(),
+      folders: folders.map((e) => e.toEntity()).toList(),
     );
   }
 }

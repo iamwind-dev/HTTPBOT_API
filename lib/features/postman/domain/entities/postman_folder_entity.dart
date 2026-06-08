@@ -4,12 +4,16 @@ class PostmanFolderEntity {
   final String id;
   final String name;
   final List<PostmanRequestEntity> requests;
+  final List<PostmanFolderEntity> folders;
 
   const PostmanFolderEntity({
     required this.id,
     required this.name,
-    required this.requests,
+    this.requests = const [],
+    this.folders = const [],
   });
 
-  int get itemCount => requests.length;
+  int get itemCount =>
+      requests.length +
+      folders.fold(0, (sum, item) => sum + item.itemCount);
 }

@@ -23,6 +23,7 @@ import '../cubit/request_editor_cubit.dart';
 import '../cubit/request_editor_state.dart';
 import '../models/request_editor_response_badge_data.dart';
 import '../models/request_editor_result.dart';
+import 'method_notes/method_header_note.dart';
 import 'request_modal_sheet.dart';
 import 'request_response_sheet.dart';
 
@@ -727,6 +728,12 @@ class _KeyValueSection extends StatelessWidget {
             : null,
         onAddPressed: () => _appendEmptyItem(context),
       ),
+      if (sectionId == 'headers')
+        MethodHeaderNote(
+          method: context.read<RequestEditorCubit>().state.draft.method,
+          body: context.read<RequestEditorCubit>().state.draft.body,
+          headers: items,
+        ),
     ],
   );
 }
@@ -879,7 +886,7 @@ class _KeyValueRow extends StatelessWidget {
     }
   }
 
-  /// Opens a focused editor sheet for the selected query-param row and saves the updated pair.
+  /// Opens a focused editor sheet for the selected key-value row and saves the updated pair.
   Future<void> _showEditSheet(BuildContext context) async {
     final result = await showRequestModalSheet<_KeyValueEditorResult?>(
       context,
