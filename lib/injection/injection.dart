@@ -2,6 +2,7 @@ import 'package:app_links/app_links.dart';
 import 'package:get_it/get_it.dart';
 
 import '../core/network/dio_client.dart';
+import '../core/network/ntlm_http_client.dart';
 import '../core/services/external_uri_launcher.dart';
 import '../core/services/oauth2_callback_service.dart';
 import '../core/theme/cubit/theme_cubit.dart';
@@ -75,6 +76,7 @@ void configureDependencies() {
 
   getIt
     ..registerLazySingleton<DioClient>(DioClient.new)
+    ..registerLazySingleton<NtlmHttpClient>(NtlmHttpClient.new)
     ..registerLazySingleton(AppLinks.new)
     ..registerLazySingleton<OAuth2CallbackService>(
       () => AppLinksOAuth2CallbackService(appLinks: getIt<AppLinks>()),
@@ -154,7 +156,10 @@ void configureDependencies() {
       RequestBuilderRepositoryImpl.new,
     )
     ..registerLazySingleton<RequestExecutionRepository>(
-      () => RequestExecutionRepositoryImpl(getIt<DioClient>()),
+      () => RequestExecutionRepositoryImpl(
+        getIt<DioClient>(),
+        ntlmHttpClient: getIt<NtlmHttpClient>(),
+      ),
     )
     ..registerLazySingleton(
       () => OAuth2RemoteDataSource(dio: getIt<DioClient>().create()),

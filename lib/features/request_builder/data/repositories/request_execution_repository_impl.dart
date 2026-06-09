@@ -3,22 +3,32 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 
 import '../../../../core/network/dio_client.dart';
+import '../../../../core/network/ntlm_http_client.dart';
 import '../helpers/request_transport_inputs.dart';
 import '../../domain/entities/auth_applied_request.dart';
+import '../../domain/entities/request_auth_draft.dart';
 import '../../domain/entities/request_execution_result.dart';
 import '../../domain/entities/request_key_value.dart';
 import '../../domain/repositories/request_execution_repository.dart';
 
 class RequestExecutionRepositoryImpl implements RequestExecutionRepository {
-  const RequestExecutionRepositoryImpl(this._dioClient);
+  RequestExecutionRepositoryImpl(
+    this._dioClient, {
+    NtlmHttpClient? ntlmHttpClient,
+  }) : _ntlmHttpClient = ntlmHttpClient ?? NtlmHttpClient();
 
   final DioClient _dioClient;
+  final NtlmHttpClient _ntlmHttpClient;
 
   /// Sends the prepared request with Dio and maps raw transport data into a domain execution result.
   @override
   Future<RequestExecutionResult> executeRequest(
     AuthAppliedRequest request,
   ) async {
+    if (request.appliedAuthType == AuthType.ntlm) {
+      return _ntlmHttpClient.execute(request);
+    }
+
     final stopwatch = Stopwatch()..start();
     final draft = request.request;
     final dio = _dioClient.create(
