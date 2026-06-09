@@ -182,6 +182,23 @@ class NtlmAuthDraft extends Equatable {
   final String domain;
   final String workstation;
 
+  /// Returns true when NTLM has the minimum credentials required to authenticate.
+  bool get canApplyNtlm =>
+      username.trim().isNotEmpty && password.isNotEmpty;
+
+  /// Creates a new NTLM draft with any updated credential fields applied.
+  NtlmAuthDraft copyWith({
+    String? username,
+    String? password,
+    String? domain,
+    String? workstation,
+  }) => NtlmAuthDraft(
+    username: username ?? this.username,
+    password: password ?? this.password,
+    domain: domain ?? this.domain,
+    workstation: workstation ?? this.workstation,
+  );
+
   @override
   List<Object> get props => [username, password, domain, workstation];
 }
