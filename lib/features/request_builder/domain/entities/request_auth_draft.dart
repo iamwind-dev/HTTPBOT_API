@@ -30,6 +30,18 @@ enum ApiKeyLocation {
   final String label;
 }
 
+enum OAuth2GrantType {
+  manual('Manual'),
+  authorizationCode('Authorization Code'),
+  implicit('Implicit'),
+  passwordCredentials('Password Credentials'),
+  clientCredentials('Client Credentials');
+
+  const OAuth2GrantType(this.label);
+
+  final String label;
+}
+
 class BasicAuthDraft extends Equatable {
   const BasicAuthDraft({this.username = '', this.password = ''});
 
@@ -214,7 +226,10 @@ class OAuth1AuthDraft extends Equatable {
 
 class OAuth2AuthDraft extends Equatable {
   const OAuth2AuthDraft({
+    this.grantType = OAuth2GrantType.manual,
     this.accessToken = '',
+    this.addTokenToHeader = true,
+    this.headerPrefix = 'Bearer',
     this.refreshToken = '',
     this.clientId = '',
     this.clientSecret = '',
@@ -222,16 +237,47 @@ class OAuth2AuthDraft extends Equatable {
     this.scopes = const <String>[],
   });
 
+  final OAuth2GrantType grantType;
   final String accessToken;
+  final bool addTokenToHeader;
+  final String headerPrefix;
   final String refreshToken;
   final String clientId;
   final String clientSecret;
   final String tokenUrl;
   final List<String> scopes;
 
+  /// Returns true when the selected OAuth2 grant type uses the manual token flow.
+  bool get isManual => grantType == OAuth2GrantType.manual;
+
+  /// Returns true when manual OAuth2 has a token that can be applied to the request.
+  bool get canApplyManualToken => isManual && accessToken.trim().isNotEmpty;
+
+  /// Returns true when the manual token should be synchronized into the Authorization header.
+  bool get sendsTokenAsHeader => addTokenToHeader;
+
+  /// Returns the Authorization value while avoiding duplicate header prefixes.
+  String get resolvedAuthorizationValue {
+    final token = accessToken.trim();
+    final prefix = headerPrefix.trim();
+
+    if (prefix.isEmpty) {
+      return token;
+    }
+
+    if (token.toLowerCase().startsWith('${prefix.toLowerCase()} ')) {
+      return token;
+    }
+
+    return '$prefix $token';
+  }
+
   @override
   List<Object> get props => [
+    grantType,
     accessToken,
+    addTokenToHeader,
+    headerPrefix,
     refreshToken,
     clientId,
     clientSecret,

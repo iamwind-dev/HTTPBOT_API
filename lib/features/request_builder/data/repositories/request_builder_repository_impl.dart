@@ -319,10 +319,7 @@ class RequestBuilderRepositoryImpl implements RequestBuilderRepository {
 
   Map<String, Object?> _requestBodyDraftToJson(RequestBodyDraft body) => {
     'type': body.type.name,
-    'raw': {
-      'subtype': body.raw.subtype.name,
-      'content': body.raw.content,
-    },
+    'raw': {'subtype': body.raw.subtype.name, 'content': body.raw.content},
     'formData': body.formData.map(_keyValueItemToJson).toList(growable: false),
     'urlEncoded': body.urlEncoded
         .map(_keyValueItemToJson)
@@ -455,7 +452,10 @@ class RequestBuilderRepositoryImpl implements RequestBuilderRepository {
       'version': auth.oauth1.version,
     },
     'oauth2': {
+      'grantType': auth.oauth2.grantType.name,
       'accessToken': auth.oauth2.accessToken,
+      'addTokenToHeader': auth.oauth2.addTokenToHeader,
+      'headerPrefix': auth.oauth2.headerPrefix,
       'refreshToken': auth.oauth2.refreshToken,
       'clientId': auth.oauth2.clientId,
       'clientSecret': auth.oauth2.clientSecret,
@@ -560,7 +560,10 @@ class RequestBuilderRepositoryImpl implements RequestBuilderRepository {
 
   OAuth2AuthDraft _oAuth2AuthDraftFromJson(Map<String, dynamic> json) =>
       OAuth2AuthDraft(
+        grantType: _oAuth2GrantTypeFromName(json['grantType'] as String?),
         accessToken: json['accessToken'] as String? ?? '',
+        addTokenToHeader: json['addTokenToHeader'] as bool? ?? true,
+        headerPrefix: json['headerPrefix'] as String? ?? 'Bearer',
         refreshToken: json['refreshToken'] as String? ?? '',
         clientId: json['clientId'] as String? ?? '',
         clientSecret: json['clientSecret'] as String? ?? '',
@@ -632,21 +635,17 @@ class RequestBuilderRepositoryImpl implements RequestBuilderRepository {
   HttpMethod _httpMethodFromName(String? value) =>
       _enumValueOrFallback(HttpMethod.values, value, HttpMethod.get);
 
-  RequestBodyType _requestBodyTypeFromName(String? value) =>
-      switch (value) {
-        'json' => RequestBodyType.raw,
-        _ => _enumValueOrFallback(
-          RequestBodyType.values,
-          value,
-          RequestBodyType.none,
-        ),
-      };
+  RequestBodyType _requestBodyTypeFromName(String? value) => switch (value) {
+    'json' => RequestBodyType.raw,
+    _ => _enumValueOrFallback(
+      RequestBodyType.values,
+      value,
+      RequestBodyType.none,
+    ),
+  };
 
-  RawBodySubtype _rawBodySubtypeFromName(String? value) => _enumValueOrFallback(
-    RawBodySubtype.values,
-    value,
-    RawBodySubtype.text,
-  );
+  RawBodySubtype _rawBodySubtypeFromName(String? value) =>
+      _enumValueOrFallback(RawBodySubtype.values, value, RawBodySubtype.text);
 
   RawBodySubtype _rawBodySubtypeFromLegacyContentType(String value) {
     final normalized = value.trim().toLowerCase();
@@ -664,6 +663,13 @@ class RequestBuilderRepositoryImpl implements RequestBuilderRepository {
 
   ApiKeyLocation _apiKeyLocationFromName(String? value) =>
       _enumValueOrFallback(ApiKeyLocation.values, value, ApiKeyLocation.header);
+
+  OAuth2GrantType _oAuth2GrantTypeFromName(String? value) =>
+      _enumValueOrFallback(
+        OAuth2GrantType.values,
+        value,
+        OAuth2GrantType.manual,
+      );
 
   RequestVariableScope _requestVariableScopeFromName(String? value) =>
       _enumValueOrFallback(

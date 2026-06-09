@@ -497,9 +497,15 @@ class _ResolutionContext {
           aws: auth.aws,
           oauth1: auth.oauth1,
           oauth2: OAuth2AuthDraft(
+            grantType: auth.oauth2.grantType,
             accessToken: resolveText(
               auth.oauth2.accessToken,
               source: 'auth.oauth2.accessToken',
+            ),
+            addTokenToHeader: auth.oauth2.addTokenToHeader,
+            headerPrefix: resolveText(
+              auth.oauth2.headerPrefix,
+              source: 'auth.oauth2.headerPrefix',
             ),
             refreshToken: resolveText(
               auth.oauth2.refreshToken,
