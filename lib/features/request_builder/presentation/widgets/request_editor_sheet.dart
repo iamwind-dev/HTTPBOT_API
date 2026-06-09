@@ -2502,6 +2502,7 @@ class _AuthSection extends StatelessWidget {
           AuthType.awsSignature => _AwsAuthFields(aws: auth.aws),
           AuthType.apiKey => _ApiKeyAuthFields(apiKey: auth.apiKey),
           AuthType.oauth2 => _OAuth2AuthFields(oauth2: auth.oauth2),
+          AuthType.ntlm => _NtlmAuthFields(ntlm: auth.ntlm),
           _ => const _InfoCard(
             message:
                 'This auth mode is not supported in the request editor yet.',
@@ -2621,6 +2622,8 @@ class _GeneratedAuthFieldsCard extends StatelessWidget {
             : auth.oauth2.isManual
             ? 'Enter a token to sync OAuth 2.0 into Headers or Query Params.'
             : AppStrings.requestEditorOAuth2ImplementedLater,
+      AuthType.ntlm =>
+        'NTLM authenticates the connection during send; no Authorization header is added here.',
       _ => 'This auth mode does not generate editor-managed headers yet.',
     };
 
@@ -2748,6 +2751,48 @@ class _AwsAuthFields extends StatelessWidget {
               sessionToken: value,
             ),
           ),
+        ),
+      ],
+    );
+  }
+}
+
+class _NtlmAuthFields extends StatelessWidget {
+  const _NtlmAuthFields({required this.ntlm});
+
+  final NtlmAuthDraft ntlm;
+
+  /// Builds the NTLM credential fields used to authenticate the connection.
+  @override
+  Widget build(BuildContext context) {
+    final editorCubit = context.read<RequestEditorCubit>();
+
+    void updateNtlm(NtlmAuthDraft next) {
+      editorCubit.updateAuth(editorCubit.state.draft.auth.copyWith(ntlm: next));
+    }
+
+    return Column(
+      children: [
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField('ntlm_username'),
+          value: ntlm.username,
+          label: 'Username',
+          onChanged: (value) => updateNtlm(ntlm.copyWith(username: value)),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField('ntlm_password'),
+          value: ntlm.password,
+          label: 'Password',
+          obscureText: true,
+          onChanged: (value) => updateNtlm(ntlm.copyWith(password: value)),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField('ntlm_domain'),
+          value: ntlm.domain,
+          label: 'Domain',
+          onChanged: (value) => updateNtlm(ntlm.copyWith(domain: value)),
         ),
       ],
     );
