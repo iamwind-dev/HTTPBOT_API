@@ -57,6 +57,10 @@ void main() {
       // NtChallengeResponse length is the security buffer at offset 20 (uint16 LE).
       final ntLen = bytes[20] | (bytes[21] << 8);
       expect(ntLen, greaterThan(24));
+      // lmResponse is empty, so the NT response starts right after the 64-byte fixed header.
+      final ntOffset =
+          bytes[24] | (bytes[25] << 8) | (bytes[26] << 16) | (bytes[27] << 24);
+      expect(ntOffset, 64);
     });
   });
 }

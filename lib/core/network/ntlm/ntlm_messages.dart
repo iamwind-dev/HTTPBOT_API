@@ -14,8 +14,8 @@ const int _negotiateFlags = 0x00000001 | // Unicode
     0x00000200 | // NTLM
     0x00008000 | // Always Sign
     0x00080000 | // Extended Session Security
-    0x20000000 | // 128-bit
-    0x80000000; // 56-bit
+    0x20000000 | // 128-bit encryption (NTLMSSP_NEGOTIATE_128)
+    0x80000000; // 56-bit encryption (NTLMSSP_NEGOTIATE_56)
 
 /// Parsed fields from a server Type-2 (challenge) message.
 class NtlmType2Message {
@@ -180,10 +180,11 @@ int _readUint16le(Uint8List bytes, int offset) =>
     bytes[offset] | (bytes[offset + 1] << 8);
 
 int _readUint32le(Uint8List bytes, int offset) =>
-    bytes[offset] |
-    (bytes[offset + 1] << 8) |
-    (bytes[offset + 2] << 16) |
-    (bytes[offset + 3] << 24);
+    (bytes[offset] |
+        (bytes[offset + 1] << 8) |
+        (bytes[offset + 2] << 16) |
+        (bytes[offset + 3] << 24)) &
+    0xFFFFFFFF;
 
 Uint8List _randomBytes(int length) {
   final random = Random.secure();

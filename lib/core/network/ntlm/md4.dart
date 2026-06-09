@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
-/// Computes the MD4 digest (RFC 1320) of [input], returning 16 bytes.
+/// Computes the MD4 digest (RFC 1320) of [input].
+/// Returns exactly 16 bytes.
 List<int> md4(List<int> input) {
   var a = 0x67452301;
   var b = 0xefcdab89;
