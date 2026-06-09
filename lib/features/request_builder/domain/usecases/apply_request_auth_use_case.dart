@@ -51,9 +51,10 @@ class _RequestAuthApplier {
         return _applyApiKeyAuth();
       case AuthType.oauth2:
         return _applyOAuth2Auth();
+      case AuthType.ntlm:
+        return _applyNtlmAuth();
       case AuthType.digest:
       case AuthType.hawk:
-      case AuthType.ntlm:
       case AuthType.oauth1:
         return _buildResult(
           request: resolvedRequest.request,
@@ -200,6 +201,50 @@ class _RequestAuthApplier {
       resolutionIssues: resolvedRequest.issues,
       authIssues: authIssues,
     );
+  }
+
+  /// Validates NTLM credentials and passes the request through with auth intact.
+  ///
+  /// NTLM authenticates the connection during send, so no Authorization header
+  /// is synced into the request here.
+  AuthAppliedRequest _applyNtlmAuth() {
+    final ntlm = resolvedRequest.request.auth.ntlm;
+    final issues = <RequestAuthIssue>[
+      ..._requireNtlmField(
+        fieldName: 'username',
+        value: ntlm.username,
+        message: 'Username is required for NTLM.',
+      ),
+      ..._requireNtlmField(
+        fieldName: 'password',
+        value: ntlm.password,
+        message: 'Password is required for NTLM.',
+      ),
+    ];
+
+    return _buildResult(
+      request: resolvedRequest.request,
+      authIssues: issues,
+    );
+  }
+
+  /// Returns one blocking missing-credentials issue when an NTLM field is blank.
+  List<RequestAuthIssue> _requireNtlmField({
+    required String fieldName,
+    required String value,
+    required String message,
+  }) {
+    if (value.trim().isNotEmpty) {
+      return const <RequestAuthIssue>[];
+    }
+    return <RequestAuthIssue>[
+      RequestAuthIssue(
+        type: RequestAuthIssueType.missingCredentials,
+        authType: AuthType.ntlm,
+        fieldName: fieldName,
+        message: message,
+      ),
+    ];
   }
 
   /// Returns one blocking issue when a required auth field is blank.
