@@ -456,6 +456,23 @@ class RequestBuilderRepositoryImpl implements RequestBuilderRepository {
       'accessToken': auth.oauth2.accessToken,
       'addTokenToHeader': auth.oauth2.addTokenToHeader,
       'headerPrefix': auth.oauth2.headerPrefix,
+      'authorizationUrl': auth.oauth2.authorizationUrl,
+      'accessTokenUrl': auth.oauth2.accessTokenUrl,
+      'redirectUri': auth.oauth2.redirectUri,
+      'scope': auth.oauth2.scope,
+      'usePkce': auth.oauth2.usePkce,
+      'pkceMethod': auth.oauth2.pkceMethod.name,
+      'state': auth.oauth2.state,
+      'clientAuthentication': auth.oauth2.clientAuthentication.name,
+      'authUrlParams': auth.oauth2.authUrlParams
+          .map(_keyValueItemToJson)
+          .toList(growable: false),
+      'tokenRequestParams': auth.oauth2.tokenRequestParams
+          .map(_keyValueItemToJson)
+          .toList(growable: false),
+      'refreshTokenUrl': auth.oauth2.refreshTokenUrl,
+      'authorizationCode': auth.oauth2.authorizationCode,
+      'codeVerifier': auth.oauth2.codeVerifier,
       'refreshToken': auth.oauth2.refreshToken,
       'clientId': auth.oauth2.clientId,
       'clientSecret': auth.oauth2.clientSecret,
@@ -564,6 +581,27 @@ class RequestBuilderRepositoryImpl implements RequestBuilderRepository {
         accessToken: json['accessToken'] as String? ?? '',
         addTokenToHeader: json['addTokenToHeader'] as bool? ?? true,
         headerPrefix: json['headerPrefix'] as String? ?? 'Bearer',
+        authorizationUrl: json['authorizationUrl'] as String? ?? '',
+        accessTokenUrl: json['accessTokenUrl'] as String? ?? '',
+        redirectUri: json['redirectUri'] as String? ?? '',
+        scope: json['scope'] as String? ?? '',
+        usePkce: json['usePkce'] as bool? ?? false,
+        pkceMethod: _oAuth2PkceMethodFromName(json['pkceMethod'] as String?),
+        state: json['state'] as String? ?? '',
+        clientAuthentication: _oAuth2ClientAuthenticationFromName(
+          json['clientAuthentication'] as String?,
+        ),
+        authUrlParams: _listFromJson(
+          json['authUrlParams'],
+          (value) => _keyValueItemFromJson(value),
+        ),
+        tokenRequestParams: _listFromJson(
+          json['tokenRequestParams'],
+          (value) => _keyValueItemFromJson(value),
+        ),
+        refreshTokenUrl: json['refreshTokenUrl'] as String? ?? '',
+        authorizationCode: json['authorizationCode'] as String? ?? '',
+        codeVerifier: json['codeVerifier'] as String? ?? '',
         refreshToken: json['refreshToken'] as String? ?? '',
         clientId: json['clientId'] as String? ?? '',
         clientSecret: json['clientSecret'] as String? ?? '',
@@ -670,6 +708,21 @@ class RequestBuilderRepositoryImpl implements RequestBuilderRepository {
         value,
         OAuth2GrantType.manual,
       );
+
+  OAuth2PkceMethod _oAuth2PkceMethodFromName(String? value) =>
+      _enumValueOrFallback(
+        OAuth2PkceMethod.values,
+        value,
+        OAuth2PkceMethod.sha256,
+      );
+
+  OAuth2ClientAuthentication _oAuth2ClientAuthenticationFromName(
+    String? value,
+  ) => _enumValueOrFallback(
+    OAuth2ClientAuthentication.values,
+    value,
+    OAuth2ClientAuthentication.basicAuthHeader,
+  );
 
   RequestVariableScope _requestVariableScopeFromName(String? value) =>
       _enumValueOrFallback(

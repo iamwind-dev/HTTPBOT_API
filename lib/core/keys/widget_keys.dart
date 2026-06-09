@@ -89,6 +89,18 @@ abstract final class AppWidgetKeys {
       'requests_editor_oauth2_config_sheet';
   static const requestsEditorOAuth2ConfigDoneButton =
       'requests_editor_oauth2_config_done_button';
+  static const requestsEditorOAuth2GetAccessTokenButton =
+      'requests_editor_oauth2_get_access_token_button';
+  static const requestsEditorOAuth2FlowFailedSheet =
+      'requests_editor_oauth2_flow_failed_sheet';
+  static const requestsEditorOAuth2AuthorizeAssistSheet =
+      'requests_editor_oauth2_authorize_assist_sheet';
+  static const requestsEditorOAuth2TokenDetailsSheet =
+      'requests_editor_oauth2_token_details_sheet';
+  static const requestsEditorOAuth2TokenDetailsCopyUrlButton =
+      'requests_editor_oauth2_token_details_copy_url_button';
+  static const requestsEditorOAuth2TokenDetailsSegmentedControl =
+      'requests_editor_oauth2_token_details_segmented_control';
   static const savedCredentialsSheet = 'saved_credentials_sheet';
   static const savedCredentialsCloseButton = 'saved_credentials_close_button';
   static const savedCredentialsMoreButton = 'saved_credentials_more_button';

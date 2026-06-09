@@ -507,6 +507,51 @@ class _ResolutionContext {
               auth.oauth2.headerPrefix,
               source: 'auth.oauth2.headerPrefix',
             ),
+            authorizationUrl: resolveText(
+              auth.oauth2.authorizationUrl,
+              source: 'auth.oauth2.authorizationUrl',
+            ),
+            accessTokenUrl: resolveText(
+              auth.oauth2.accessTokenUrl,
+              source: 'auth.oauth2.accessTokenUrl',
+            ),
+            redirectUri: resolveText(
+              auth.oauth2.redirectUri,
+              source: 'auth.oauth2.redirectUri',
+            ),
+            scope: resolveText(auth.oauth2.scope, source: 'auth.oauth2.scope'),
+            usePkce: auth.oauth2.usePkce,
+            pkceMethod: auth.oauth2.pkceMethod,
+            state: resolveText(auth.oauth2.state, source: 'auth.oauth2.state'),
+            clientAuthentication: auth.oauth2.clientAuthentication,
+            authUrlParams: auth.oauth2.authUrlParams
+                .map(
+                  (item) => resolveKeyValueItem(
+                    item,
+                    source: 'auth.oauth2.authUrlParams',
+                  ),
+                )
+                .toList(growable: false),
+            tokenRequestParams: auth.oauth2.tokenRequestParams
+                .map(
+                  (item) => resolveKeyValueItem(
+                    item,
+                    source: 'auth.oauth2.tokenRequestParams',
+                  ),
+                )
+                .toList(growable: false),
+            refreshTokenUrl: resolveText(
+              auth.oauth2.refreshTokenUrl,
+              source: 'auth.oauth2.refreshTokenUrl',
+            ),
+            authorizationCode: resolveText(
+              auth.oauth2.authorizationCode,
+              source: 'auth.oauth2.authorizationCode',
+            ),
+            codeVerifier: resolveText(
+              auth.oauth2.codeVerifier,
+              source: 'auth.oauth2.codeVerifier',
+            ),
             refreshToken: resolveText(
               auth.oauth2.refreshToken,
               source: 'auth.oauth2.refreshToken',
