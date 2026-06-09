@@ -11,7 +11,7 @@ class OAuth2AuthSyncResult {
   final List<KeyValueItem> headers;
 }
 
-/// Synchronizes manual OAuth2 auth with the visible query-param and header editor rows.
+/// Synchronizes OAuth2 access-token auth with the visible query-param and header editor rows.
 OAuth2AuthSyncResult syncOAuth2AuthToRequestFields({
   required List<KeyValueItem> queryParameters,
   required List<KeyValueItem> headers,
@@ -24,7 +24,7 @@ OAuth2AuthSyncResult syncOAuth2AuthToRequestFields({
       .where((item) => !item.isSystemGeneratedOAuth2Header)
       .toList(growable: false);
 
-  if (auth.type != AuthType.oauth2 || !auth.oauth2.canApplyManualToken) {
+  if (auth.type != AuthType.oauth2 || !auth.oauth2.canApplyAccessToken) {
     return OAuth2AuthSyncResult(
       queryParameters: List<KeyValueItem>.unmodifiable(
         sanitizedQueryParameters,

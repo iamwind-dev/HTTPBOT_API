@@ -1,6 +1,9 @@
 // request_auth_draft.dart
 import 'package:equatable/equatable.dart';
 
+import '../../../../core/services/oauth2_callback_service.dart';
+import 'request_key_value.dart';
+
 enum AuthType {
   none('No Auth', plannedForInitialImplementation: true),
   basic('Basic', plannedForInitialImplementation: true),
@@ -38,6 +41,24 @@ enum OAuth2GrantType {
   clientCredentials('Client Credentials');
 
   const OAuth2GrantType(this.label);
+
+  final String label;
+}
+
+enum OAuth2PkceMethod {
+  sha256('SHA-256'),
+  plain('Plain');
+
+  const OAuth2PkceMethod(this.label);
+
+  final String label;
+}
+
+enum OAuth2ClientAuthentication {
+  basicAuthHeader('Basic Auth Header'),
+  requestBody('Request Body');
+
+  const OAuth2ClientAuthentication(this.label);
 
   final String label;
 }
@@ -230,6 +251,19 @@ class OAuth2AuthDraft extends Equatable {
     this.accessToken = '',
     this.addTokenToHeader = true,
     this.headerPrefix = 'Bearer',
+    this.authorizationUrl = '',
+    this.accessTokenUrl = '',
+    this.redirectUri = defaultOAuth2MobileRedirectUri,
+    this.scope = '',
+    this.usePkce = false,
+    this.pkceMethod = OAuth2PkceMethod.sha256,
+    this.state = '',
+    this.clientAuthentication = OAuth2ClientAuthentication.requestBody,
+    this.authUrlParams = const <KeyValueItem>[],
+    this.tokenRequestParams = const <KeyValueItem>[],
+    this.refreshTokenUrl = '',
+    this.authorizationCode = '',
+    this.codeVerifier = '',
     this.refreshToken = '',
     this.clientId = '',
     this.clientSecret = '',
@@ -241,6 +275,19 @@ class OAuth2AuthDraft extends Equatable {
   final String accessToken;
   final bool addTokenToHeader;
   final String headerPrefix;
+  final String authorizationUrl;
+  final String accessTokenUrl;
+  final String redirectUri;
+  final String scope;
+  final bool usePkce;
+  final OAuth2PkceMethod pkceMethod;
+  final String state;
+  final OAuth2ClientAuthentication clientAuthentication;
+  final List<KeyValueItem> authUrlParams;
+  final List<KeyValueItem> tokenRequestParams;
+  final String refreshTokenUrl;
+  final String authorizationCode;
+  final String codeVerifier;
   final String refreshToken;
   final String clientId;
   final String clientSecret;
@@ -253,8 +300,36 @@ class OAuth2AuthDraft extends Equatable {
   /// Returns true when manual OAuth2 has a token that can be applied to the request.
   bool get canApplyManualToken => isManual && accessToken.trim().isNotEmpty;
 
+  /// Returns true when an implemented OAuth2 flow has produced a token that can be applied to the request.
+  bool get canApplyAccessToken =>
+      (isManual || isAuthorizationCode) && accessToken.trim().isNotEmpty;
+
   /// Returns true when the manual token should be synchronized into the Authorization header.
   bool get sendsTokenAsHeader => addTokenToHeader;
+
+  /// Returns true when the selected OAuth2 grant type uses the authorization code flow.
+  bool get isAuthorizationCode =>
+      grantType == OAuth2GrantType.authorizationCode;
+
+  /// Returns the token endpoint used for authorization code exchange.
+  String get resolvedAccessTokenUrl {
+    final preferredUrl = accessTokenUrl.trim();
+    if (preferredUrl.isNotEmpty) {
+      return preferredUrl;
+    }
+
+    return tokenUrl.trim();
+  }
+
+  /// Returns the refresh-token endpoint with a fallback to the access-token endpoint.
+  String get resolvedRefreshTokenUrl {
+    final preferredUrl = refreshTokenUrl.trim();
+    if (preferredUrl.isNotEmpty) {
+      return preferredUrl;
+    }
+
+    return resolvedAccessTokenUrl;
+  }
 
   /// Returns the Authorization value while avoiding duplicate header prefixes.
   String get resolvedAuthorizationValue {
@@ -272,12 +347,74 @@ class OAuth2AuthDraft extends Equatable {
     return '$prefix $token';
   }
 
+  /// Creates a new OAuth2 draft with any updated configuration or runtime values applied.
+  OAuth2AuthDraft copyWith({
+    OAuth2GrantType? grantType,
+    String? accessToken,
+    bool? addTokenToHeader,
+    String? headerPrefix,
+    String? authorizationUrl,
+    String? accessTokenUrl,
+    String? redirectUri,
+    String? scope,
+    bool? usePkce,
+    OAuth2PkceMethod? pkceMethod,
+    String? state,
+    OAuth2ClientAuthentication? clientAuthentication,
+    List<KeyValueItem>? authUrlParams,
+    List<KeyValueItem>? tokenRequestParams,
+    String? refreshTokenUrl,
+    String? authorizationCode,
+    String? codeVerifier,
+    String? refreshToken,
+    String? clientId,
+    String? clientSecret,
+    String? tokenUrl,
+    List<String>? scopes,
+  }) => OAuth2AuthDraft(
+    grantType: grantType ?? this.grantType,
+    accessToken: accessToken ?? this.accessToken,
+    addTokenToHeader: addTokenToHeader ?? this.addTokenToHeader,
+    headerPrefix: headerPrefix ?? this.headerPrefix,
+    authorizationUrl: authorizationUrl ?? this.authorizationUrl,
+    accessTokenUrl: accessTokenUrl ?? this.accessTokenUrl,
+    redirectUri: redirectUri ?? this.redirectUri,
+    scope: scope ?? this.scope,
+    usePkce: usePkce ?? this.usePkce,
+    pkceMethod: pkceMethod ?? this.pkceMethod,
+    state: state ?? this.state,
+    clientAuthentication: clientAuthentication ?? this.clientAuthentication,
+    authUrlParams: authUrlParams ?? this.authUrlParams,
+    tokenRequestParams: tokenRequestParams ?? this.tokenRequestParams,
+    refreshTokenUrl: refreshTokenUrl ?? this.refreshTokenUrl,
+    authorizationCode: authorizationCode ?? this.authorizationCode,
+    codeVerifier: codeVerifier ?? this.codeVerifier,
+    refreshToken: refreshToken ?? this.refreshToken,
+    clientId: clientId ?? this.clientId,
+    clientSecret: clientSecret ?? this.clientSecret,
+    tokenUrl: tokenUrl ?? this.tokenUrl,
+    scopes: scopes ?? this.scopes,
+  );
+
   @override
   List<Object> get props => [
     grantType,
     accessToken,
     addTokenToHeader,
     headerPrefix,
+    authorizationUrl,
+    accessTokenUrl,
+    redirectUri,
+    scope,
+    usePkce,
+    pkceMethod,
+    state,
+    clientAuthentication,
+    authUrlParams,
+    tokenRequestParams,
+    refreshTokenUrl,
+    authorizationCode,
+    codeVerifier,
     refreshToken,
     clientId,
     clientSecret,

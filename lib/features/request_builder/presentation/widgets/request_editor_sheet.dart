@@ -3,19 +3,27 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter/services.dart';
 
 import '../../../../core/constants/app_strings.dart';
 import '../../../../core/keys/widget_keys.dart';
+import '../../../../core/services/external_uri_launcher.dart';
+import '../../../../core/services/oauth2_callback_service.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_theme_context.dart';
 import '../../../../injection/injection.dart';
 import '../../domain/entities/request_auth_draft.dart';
+import '../../domain/entities/oauth2_token_details_entity.dart';
 import '../../domain/entities/request_body_draft.dart';
 import '../../domain/entities/request_draft.dart';
 import '../../domain/entities/request_key_value.dart';
 import '../../domain/entities/request_variable_store.dart';
 import '../../domain/entities/requests_method.dart';
+import '../../domain/helpers/oauth2_authorization_url_builder.dart';
+import '../../domain/helpers/oauth2_callback_parser.dart';
+import '../../domain/helpers/oauth2_pkce.dart';
+import '../../domain/usecases/exchange_oauth2_authorization_code_use_case.dart';
 import '../bloc/request_send_bloc.dart';
 import '../bloc/request_send_event.dart';
 import '../bloc/request_send_state.dart';
@@ -25,6 +33,7 @@ import '../models/request_editor_response_badge_data.dart';
 import '../models/request_editor_result.dart';
 import 'api_key_presets.dart';
 import 'method_notes/method_header_note.dart';
+import 'oauth2_token_details_sheet.dart';
 import 'request_modal_sheet.dart';
 import 'request_response_sheet.dart';
 import 'saved_credentials_sheet.dart';
@@ -2892,19 +2901,28 @@ class _OAuth2AuthFields extends StatelessWidget {
 
   /// Opens the OAuth2 configuration sheet and persists the returned configuration.
   Future<void> _openConfigurationSheet(BuildContext context) async {
-    final updatedOauth2 = await showRequestModalSheet<OAuth2AuthDraft?>(
-      context,
-      builder: (context) => _OAuth2ConfigurationSheet(initialOauth2: oauth2),
-    );
+    final configurationResult =
+        await showRequestModalSheet<_OAuth2ConfigurationResult?>(
+          context,
+          builder: (context) =>
+              _OAuth2ConfigurationSheet(initialOauth2: oauth2),
+        );
 
-    if (!context.mounted || updatedOauth2 == null) {
+    if (!context.mounted || configurationResult == null) {
       return;
     }
 
     final editorCubit = context.read<RequestEditorCubit>();
     editorCubit.updateAuth(
-      editorCubit.state.draft.auth.copyWith(oauth2: updatedOauth2),
+      editorCubit.state.draft.auth.copyWith(oauth2: configurationResult.oauth2),
     );
+
+    if (configurationResult.tokenDetails != null) {
+      await showOAuth2TokenDetailsSheet(
+        context,
+        tokenDetails: configurationResult.tokenDetails!,
+      );
+    }
   }
 
   /// Builds the inline OAuth2 controls for manual token entry and sync mode selection.
@@ -2928,19 +2946,8 @@ class _OAuth2AuthFields extends StatelessWidget {
           value: oauth2.accessToken,
           label: AppStrings.requestEditorOAuth2Token,
           hintText: 'Enter Value',
-          onChanged: (value) => updateOauth2(
-            OAuth2AuthDraft(
-              grantType: oauth2.grantType,
-              accessToken: value,
-              addTokenToHeader: oauth2.addTokenToHeader,
-              headerPrefix: oauth2.headerPrefix,
-              refreshToken: oauth2.refreshToken,
-              clientId: oauth2.clientId,
-              clientSecret: oauth2.clientSecret,
-              tokenUrl: oauth2.tokenUrl,
-              scopes: oauth2.scopes,
-            ),
-          ),
+          onChanged: (value) =>
+              updateOauth2(oauth2.copyWith(accessToken: value)),
         ),
         if (oauth2.accessToken.trim().isNotEmpty) ...[
           const SizedBox(height: AppSpacing.small),
@@ -2970,19 +2977,8 @@ class _OAuth2AuthFields extends StatelessWidget {
                     AppWidgetKeys.requestsEditorOAuth2AsHeaderSwitch,
                   ),
                   value: oauth2.addTokenToHeader,
-                  onChanged: (value) => updateOauth2(
-                    OAuth2AuthDraft(
-                      grantType: oauth2.grantType,
-                      accessToken: oauth2.accessToken,
-                      addTokenToHeader: value,
-                      headerPrefix: oauth2.headerPrefix,
-                      refreshToken: oauth2.refreshToken,
-                      clientId: oauth2.clientId,
-                      clientSecret: oauth2.clientSecret,
-                      tokenUrl: oauth2.tokenUrl,
-                      scopes: oauth2.scopes,
-                    ),
-                  ),
+                  onChanged: (value) =>
+                      updateOauth2(oauth2.copyWith(addTokenToHeader: value)),
                 ),
               ],
             ),
@@ -2995,19 +2991,8 @@ class _OAuth2AuthFields extends StatelessWidget {
           ),
           value: oauth2.headerPrefix,
           label: AppStrings.requestEditorOAuth2HeaderPrefix,
-          onChanged: (value) => updateOauth2(
-            OAuth2AuthDraft(
-              grantType: oauth2.grantType,
-              accessToken: oauth2.accessToken,
-              addTokenToHeader: oauth2.addTokenToHeader,
-              headerPrefix: value,
-              refreshToken: oauth2.refreshToken,
-              clientId: oauth2.clientId,
-              clientSecret: oauth2.clientSecret,
-              tokenUrl: oauth2.tokenUrl,
-              scopes: oauth2.scopes,
-            ),
-          ),
+          onChanged: (value) =>
+              updateOauth2(oauth2.copyWith(headerPrefix: value)),
         ),
         const SizedBox(height: AppSpacing.small),
         InkWell(
@@ -3067,46 +3052,688 @@ class _OAuth2ConfigurationSheet extends StatefulWidget {
       _OAuth2ConfigurationSheetState();
 }
 
-class _OAuth2ConfigurationSheetState extends State<_OAuth2ConfigurationSheet> {
-  late OAuth2GrantType _grantType;
-  late TextEditingController _tokenController;
+class _OAuth2ConfigurationResult {
+  const _OAuth2ConfigurationResult({required this.oauth2, this.tokenDetails});
 
-  /// Builds the updated OAuth2 draft and closes the configuration sheet.
-  void _handleDone() {
+  final OAuth2AuthDraft oauth2;
+  final OAuth2TokenDetailsEntity? tokenDetails;
+}
+
+class _OAuth2ConfigurationSheetState extends State<_OAuth2ConfigurationSheet> {
+  late OAuth2AuthDraft _oauth2;
+  bool _isAuthorizing = false;
+
+  /// Returns the number label shown for enabled key/value params in summary rows.
+  String _countLabel(List<KeyValueItem> items) {
+    final enabledCount = items
+        .where((item) => item.isEnabled && item.hasKey)
+        .length;
+    if (enabledCount == 0) {
+      return 'None';
+    }
+
+    return enabledCount == 1 ? '1 Param' : '$enabledCount Params';
+  }
+
+  /// Returns a generated state when the current OAuth2 config has not set one yet.
+  String _ensureStateValue(String state) {
+    if (state.trim().isNotEmpty) {
+      return state;
+    }
+
+    return 'state-${DateTime.now().microsecondsSinceEpoch}';
+  }
+
+  /// Returns a generated PKCE verifier when the current OAuth2 config needs one.
+  String _ensureCodeVerifier(OAuth2AuthDraft oauth2) {
+    if (!oauth2.usePkce) {
+      return '';
+    }
+
+    if (oauth2.codeVerifier.trim().isNotEmpty) {
+      return oauth2.codeVerifier;
+    }
+
+    return generateOAuth2CodeVerifier();
+  }
+
+  /// Returns the first blocking validation error for the authorization code flow.
+  String? _authorizationCodeValidationError(OAuth2AuthDraft oauth2) {
+    if (oauth2.authorizationUrl.trim().isEmpty) {
+      return 'Missing Auth URL.';
+    }
+    if (oauth2.resolvedAccessTokenUrl.trim().isEmpty) {
+      return 'Missing Access Token URL.';
+    }
+    if (oauth2.clientId.trim().isEmpty) {
+      return 'Missing Client ID.';
+    }
+    if (oauth2.redirectUri.trim().isEmpty) {
+      return 'Missing Redirect URI.';
+    }
+    if (oauth2.redirectUri.trim() != defaultOAuth2MobileRedirectUri) {
+      return AppStrings.requestEditorOAuth2RedirectUriInvalid;
+    }
+
+    return null;
+  }
+
+  /// Builds the auth draft used for the authorize URL and later token exchange.
+  OAuth2AuthDraft _prepareAuthorizationCodeDraft() {
+    final nextState = _ensureStateValue(_oauth2.state);
+    final nextCodeVerifier = _ensureCodeVerifier(_oauth2);
+
+    return _oauth2.copyWith(state: nextState, codeVerifier: nextCodeVerifier);
+  }
+
+  /// Shows the standard OAuth2 flow-failure sheet without crashing the editor.
+  Future<void> _showFlowFailedSheet(String detail) {
+    return showRequestModalSheet<void>(
+      context,
+      builder: (context) => _OAuth2FlowFailedSheet(detail: detail),
+    );
+  }
+
+  /// Opens the shared key/value editor used for Auth URL Params and Token Request Params.
+  Future<List<KeyValueItem>?> _openParamsSheet({
+    required String title,
+    required List<KeyValueItem> initialItems,
+  }) => showRequestModalSheet<List<KeyValueItem>?>(
+    context,
+    builder: (context) =>
+        _OAuth2ParamsSheet(title: title, initialItems: initialItems),
+  );
+
+  /// Waits for the next matching OAuth callback, including one that may have arrived just before listening.
+  Future<Uri> _waitForOAuthCallback() async {
+    final callbackService = getIt<OAuth2CallbackService>();
+    final pendingCallback = callbackService.takePendingCallback();
+    if (pendingCallback != null) {
+      return pendingCallback;
+    }
+
+    return callbackService.callbackStream.first;
+  }
+
+  /// Exchanges the callback code and closes the configuration sheet with the resolved token values.
+  Future<void> _completeAuthorizationCodeFlow({
+    required OAuth2AuthDraft preparedOauth2,
+    required String authorizationCode,
+    required Uri authorizationUrl,
+  }) async {
+    final tokenDetails = await getIt<ExchangeOAuth2AuthorizationCodeUseCase>()(
+      auth: preparedOauth2,
+      code: authorizationCode,
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    final resolvedTokenDetails = tokenDetails.copyWith(
+      resolvedAuthUrl: authorizationUrl.toString(),
+    );
+    final tokenType = resolvedTokenDetails.tokenType.trim();
+    final nextPrefix = tokenType.isEmpty
+        ? preparedOauth2.headerPrefix
+        : tokenType;
+
     Navigator.of(context).pop(
-      OAuth2AuthDraft(
-        grantType: _grantType,
-        accessToken: _tokenController.text,
-        addTokenToHeader: widget.initialOauth2.addTokenToHeader,
-        headerPrefix: widget.initialOauth2.headerPrefix,
-        refreshToken: widget.initialOauth2.refreshToken,
-        clientId: widget.initialOauth2.clientId,
-        clientSecret: widget.initialOauth2.clientSecret,
-        tokenUrl: widget.initialOauth2.tokenUrl,
-        scopes: widget.initialOauth2.scopes,
+      _OAuth2ConfigurationResult(
+        oauth2: preparedOauth2.copyWith(
+          accessToken: resolvedTokenDetails.accessToken,
+          refreshToken:
+              resolvedTokenDetails.refreshToken ?? preparedOauth2.refreshToken,
+          headerPrefix: nextPrefix,
+          authorizationCode: authorizationCode,
+        ),
+        tokenDetails: resolvedTokenDetails,
       ),
     );
   }
 
-  @override
-  void dispose() {
-    _tokenController.dispose();
-    super.dispose();
+  /// Runs the Authorization Code flow by launching the browser and waiting for the app deep link callback.
+  Future<void> _handleGetAccessToken() async {
+    final validationError = _authorizationCodeValidationError(_oauth2);
+    if (validationError != null) {
+      await _showFlowFailedSheet(validationError);
+      return;
+    }
+
+    final preparedOauth2 = _prepareAuthorizationCodeDraft();
+    final authorizationUrl = buildOAuth2AuthorizationUrl(preparedOauth2);
+    if (authorizationUrl == null) {
+      await _showFlowFailedSheet(AppStrings.requestEditorOAuth2BuildUrlFailed);
+      return;
+    }
+
+    final callbackService = getIt<OAuth2CallbackService>();
+    callbackService.clearPendingCallback();
+
+    setState(() {
+      _oauth2 = preparedOauth2;
+      _isAuthorizing = true;
+    });
+
+    try {
+      final launched = await getIt<ExternalUriLauncher>().launchExternal(
+        authorizationUrl,
+      );
+      if (!launched) {
+        if (!mounted) {
+          return;
+        }
+
+        final exchangeResult =
+            await showRequestModalSheet<_OAuth2ExchangeResult?>(
+              context,
+              builder: (context) => _OAuth2AuthorizationAssistSheet(
+                authorizationUrl: authorizationUrl,
+                initialOauth2: preparedOauth2,
+              ),
+            );
+        if (!mounted || exchangeResult == null) {
+          return;
+        }
+
+        await _completeAuthorizationCodeFlow(
+          preparedOauth2: preparedOauth2,
+          authorizationCode: exchangeResult.authorizationCode,
+          authorizationUrl: authorizationUrl,
+        );
+        return;
+      }
+
+      final callbackUri = await _waitForOAuthCallback();
+      final callbackData = parseOAuth2CallbackUri(
+        callbackUri: callbackUri,
+        expectedState: preparedOauth2.state,
+      );
+      await _completeAuthorizationCodeFlow(
+        preparedOauth2: preparedOauth2,
+        authorizationCode: callbackData.code,
+        authorizationUrl: authorizationUrl,
+      );
+    } on FormatException catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      await _showFlowFailedSheet(error.message);
+    } on Object {
+      if (!mounted) {
+        return;
+      }
+
+      await _showFlowFailedSheet('Token exchange failed.');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isAuthorizing = false;
+        });
+      }
+    }
+  }
+
+  /// Builds the updated OAuth2 draft and closes the configuration sheet.
+  void _handleDone() {
+    Navigator.of(context).pop(_OAuth2ConfigurationResult(oauth2: _oauth2));
   }
 
   @override
   void initState() {
     super.initState();
-    _grantType = widget.initialOauth2.grantType;
-    _tokenController = TextEditingController(
-      text: widget.initialOauth2.accessToken,
-    );
+    _oauth2 = widget.initialOauth2;
   }
 
   /// Builds the dedicated OAuth2 configuration sheet used to select grant type and token.
   @override
+  Widget build(BuildContext context) {
+    final grantTypeFields = switch (_oauth2.grantType) {
+      OAuth2GrantType.manual => [
+        const _EditorSectionTitle(title: AppStrings.requestEditorOAuth2Token),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField(
+            'oauth2_sheet_access_token',
+          ),
+          value: _oauth2.accessToken,
+          label: AppStrings.requestEditorOAuth2Token,
+          hintText: 'Enter Value',
+          onChanged: (value) {
+            setState(() {
+              _oauth2 = _oauth2.copyWith(accessToken: value);
+            });
+          },
+        ),
+      ],
+      OAuth2GrantType.authorizationCode => [
+        const _EditorSectionTitle(
+          title: AppStrings.requestEditorOAuth2Configuration,
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField(
+            'oauth2_authorization_url',
+          ),
+          value: _oauth2.authorizationUrl,
+          label: AppStrings.requestEditorOAuth2AuthUrl,
+          onChanged: (value) => setState(() {
+            _oauth2 = _oauth2.copyWith(authorizationUrl: value);
+          }),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField(
+            'oauth2_access_token_url',
+          ),
+          value: _oauth2.accessTokenUrl,
+          label: AppStrings.requestEditorOAuth2AccessTokenUrl,
+          onChanged: (value) => setState(() {
+            _oauth2 = _oauth2.copyWith(accessTokenUrl: value);
+          }),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField('oauth2_client_id'),
+          value: _oauth2.clientId,
+          label: AppStrings.requestEditorOAuth2ClientId,
+          onChanged: (value) => setState(() {
+            _oauth2 = _oauth2.copyWith(clientId: value);
+          }),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField(
+            'oauth2_client_secret',
+          ),
+          value: _oauth2.clientSecret,
+          label: AppStrings.requestEditorOAuth2ClientSecret,
+          obscureText: true,
+          onChanged: (value) => setState(() {
+            _oauth2 = _oauth2.copyWith(clientSecret: value);
+          }),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField(
+            'oauth2_redirect_uri',
+          ),
+          value: _oauth2.redirectUri,
+          label: AppStrings.requestEditorOAuth2RedirectUri,
+          hintText: defaultOAuth2MobileRedirectUri,
+          onChanged: (value) => setState(() {
+            _oauth2 = _oauth2.copyWith(redirectUri: value);
+          }),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField('oauth2_scope'),
+          value: _oauth2.scope,
+          label: AppStrings.requestEditorOAuth2Scope,
+          onChanged: (value) => setState(() {
+            _oauth2 = _oauth2.copyWith(scope: value);
+          }),
+        ),
+        const SizedBox(height: AppSpacing.large),
+        const _EditorSectionTitle(
+          title: AppStrings.requestEditorOAuth2Advanced,
+        ),
+        const SizedBox(height: AppSpacing.small),
+        DecoratedBox(
+          decoration: _buildCardDecoration(context),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.large,
+              vertical: AppSpacing.medium,
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    AppStrings.requestEditorOAuth2UsePkce,
+                    style: Theme.of(context).textTheme.bodyLarge,
+                  ),
+                ),
+                Switch.adaptive(
+                  value: _oauth2.usePkce,
+                  onChanged: (value) => setState(() {
+                    _oauth2 = _oauth2.copyWith(
+                      usePkce: value,
+                      codeVerifier: value ? _oauth2.codeVerifier : '',
+                    );
+                  }),
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (_oauth2.usePkce) ...[
+          const SizedBox(height: AppSpacing.small),
+          DecoratedBox(
+            decoration: _buildCardDecoration(context),
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.medium),
+              child: _EditorDropdownField<OAuth2PkceMethod>(
+                fieldKey: AppWidgetKeys.requestsEditorAuthField(
+                  'oauth2_pkce_method',
+                ),
+                label: AppStrings.requestEditorOAuth2PkceMethod,
+                value: _oauth2.pkceMethod,
+                items: OAuth2PkceMethod.values
+                    .map(
+                      (method) => DropdownMenuItem<OAuth2PkceMethod>(
+                        value: method,
+                        child: Text(method.label),
+                      ),
+                    )
+                    .toList(growable: false),
+                onChanged: (value) {
+                  if (value == null) {
+                    return;
+                  }
+
+                  setState(() {
+                    _oauth2 = _oauth2.copyWith(pkceMethod: value);
+                  });
+                },
+              ),
+            ),
+          ),
+        ],
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField('oauth2_state'),
+          value: _oauth2.state,
+          label: AppStrings.requestEditorOAuth2State,
+          hintText: 'Auto-generated',
+          onChanged: (value) => setState(() {
+            _oauth2 = _oauth2.copyWith(state: value);
+          }),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        DecoratedBox(
+          decoration: _buildCardDecoration(context),
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.medium),
+            child: _EditorDropdownField<OAuth2ClientAuthentication>(
+              fieldKey: AppWidgetKeys.requestsEditorAuthField(
+                'oauth2_client_authentication',
+              ),
+              label: AppStrings.requestEditorOAuth2ClientAuthentication,
+              value: _oauth2.clientAuthentication,
+              items: OAuth2ClientAuthentication.values
+                  .map(
+                    (authentication) =>
+                        DropdownMenuItem<OAuth2ClientAuthentication>(
+                          value: authentication,
+                          child: Text(authentication.label),
+                        ),
+                  )
+                  .toList(growable: false),
+              onChanged: (value) {
+                if (value == null) {
+                  return;
+                }
+
+                setState(() {
+                  _oauth2 = _oauth2.copyWith(clientAuthentication: value);
+                });
+              },
+            ),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _OAuth2NavigationRow(
+          label: AppStrings.requestEditorOAuth2AuthUrlParams,
+          value: _countLabel(_oauth2.authUrlParams),
+          onTap: () async {
+            final updatedItems = await _openParamsSheet(
+              title: AppStrings.requestEditorOAuth2AuthUrlParamsTitle,
+              initialItems: _oauth2.authUrlParams,
+            );
+            if (!mounted || updatedItems == null) {
+              return;
+            }
+
+            setState(() {
+              _oauth2 = _oauth2.copyWith(authUrlParams: updatedItems);
+            });
+          },
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _OAuth2NavigationRow(
+          label: AppStrings.requestEditorOAuth2TokenRequestParams,
+          value: _countLabel(_oauth2.tokenRequestParams),
+          onTap: () async {
+            final updatedItems = await _openParamsSheet(
+              title: AppStrings.requestEditorOAuth2TokenRequestParamsTitle,
+              initialItems: _oauth2.tokenRequestParams,
+            );
+            if (!mounted || updatedItems == null) {
+              return;
+            }
+
+            setState(() {
+              _oauth2 = _oauth2.copyWith(tokenRequestParams: updatedItems);
+            });
+          },
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField(
+            'oauth2_refresh_token_url',
+          ),
+          value: _oauth2.refreshTokenUrl,
+          label: AppStrings.requestEditorOAuth2RefreshTokenUrl,
+          hintText: AppStrings.requestEditorOAuth2RefreshTokenUrlHint,
+          onChanged: (value) => setState(() {
+            _oauth2 = _oauth2.copyWith(refreshTokenUrl: value);
+          }),
+        ),
+        const SizedBox(height: AppSpacing.large),
+        const _EditorSectionTitle(title: AppStrings.requestEditorOAuth2Token),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField(
+            'oauth2_sheet_access_token',
+          ),
+          value: _oauth2.accessToken,
+          label: AppStrings.requestEditorOAuth2Token,
+          hintText: 'Enter Value',
+          onChanged: (value) => setState(() {
+            _oauth2 = _oauth2.copyWith(accessToken: value);
+          }),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: ElevatedButton(
+            key: const ValueKey<String>(
+              AppWidgetKeys.requestsEditorOAuth2GetAccessTokenButton,
+            ),
+            onPressed: _isAuthorizing ? null : _handleGetAccessToken,
+            child: Text(
+              _isAuthorizing
+                  ? AppStrings.requestEditorOAuth2WaitingForCallback
+                  : AppStrings.requestEditorOAuth2GetAccessToken,
+            ),
+          ),
+        ),
+      ],
+      _ => [
+        const _InfoCard(
+          message: AppStrings.requestEditorOAuth2ImplementedLater,
+        ),
+      ],
+    };
+
+    return RequestModalSheetCard(
+      key: const ValueKey<String>(
+        AppWidgetKeys.requestsEditorOAuth2ConfigSheet,
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.large,
+          AppSpacing.large,
+          AppSpacing.large,
+          AppSpacing.large,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text(
+                  'OAuth 2.0',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const Spacer(),
+                TextButton(
+                  key: const ValueKey<String>(
+                    AppWidgetKeys.requestsEditorOAuth2ConfigDoneButton,
+                  ),
+                  onPressed: _handleDone,
+                  child: const Text('Done'),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.large),
+            Flexible(
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const _EditorSectionTitle(
+                      title: AppStrings.requestEditorOAuth2Configuration,
+                    ),
+                    const SizedBox(height: AppSpacing.small),
+                    DecoratedBox(
+                      decoration: _buildCardDecoration(context),
+                      child: Padding(
+                        padding: const EdgeInsets.all(AppSpacing.medium),
+                        child: _EditorDropdownField<OAuth2GrantType>(
+                          fieldKey: AppWidgetKeys.requestsEditorAuthField(
+                            'oauth2_grant_type',
+                          ),
+                          label: AppStrings.requestEditorOAuth2GrantType,
+                          value: _oauth2.grantType,
+                          items: OAuth2GrantType.values
+                              .map(
+                                (grantType) =>
+                                    DropdownMenuItem<OAuth2GrantType>(
+                                      value: grantType,
+                                      child: Text(grantType.label),
+                                    ),
+                              )
+                              .toList(growable: false),
+                          onChanged: (value) {
+                            if (value == null) {
+                              return;
+                            }
+
+                            setState(() {
+                              _oauth2 = _oauth2.copyWith(grantType: value);
+                            });
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.large),
+                    ...grantTypeFields,
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _OAuth2NavigationRow extends StatelessWidget {
+  const _OAuth2NavigationRow({
+    required this.label,
+    required this.value,
+    required this.onTap,
+  });
+
+  final String label;
+  final VoidCallback onTap;
+  final String value;
+
+  /// Builds a tappable summary row used to open nested OAuth2 configuration sheets.
+  @override
+  Widget build(BuildContext context) => InkWell(
+    onTap: onTap,
+    borderRadius: const BorderRadius.all(Radius.circular(AppRadius.xxLarge)),
+    child: DecoratedBox(
+      decoration: _buildCardDecoration(context),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.large,
+          vertical: AppSpacing.medium,
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(label, style: Theme.of(context).textTheme.bodyLarge),
+            ),
+            Text(
+              value,
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                color: context.appColors.textSecondary,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.small),
+            const Icon(CupertinoIcons.chevron_right),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _OAuth2ParamsSheet extends StatefulWidget {
+  const _OAuth2ParamsSheet({required this.title, required this.initialItems});
+
+  final List<KeyValueItem> initialItems;
+  final String title;
+
+  @override
+  State<_OAuth2ParamsSheet> createState() => _OAuth2ParamsSheetState();
+}
+
+class _OAuth2ParamsSheetState extends State<_OAuth2ParamsSheet> {
+  late List<KeyValueItem> _items;
+
+  /// Adds a new empty param row to the local OAuth2 params sheet state.
+  void _addItem() {
+    setState(() {
+      _items = <KeyValueItem>[
+        ..._items,
+        const KeyValueItem(key: '', value: ''),
+      ];
+    });
+  }
+
+  /// Closes the params sheet and returns the edited param collection.
+  void _done() {
+    Navigator.of(context).pop(List<KeyValueItem>.unmodifiable(_items));
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _items = List<KeyValueItem>.from(widget.initialItems);
+  }
+
+  /// Builds the Auth URL Params or Token Request Params editor sheet.
+  @override
   Widget build(BuildContext context) => RequestModalSheetCard(
-    key: const ValueKey<String>(AppWidgetKeys.requestsEditorOAuth2ConfigSheet),
     child: Padding(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.large,
@@ -3120,75 +3747,356 @@ class _OAuth2ConfigurationSheetState extends State<_OAuth2ConfigurationSheet> {
         children: [
           Row(
             children: [
-              Text('OAuth 2.0', style: Theme.of(context).textTheme.titleLarge),
-              const Spacer(),
-              TextButton(
-                key: const ValueKey<String>(
-                  AppWidgetKeys.requestsEditorOAuth2ConfigDoneButton,
-                ),
-                onPressed: _handleDone,
-                child: const Text('Done'),
+              IconButton(
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(CupertinoIcons.back),
               ),
+              const SizedBox(width: AppSpacing.small),
+              Expanded(
+                child: Text(
+                  widget.title,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+              ),
+              TextButton(onPressed: _done, child: const Text('Done')),
             ],
           ),
           const SizedBox(height: AppSpacing.large),
-          const _EditorSectionTitle(
-            title: AppStrings.requestEditorOAuth2Configuration,
+          Flexible(
+            child: ListView.separated(
+              shrinkWrap: true,
+              itemCount: _items.length + 1,
+              separatorBuilder: (_, __) =>
+                  const SizedBox(height: AppSpacing.small),
+              itemBuilder: (context, index) {
+                if (index == _items.length) {
+                  return Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: _addItem,
+                      icon: const Icon(CupertinoIcons.add),
+                      label: const Text(AppStrings.requestEditorAdd),
+                    ),
+                  );
+                }
+
+                final item = _items[index];
+                return DecoratedBox(
+                  decoration: _buildCardDecoration(context),
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppSpacing.medium),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'Param ${index + 1}',
+                                style: Theme.of(context).textTheme.titleSmall,
+                              ),
+                            ),
+                            Switch.adaptive(
+                              value: item.isEnabled,
+                              onChanged: (value) {
+                                setState(() {
+                                  _items[index] = item.copyWith(
+                                    isEnabled: value,
+                                  );
+                                });
+                              },
+                            ),
+                            IconButton(
+                              onPressed: () {
+                                setState(() {
+                                  _items.removeAt(index);
+                                });
+                              },
+                              icon: const Icon(CupertinoIcons.delete),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: AppSpacing.small),
+                        _EditorTextField(
+                          fieldKey: 'oauth2_params_${widget.title}_key_$index',
+                          value: item.key,
+                          label: 'Key',
+                          onChanged: (value) {
+                            setState(() {
+                              _items[index] = item.copyWith(key: value);
+                            });
+                          },
+                        ),
+                        const SizedBox(height: AppSpacing.small),
+                        _EditorTextField(
+                          fieldKey:
+                              'oauth2_params_${widget.title}_value_$index',
+                          value: item.value,
+                          label: 'Value',
+                          onChanged: (value) {
+                            setState(() {
+                              _items[index] = item.copyWith(value: value);
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _OAuth2ExchangeResult {
+  const _OAuth2ExchangeResult({required this.authorizationCode});
+
+  final String authorizationCode;
+}
+
+class _OAuth2AuthorizationAssistSheet extends StatefulWidget {
+  const _OAuth2AuthorizationAssistSheet({
+    required this.authorizationUrl,
+    required this.initialOauth2,
+  });
+
+  final Uri authorizationUrl;
+  final OAuth2AuthDraft initialOauth2;
+
+  @override
+  State<_OAuth2AuthorizationAssistSheet> createState() =>
+      _OAuth2AuthorizationAssistSheetState();
+}
+
+class _OAuth2AuthorizationAssistSheetState
+    extends State<_OAuth2AuthorizationAssistSheet> {
+  late final TextEditingController _codeController;
+  bool _isSubmitting = false;
+
+  /// Copies the generated authorize URL to the clipboard for the manual browser step.
+  Future<void> _copyUrl() async {
+    await Clipboard.setData(
+      ClipboardData(text: widget.authorizationUrl.toString()),
+    );
+  }
+
+  /// Exchanges the manually pasted authorization code through the OAuth2 use case.
+  Future<void> _exchangeCode() async {
+    final authorizationCode = _codeController.text.trim();
+    if (authorizationCode.isEmpty) {
+      await showRequestModalSheet<void>(
+        context,
+        builder: (context) => const _OAuth2FlowFailedSheet(
+          detail: 'OAuth callback did not include code.',
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+    });
+
+    try {
+      if (!mounted) {
+        return;
+      }
+
+      Navigator.of(
+        context,
+      ).pop(_OAuth2ExchangeResult(authorizationCode: authorizationCode));
+    } on FormatException catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      await showRequestModalSheet<void>(
+        context,
+        builder: (context) => _OAuth2FlowFailedSheet(detail: error.message),
+      );
+    } on Object {
+      if (!mounted) {
+        return;
+      }
+
+      await showRequestModalSheet<void>(
+        context,
+        builder: (context) =>
+            const _OAuth2FlowFailedSheet(detail: 'Token exchange failed.'),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _codeController.dispose();
+    super.dispose();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _codeController = TextEditingController(
+      text: widget.initialOauth2.authorizationCode,
+    );
+  }
+
+  /// Builds the authorize-link fallback sheet used when no in-app callback/browser integration exists.
+  @override
+  Widget build(BuildContext context) => RequestModalSheetCard(
+    key: const ValueKey<String>(
+      AppWidgetKeys.requestsEditorOAuth2AuthorizeAssistSheet,
+    ),
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.large,
+        AppSpacing.large,
+        AppSpacing.large,
+        AppSpacing.large,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('OAuth 2.0', style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: AppSpacing.large),
+          const _InfoCard(
+            message: AppStrings.requestEditorOAuth2ManualAuthorization,
+          ),
+          const SizedBox(height: AppSpacing.small),
+          const _InfoCard(
+            message: AppStrings.requestEditorOAuth2OpenAuthorizeUrl,
           ),
           const SizedBox(height: AppSpacing.small),
           DecoratedBox(
             decoration: _buildCardDecoration(context),
             child: Padding(
               padding: const EdgeInsets.all(AppSpacing.medium),
-              child: _EditorDropdownField<OAuth2GrantType>(
-                fieldKey: AppWidgetKeys.requestsEditorAuthField(
-                  'oauth2_grant_type',
-                ),
-                label: AppStrings.requestEditorOAuth2GrantType,
-                value: _grantType,
-                items: OAuth2GrantType.values
-                    .map(
-                      (grantType) => DropdownMenuItem<OAuth2GrantType>(
-                        value: grantType,
-                        child: Text(grantType.label),
-                      ),
-                    )
-                    .toList(growable: false),
-                onChanged: (value) {
-                  if (value == null) {
-                    return;
-                  }
-
-                  setState(() {
-                    _grantType = value;
-                  });
-                },
-              ),
+              child: SelectableText(widget.authorizationUrl.toString()),
             ),
           ),
-          const SizedBox(height: AppSpacing.large),
-          const _EditorSectionTitle(title: AppStrings.requestEditorOAuth2Token),
+          const SizedBox(height: AppSpacing.small),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: _copyUrl,
+              icon: const Icon(CupertinoIcons.doc_on_doc),
+              label: const Text(AppStrings.requestEditorOAuth2CopyAuthorizeUrl),
+            ),
+          ),
           const SizedBox(height: AppSpacing.small),
           _EditorTextField(
             fieldKey: AppWidgetKeys.requestsEditorAuthField(
-              'oauth2_sheet_access_token',
+              'oauth2_authorization_code',
             ),
-            value: _tokenController.text,
-            label: AppStrings.requestEditorOAuth2Token,
-            hintText: 'Enter Value',
+            value: _codeController.text,
+            label: AppStrings.requestEditorOAuth2AuthorizationCode,
             onChanged: (value) {
-              _tokenController.value = TextEditingValue(
+              _codeController.value = TextEditingValue(
                 text: value,
                 selection: TextSelection.collapsed(offset: value.length),
               );
             },
           ),
-          if (_grantType != OAuth2GrantType.manual) ...[
-            const SizedBox(height: AppSpacing.small),
-            const _InfoCard(
-              message: AppStrings.requestEditorOAuth2ImplementedLater,
+          const SizedBox(height: AppSpacing.small),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: ElevatedButton(
+              onPressed: _isSubmitting ? null : _exchangeCode,
+              child: Text(
+                _isSubmitting
+                    ? 'Loading...'
+                    : AppStrings.requestEditorOAuth2ExchangeCode,
+              ),
             ),
-          ],
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _OAuth2FlowFailedSheet extends StatelessWidget {
+  const _OAuth2FlowFailedSheet({required this.detail});
+
+  final String detail;
+
+  /// Builds the standard OAuth2 flow-failure sheet for malformed responses and validation failures.
+  @override
+  Widget build(BuildContext context) => RequestModalSheetCard(
+    key: const ValueKey<String>(
+      AppWidgetKeys.requestsEditorOAuth2FlowFailedSheet,
+    ),
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.large,
+        AppSpacing.large,
+        AppSpacing.large,
+        AppSpacing.large,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                AppStrings.requestEditorOAuth2FlowFailed,
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const Spacer(),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Done'),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.large),
+          const _EditorSectionTitle(
+            title: AppStrings.requestEditorOAuth2Status,
+          ),
+          const SizedBox(height: AppSpacing.small),
+          DecoratedBox(
+            decoration: _buildCardDecoration(context),
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.medium),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    CupertinoIcons.exclamationmark_triangle,
+                    color: context.appColors.methodDelete,
+                  ),
+                  const SizedBox(width: AppSpacing.medium),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          AppStrings.requestEditorOAuth2MalformedResponse,
+                          style: Theme.of(context).textTheme.titleSmall,
+                        ),
+                        const SizedBox(height: AppSpacing.xSmall),
+                        Text(
+                          detail,
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     ),
