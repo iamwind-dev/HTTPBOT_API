@@ -78,4 +78,28 @@ abstract final class AppWidgetKeys {
   /// Builds a stable key for an auth credential field keyed by semantic name.
   static String requestsEditorAuthField(String fieldName) =>
       'requests_editor_auth_${fieldName}_field';
+
+  static const requestsEditorManageCredentialsButton =
+      'requests_editor_manage_credentials_button';
+  static const requestsEditorOAuth2AsHeaderSwitch =
+      'requests_editor_oauth2_as_header_switch';
+  static const requestsEditorOAuth2ConfigureButton =
+      'requests_editor_oauth2_configure_button';
+  static const requestsEditorOAuth2ConfigSheet =
+      'requests_editor_oauth2_config_sheet';
+  static const requestsEditorOAuth2ConfigDoneButton =
+      'requests_editor_oauth2_config_done_button';
+  static const savedCredentialsSheet = 'saved_credentials_sheet';
+  static const savedCredentialsCloseButton = 'saved_credentials_close_button';
+  static const savedCredentialsMoreButton = 'saved_credentials_more_button';
+  static const savedCredentialsAddButton = 'saved_credentials_add_button';
+  static const createAuthSheet = 'create_auth_sheet';
+  static const createAuthCloseButton = 'create_auth_close_button';
+  static const createAuthSaveButton = 'create_auth_save_button';
+  static const createAuthNameField = 'create_auth_name_field';
+  static const createAuthTypeField = 'create_auth_type_field';
+
+  /// Builds a stable key for a saved credential list item by index.
+  static String savedCredentialsItemAt(int index) =>
+      'saved_credentials_item_$index';
 }

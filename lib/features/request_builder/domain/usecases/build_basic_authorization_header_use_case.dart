@@ -5,9 +5,9 @@ import '../entities/request_auth_draft.dart';
 class BuildBasicAuthorizationHeaderUseCase {
   const BuildBasicAuthorizationHeaderUseCase();
 
-  /// Returns the Basic Authorization header value when both credentials are present.
+  /// Returns the Basic Authorization header value when either credential is present.
   String? call(BasicAuthDraft basicAuth) {
-    if (!_hasCompleteCredentials(basicAuth)) {
+    if (_credentialsAreEmpty(basicAuth)) {
       return null;
     }
 
@@ -18,8 +18,7 @@ class BuildBasicAuthorizationHeaderUseCase {
     return 'Basic $credentials';
   }
 
-  /// Returns true when both Basic auth inputs contain non-whitespace characters.
-  bool _hasCompleteCredentials(BasicAuthDraft basicAuth) =>
-      basicAuth.username.trim().isNotEmpty &&
-      basicAuth.password.trim().isNotEmpty;
+  /// Returns true when both Basic auth inputs are blank after trimming.
+  bool _credentialsAreEmpty(BasicAuthDraft basicAuth) =>
+      basicAuth.username.trim().isEmpty && basicAuth.password.trim().isEmpty;
 }

@@ -37,8 +37,13 @@ import '../features/request_history/domain/usecases/save_request_history_entry_u
 import '../features/request_history/presentation/cubit/request_history_cubit.dart';
 import '../features/request_builder/data/repositories/request_execution_repository_impl.dart';
 import '../features/request_builder/data/repositories/request_builder_repository_impl.dart';
+import '../features/request_builder/data/repositories/saved_credentials_repository_impl.dart';
 import '../features/request_builder/domain/repositories/request_execution_repository.dart';
 import '../features/request_builder/domain/repositories/request_builder_repository.dart';
+import '../features/request_builder/domain/repositories/saved_credentials_repository.dart';
+import '../features/request_builder/domain/usecases/get_saved_credentials_use_case.dart';
+import '../features/request_builder/domain/usecases/save_saved_credentials_use_case.dart';
+import '../features/request_builder/presentation/cubit/manage_credentials_cubit.dart';
 import '../features/request_builder/domain/usecases/clear_current_request_draft_session_use_case.dart';
 import '../features/request_builder/domain/usecases/execute_request_use_case.dart';
 import '../features/request_builder/domain/usecases/get_current_request_draft_session_use_case.dart';
@@ -198,6 +203,21 @@ void configureDependencies() {
     () => RequestHistoryCubit(
       getIt<GetRequestHistoryEntriesUseCase>(),
       getIt<ClearRequestHistoryUseCase>(),
+    ),
+  );
+  getIt.registerLazySingleton<SavedCredentialsRepository>(
+    SavedCredentialsRepositoryImpl.new,
+  );
+  getIt.registerLazySingleton(
+    () => GetSavedCredentialsUseCase(getIt<SavedCredentialsRepository>()),
+  );
+  getIt.registerLazySingleton(
+    () => SaveSavedCredentialsUseCase(getIt<SavedCredentialsRepository>()),
+  );
+  getIt.registerFactory(
+    () => ManageCredentialsCubit(
+      getSavedCredentialsUseCase: getIt<GetSavedCredentialsUseCase>(),
+      saveSavedCredentialsUseCase: getIt<SaveSavedCredentialsUseCase>(),
     ),
   );
 }
