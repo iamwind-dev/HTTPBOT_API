@@ -59,6 +59,9 @@ class NtlmHttpClient {
 
     final client = _httpClientFactory();
     client.connectionTimeout = draft.timeout;
+    if (!draft.verifySsl) {
+      client.badCertificateCallback = (_, _, _) => true;
+    }
 
     try {
       // ── Type-1 (negotiate) ───────────────────────────────────────────────
@@ -98,14 +101,20 @@ class NtlmHttpClient {
         workstation: ntlm.workstation.trim(),
       );
 
-      final rawResponse = await _sendType3OverSocket(
-        socket,
-        method: draft.method.wireName,
-        uri: uri,
-        headers: inputs.headers,
-        authorization: 'NTLM $type3',
-        bodyBytes: bodyBytes,
-      );
+      final _RawHttpResponse rawResponse;
+      try {
+        rawResponse = await _sendType3OverSocket(
+          socket,
+          method: draft.method.wireName,
+          uri: uri,
+          headers: inputs.headers,
+          authorization: 'NTLM $type3',
+          bodyBytes: bodyBytes,
+        ).timeout(draft.timeout);
+      } on TimeoutException {
+        socket.destroy();
+        rethrow; // mapped by the outer handler to a timeout result
+      }
 
       stopwatch.stop();
 

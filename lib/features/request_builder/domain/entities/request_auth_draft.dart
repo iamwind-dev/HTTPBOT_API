@@ -12,7 +12,7 @@ enum AuthType {
   digest('Digest', plannedForInitialImplementation: false),
   hawk('Hawk', plannedForInitialImplementation: false),
   jwt('JWT', plannedForInitialImplementation: false),
-  ntlm('NTLM', plannedForInitialImplementation: false),
+  ntlm('NTLM', plannedForInitialImplementation: true),
   awsSignature('AWS Signature', plannedForInitialImplementation: false),
   oauth1('OAuth 1.0a', plannedForInitialImplementation: false),
   oauth2('OAuth 2.0', plannedForInitialImplementation: false);
