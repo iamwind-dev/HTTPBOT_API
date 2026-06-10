@@ -379,6 +379,12 @@ class _ResolutionContext {
               auth.jwt.algorithm,
               source: 'auth.jwt.algorithm',
             ),
+            base64EncodedSecret: auth.jwt.base64EncodedSecret,
+            privateKey: resolveText(
+              auth.jwt.privateKey,
+              source: 'auth.jwt.privateKey',
+            ),
+            sendAsHeader: auth.jwt.sendAsHeader,
             prefix: resolveText(auth.jwt.prefix, source: 'auth.jwt.prefix'),
           ),
           ntlm: auth.ntlm,
@@ -472,6 +478,14 @@ class _ResolutionContext {
               auth.oauth1.signatureMethod,
               source: 'auth.oauth1.signatureMethod',
             ),
+            verifier: resolveText(
+              auth.oauth1.verifier,
+              source: 'auth.oauth1.verifier',
+            ),
+            callback: resolveText(
+              auth.oauth1.callback,
+              source: 'auth.oauth1.callback',
+            ),
             nonce: resolveText(auth.oauth1.nonce, source: 'auth.oauth1.nonce'),
             timestamp: resolveText(
               auth.oauth1.timestamp,
@@ -481,6 +495,11 @@ class _ResolutionContext {
               auth.oauth1.version,
               source: 'auth.oauth1.version',
             ),
+            realm: resolveText(auth.oauth1.realm, source: 'auth.oauth1.realm'),
+            asHeader: auth.oauth1.asHeader,
+            includeBodyHash: auth.oauth1.includeBodyHash,
+            encodeSignature: auth.oauth1.encodeSignature,
+            includeEmptyParameters: auth.oauth1.includeEmptyParameters,
           ),
           oauth2: auth.oauth2,
         );

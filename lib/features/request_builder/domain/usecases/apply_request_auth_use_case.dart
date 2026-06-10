@@ -5,6 +5,8 @@ import '../entities/request_draft.dart';
 import '../entities/request_key_value.dart';
 import '../entities/resolved_request.dart';
 import '../helpers/api_key_auth_ui_sync.dart';
+import '../helpers/jwt_auth_ui_sync.dart';
+import '../helpers/oauth1_auth_ui_sync.dart';
 import '../helpers/oauth2_auth_ui_sync.dart';
 import 'sync_request_auth_headers_use_case.dart';
 
@@ -44,17 +46,20 @@ class _RequestAuthApplier {
       case AuthType.none:
       case AuthType.basic:
       case AuthType.bearerToken:
-      case AuthType.jwt:
       case AuthType.awsSignature:
         return _applyHeaderDrivenAuth();
+      case AuthType.jwt:
+        return _applyJwtAuth();
       case AuthType.apiKey:
         return _applyApiKeyAuth();
       case AuthType.oauth2:
         return _applyOAuth2Auth();
+      case AuthType.ntlm:
+        return _applyNtlmAuth();
+      case AuthType.oauth1:
+        return _applyOAuth1Auth();
       case AuthType.digest:
       case AuthType.hawk:
-      case AuthType.ntlm:
-      case AuthType.oauth1:
         return _buildResult(
           request: resolvedRequest.request,
           authIssues: <RequestAuthIssue>[
@@ -168,6 +173,94 @@ class _RequestAuthApplier {
     );
   }
 
+  /// Re-synchronizes UI-backed JWT fields once right before execution.
+  AuthAppliedRequest _applyJwtAuth() {
+    final syncedFields = syncJwtAuthToRequestFields(
+      queryParameters: resolvedRequest.request.queryParameters,
+      headers: resolvedRequest.request.headers,
+      auth: resolvedRequest.request.auth,
+    );
+
+    if (syncedFields.errorMessage != null) {
+      return _buildResult(
+        request: resolvedRequest.request,
+        authIssues: <RequestAuthIssue>[
+          RequestAuthIssue(
+            type: RequestAuthIssueType.invalidConfiguration,
+            authType: AuthType.jwt,
+            message: syncedFields.errorMessage!,
+          ),
+        ],
+      );
+    }
+
+    return _buildResult(
+      request: _rebuildRequest(
+        headers: syncedFields.headers,
+        queryParameters: syncedFields.queryParameters,
+        auth: const RequestAuthDraft.none(),
+      ),
+    );
+  }
+
+  /// Re-synchronizes UI-backed OAuth1 fields once right before execution.
+  AuthAppliedRequest _applyOAuth1Auth() {
+    final oauth1 = resolvedRequest.request.auth.oauth1;
+    final issues = <RequestAuthIssue>[
+      ..._requireOAuth1Field(
+        fieldName: 'consumerKey',
+        value: oauth1.consumerKey,
+        message: 'Consumer Key is required for OAuth 1.0a.',
+      ),
+      if (oauth1.usesRsaSignature)
+        const RequestAuthIssue(
+          type: RequestAuthIssueType.invalidConfiguration,
+          authType: AuthType.oauth1,
+          fieldName: 'signatureMethod',
+          message: 'RSA signature methods are not implemented yet.',
+        ),
+      ..._requireOAuth1Field(
+        fieldName: 'consumerSecret',
+        value: oauth1.consumerSecret,
+        message: 'Consumer Secret is required for OAuth 1.0a.',
+      ),
+    ];
+
+    if (issues.isNotEmpty) {
+      return _buildResult(request: resolvedRequest.request, authIssues: issues);
+    }
+
+    final syncedFields = syncOAuth1AuthToRequestFields(
+      queryParameters: resolvedRequest.request.queryParameters,
+      headers: resolvedRequest.request.headers,
+      auth: resolvedRequest.request.auth,
+      method: resolvedRequest.request.method,
+      url: resolvedRequest.request.url,
+      body: resolvedRequest.request.body,
+    );
+
+    if (syncedFields.errorMessage != null) {
+      return _buildResult(
+        request: resolvedRequest.request,
+        authIssues: <RequestAuthIssue>[
+          RequestAuthIssue(
+            type: RequestAuthIssueType.invalidConfiguration,
+            authType: AuthType.oauth1,
+            message: syncedFields.errorMessage!,
+          ),
+        ],
+      );
+    }
+
+    return _buildResult(
+      request: _rebuildRequest(
+        headers: syncedFields.headers,
+        queryParameters: syncedFields.queryParameters,
+        auth: const RequestAuthDraft.none(),
+      ),
+    );
+  }
+
   /// Rebuilds the request with only the auth-mutated sections changed.
   RequestDraft _rebuildRequest({
     List<KeyValueItem>? headers,
@@ -200,6 +293,67 @@ class _RequestAuthApplier {
       resolutionIssues: resolvedRequest.issues,
       authIssues: authIssues,
     );
+  }
+
+  /// Validates NTLM credentials and passes the request through with auth intact.
+  ///
+  /// NTLM authenticates the connection during send, so no Authorization header
+  /// is synced into the request here.
+  AuthAppliedRequest _applyNtlmAuth() {
+    final ntlm = resolvedRequest.request.auth.ntlm;
+    final issues = <RequestAuthIssue>[
+      ..._requireNtlmField(
+        fieldName: 'username',
+        value: ntlm.username,
+        message: 'Username is required for NTLM.',
+      ),
+      ..._requireNtlmField(
+        fieldName: 'password',
+        value: ntlm.password,
+        message: 'Password is required for NTLM.',
+      ),
+    ];
+
+    return _buildResult(request: resolvedRequest.request, authIssues: issues);
+  }
+
+  /// Returns one blocking missing-credentials issue when an NTLM field is blank.
+  List<RequestAuthIssue> _requireNtlmField({
+    required String fieldName,
+    required String value,
+    required String message,
+  }) {
+    if (value.trim().isNotEmpty) {
+      return const <RequestAuthIssue>[];
+    }
+    return <RequestAuthIssue>[
+      RequestAuthIssue(
+        type: RequestAuthIssueType.missingCredentials,
+        authType: AuthType.ntlm,
+        fieldName: fieldName,
+        message: message,
+      ),
+    ];
+  }
+
+  /// Returns one blocking issue when an OAuth1 field is blank.
+  List<RequestAuthIssue> _requireOAuth1Field({
+    required String fieldName,
+    required String value,
+    required String message,
+  }) {
+    if (value.trim().isNotEmpty) {
+      return const <RequestAuthIssue>[];
+    }
+
+    return <RequestAuthIssue>[
+      RequestAuthIssue(
+        type: RequestAuthIssueType.invalidConfiguration,
+        authType: AuthType.oauth1,
+        fieldName: fieldName,
+        message: message,
+      ),
+    ];
   }
 
   /// Returns one blocking issue when a required auth field is blank.

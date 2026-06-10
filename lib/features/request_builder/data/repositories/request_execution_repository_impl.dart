@@ -3,49 +3,59 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 
 import '../../../../core/network/dio_client.dart';
-import '../mappers/request_body_mapper.dart';
-import '../mappers/request_headers_mapper.dart';
+import '../../../../core/network/ntlm_http_client.dart';
+import '../helpers/request_transport_inputs.dart';
 import '../../domain/entities/auth_applied_request.dart';
-import '../../domain/entities/request_draft.dart';
+import '../../domain/entities/request_auth_draft.dart';
 import '../../domain/entities/request_execution_result.dart';
 import '../../domain/entities/request_key_value.dart';
-import '../../domain/entities/requests_method.dart';
-import '../../domain/helpers/header_method_policy.dart';
+import '../../domain/helpers/request_auth_validator.dart';
 import '../../domain/repositories/request_execution_repository.dart';
 
 class RequestExecutionRepositoryImpl implements RequestExecutionRepository {
-  const RequestExecutionRepositoryImpl(this._dioClient);
+  RequestExecutionRepositoryImpl(
+    this._dioClient, {
+    NtlmHttpClient? ntlmHttpClient,
+  }) : _ntlmHttpClient = ntlmHttpClient ?? NtlmHttpClient();
 
   final DioClient _dioClient;
+  final NtlmHttpClient _ntlmHttpClient;
 
   /// Sends the prepared request with Dio and maps raw transport data into a domain execution result.
   @override
   Future<RequestExecutionResult> executeRequest(
     AuthAppliedRequest request,
   ) async {
+    if (request.appliedAuthType == AuthType.ntlm) {
+      final authValidation = validateAuthBeforeSend(request.request.auth);
+      if (!authValidation.isValid) {
+        return RequestExecutionResult(
+          request: request.request,
+          errorType: RequestExecutionErrorType.blocked,
+          errorMessage: authValidation.errorMessage ?? '',
+          resolutionIssues: request.resolutionIssues,
+          authIssues: request.authIssues,
+        );
+      }
+
+      return _ntlmHttpClient.execute(request);
+    }
+
     final stopwatch = Stopwatch()..start();
     final draft = request.request;
     final dio = _dioClient.create(
       timeout: draft.timeout,
       verifySsl: draft.verifySsl,
     );
-    final canSendBody = methodSupportsRequestBody(draft.method);
-    final payload = canSendBody
-        ? await buildRequestBodyPayload(draft.body)
-        : const RequestBodyPayload();
-    final headers = _buildHeaders(
-      draft,
-      payload: payload,
-      canSendBody: canSendBody,
-    );
+    final inputs = await buildRequestTransportInputs(draft);
 
     try {
       final response = await dio.request<List<int>>(
-        _buildExecutionUrl(draft.url, draft.queryParameters),
-        data: canSendBody ? payload.data : null,
+        inputs.url,
+        data: inputs.canSendBody ? inputs.payload.data : null,
         options: Options(
           method: draft.method.wireName,
-          headers: headers,
+          headers: inputs.headers,
           responseType: ResponseType.bytes,
           validateStatus: (_) => true,
         ),
@@ -100,54 +110,6 @@ class RequestExecutionRepositoryImpl implements RequestExecutionRepository {
         authIssues: request.authIssues,
       );
     }
-  }
-
-  /// Builds the exact URL string sent to the server while preserving duplicate query keys.
-  String _buildExecutionUrl(
-    String baseUrl,
-    List<KeyValueItem> queryParameters,
-  ) {
-    final enabledQueryParameters = queryParameters
-        .where((item) => item.isEnabled && item.hasKey)
-        .map(
-          (item) =>
-              '${Uri.encodeQueryComponent(item.key)}=${Uri.encodeQueryComponent(item.value)}',
-        )
-        .toList(growable: false);
-
-    if (enabledQueryParameters.isEmpty) {
-      return baseUrl;
-    }
-
-    final suffix = enabledQueryParameters.join('&');
-    if (baseUrl.contains('?')) {
-      final separator = baseUrl.endsWith('?') || baseUrl.endsWith('&')
-          ? ''
-          : '&';
-      return '$baseUrl$separator$suffix';
-    }
-
-    return '$baseUrl?$suffix';
-  }
-
-  /// Converts enabled request headers into a transport header map and adds default content types when needed.
-  Map<String, String> _buildHeaders(
-    RequestDraft draft, {
-    required RequestBodyPayload payload,
-    required bool canSendBody,
-  }) {
-    final headers = buildEnabledHeaders(draft.headers);
-    final canAutoAttachContentType =
-        shouldAutoAttachContentTypeForMethod(draft.method) &&
-        canSendBody &&
-        payload.contentType != null;
-    final finalHeaders = applyAutoContentTypeIfNeeded(
-      headers: headers,
-      contentType: payload.contentType,
-      canAutoAttachContentType: canAutoAttachContentType,
-    );
-
-    return Map<String, String>.from(finalHeaders);
   }
 
   /// Flattens response headers into reusable key/value entities for downstream parsing and UI.

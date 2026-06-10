@@ -66,8 +66,139 @@ class OAuth2RemoteDataSource {
       }
     }
 
-    final response = await _postTokenRequest(
+    return _executeTokenRequest(
       accessTokenUrl: auth.resolvedAccessTokenUrl,
+      headers: headers,
+      requestBody: requestBody,
+    );
+  }
+
+  /// Requests an access token with the resource owner password credentials grant.
+  Future<OAuth2TokenExchangeResult> requestPasswordCredentialsToken({
+    required OAuth2AuthDraft auth,
+  }) async {
+    final requestBody = <String, String>{
+      'grant_type': 'password',
+      'username': auth.username.trim(),
+      'password': auth.password,
+    };
+
+    final scope = auth.scope.trim();
+    if (scope.isNotEmpty) {
+      requestBody['scope'] = scope;
+    }
+
+    if (auth.clientAuthentication == OAuth2ClientAuthentication.requestBody) {
+      final clientId = auth.clientId.trim();
+      if (clientId.isNotEmpty) {
+        requestBody['client_id'] = clientId;
+      }
+
+      final clientSecret = auth.clientSecret.trim();
+      if (clientSecret.isNotEmpty) {
+        requestBody['client_secret'] = clientSecret;
+      }
+    }
+
+    for (final item in auth.tokenRequestParams) {
+      final key = item.key.trim();
+      if (!item.isEnabled || key.isEmpty || requestBody.containsKey(key)) {
+        continue;
+      }
+
+      requestBody[key] = item.value;
+    }
+
+    final headers = <String, String>{
+      'Content-Type': Headers.formUrlEncodedContentType,
+      'Accept': Headers.jsonContentType,
+    };
+
+    if (auth.clientAuthentication ==
+        OAuth2ClientAuthentication.basicAuthHeader) {
+      final clientId = auth.clientId.trim();
+      final clientSecret = auth.clientSecret.trim();
+
+      if (clientId.isNotEmpty || clientSecret.isNotEmpty) {
+        final credentials = base64Encode(
+          utf8.encode('$clientId:$clientSecret'),
+        );
+        headers['Authorization'] = 'Basic $credentials';
+      }
+    }
+
+    return _executeTokenRequest(
+      accessTokenUrl: auth.resolvedAccessTokenUrl,
+      headers: headers,
+      requestBody: requestBody,
+    );
+  }
+
+  /// Requests an access token with the client credentials grant.
+  Future<OAuth2TokenExchangeResult> requestClientCredentialsToken({
+    required OAuth2AuthDraft auth,
+  }) async {
+    final requestBody = <String, String>{'grant_type': 'client_credentials'};
+
+    final scope = auth.scope.trim();
+    if (scope.isNotEmpty) {
+      requestBody['scope'] = scope;
+    }
+
+    if (auth.clientAuthentication == OAuth2ClientAuthentication.requestBody) {
+      final clientId = auth.clientId.trim();
+      if (clientId.isNotEmpty) {
+        requestBody['client_id'] = clientId;
+      }
+
+      final clientSecret = auth.clientSecret.trim();
+      if (clientSecret.isNotEmpty) {
+        requestBody['client_secret'] = clientSecret;
+      }
+    }
+
+    for (final item in auth.tokenRequestParams) {
+      final key = item.key.trim();
+      if (!item.isEnabled || key.isEmpty || requestBody.containsKey(key)) {
+        continue;
+      }
+
+      requestBody[key] = item.value;
+    }
+
+    final headers = <String, String>{
+      'Content-Type': Headers.formUrlEncodedContentType,
+      'Accept': Headers.jsonContentType,
+    };
+
+    if (auth.clientAuthentication ==
+        OAuth2ClientAuthentication.basicAuthHeader) {
+      final clientId = auth.clientId.trim();
+      final clientSecret = auth.clientSecret.trim();
+
+      if (clientId.isNotEmpty || clientSecret.isNotEmpty) {
+        final credentials = base64Encode(
+          utf8.encode('$clientId:$clientSecret'),
+        );
+        headers['Authorization'] = 'Basic $credentials';
+      }
+    }
+
+    return _executeTokenRequest(
+      accessTokenUrl: auth.resolvedAccessTokenUrl,
+      headers: headers,
+      requestBody: requestBody,
+    );
+  }
+
+  /// Posts the token request and parses the JSON payload shared by all grant types.
+  Future<OAuth2TokenExchangeResult> _executeTokenRequest({
+    required String accessTokenUrl,
+    required Map<String, String> headers,
+    required Map<String, String> requestBody,
+  }) async {
+    final response = await _postTokenRequest(
+      accessTokenUrl: accessTokenUrl,
       headers: headers,
       requestBody: requestBody,
     );

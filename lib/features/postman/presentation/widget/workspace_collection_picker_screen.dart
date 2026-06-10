@@ -29,10 +29,7 @@ class WorkspaceCollectionPickerScreen extends StatelessWidget {
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [
-                  colors.surface,
-                  colors.background,
-                ],
+                colors: [colors.surface, colors.background],
               ),
             ),
             child: SafeArea(
@@ -48,9 +45,7 @@ class WorkspaceCollectionPickerScreen extends StatelessWidget {
                   children: [
                     _Header(state: state),
                     const SizedBox(height: AppSpacing.medium),
-                    Expanded(
-                      child: _Body(state: state),
-                    ),
+                    Expanded(child: _Body(state: state)),
                   ],
                 ),
               ),
@@ -105,8 +100,9 @@ class _Header extends StatelessWidget {
                 ? colors.textOnPrimary
                 : colors.iconSecondary,
             onTap: () async {
-              final didImport =
-                  await context.read<PostmanCubit>().importSelectedCollection();
+              final didImport = await context
+                  .read<PostmanCubit>()
+                  .importSelectedCollection();
               if (didImport) {
                 if (!context.mounted) {
                   return;
@@ -322,11 +318,7 @@ class _CollectionTile extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Icon(
-                Icons.folder_outlined,
-                color: colors.methodGet,
-                size: 28,
-              ),
+              Icon(Icons.folder_outlined, color: colors.methodGet, size: 28),
               const SizedBox(width: 14),
               Expanded(
                 child: Text(
@@ -371,21 +363,14 @@ class _SelectionIndicator extends StatelessWidget {
         ),
       ),
       child: selected
-          ? Icon(
-              Icons.check_rounded,
-              color: colors.textOnPrimary,
-              size: 18,
-            )
+          ? Icon(Icons.check_rounded, color: colors.textOnPrimary, size: 18)
           : null,
     );
   }
 }
 
 class _EmptyCollectionsView extends StatelessWidget {
-  const _EmptyCollectionsView({
-    required this.title,
-    required this.message,
-  });
+  const _EmptyCollectionsView({required this.title, required this.message});
 
   final String title;
   final String message;
@@ -393,8 +378,8 @@ class _EmptyCollectionsView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.appColors;
-    final fadedStrong = colors.textPrimary.withOpacity(0.72);
-    final fadedLight = colors.textSecondary.withOpacity(0.92);
+    final fadedStrong = colors.textPrimary.withValues(alpha: 0.72);
+    final fadedLight = colors.textSecondary.withValues(alpha: 0.92);
 
     return Center(
       child: Padding(
@@ -405,7 +390,7 @@ class _EmptyCollectionsView extends StatelessWidget {
             Icon(
               Icons.folder_outlined,
               size: 60,
-              color: colors.iconSecondary.withOpacity(0.45),
+              color: colors.iconSecondary.withValues(alpha: 0.45),
             ),
             const SizedBox(height: 20),
             Text(
@@ -421,11 +406,7 @@ class _EmptyCollectionsView extends StatelessWidget {
             Text(
               message,
               textAlign: TextAlign.center,
-              style: TextStyle(
-                color: fadedLight,
-                fontSize: 15,
-                height: 1.45,
-              ),
+              style: TextStyle(color: fadedLight, fontSize: 15, height: 1.45),
             ),
           ],
         ),
@@ -462,16 +443,10 @@ class _CircleIconButton extends StatelessWidget {
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: backgroundColor ?? colors.headerActionSurface,
-            border: Border.all(
-              color: colors.border.withOpacity(0.35),
-            ),
+            border: Border.all(color: colors.border.withValues(alpha: 0.35)),
           ),
           child: Center(
-            child: Icon(
-              icon,
-              color: iconColor ?? colors.iconPrimary,
-              size: 28,
-            ),
+            child: Icon(icon, color: iconColor ?? colors.iconPrimary, size: 28),
           ),
         ),
       ),

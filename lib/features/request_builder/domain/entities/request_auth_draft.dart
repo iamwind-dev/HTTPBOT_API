@@ -12,7 +12,7 @@ enum AuthType {
   digest('Digest', plannedForInitialImplementation: false),
   hawk('Hawk', plannedForInitialImplementation: false),
   jwt('JWT', plannedForInitialImplementation: false),
-  ntlm('NTLM', plannedForInitialImplementation: false),
+  ntlm('NTLM', plannedForInitialImplementation: true),
   awsSignature('AWS Signature', plannedForInitialImplementation: false),
   oauth1('OAuth 1.0a', plannedForInitialImplementation: false),
   oauth2('OAuth 2.0', plannedForInitialImplementation: false);
@@ -148,6 +148,34 @@ class HawkAuthDraft extends Equatable {
   List<Object> get props => [identifier, key, algorithm, app, delegation];
 }
 
+enum JwtAlgorithm {
+  hs256('HS256'),
+  hs384('HS384'),
+  hs512('HS512'),
+  rs256('RS256'),
+  rs384('RS384'),
+  rs512('RS512'),
+  ps256('PS256'),
+  ps384('PS384'),
+  ps512('PS512'),
+  es256('ES256'),
+  es384('ES384'),
+  es512('ES512');
+
+  const JwtAlgorithm(this.label);
+
+  final String label;
+
+  /// Returns true when this algorithm signs with an HMAC shared secret.
+  bool get isHmac => switch (this) {
+    JwtAlgorithm.hs256 || JwtAlgorithm.hs384 || JwtAlgorithm.hs512 => true,
+    _ => false,
+  };
+
+  /// Returns true when this algorithm requires an asymmetric private key.
+  bool get isPrivateKey => !isHmac;
+}
+
 class JwtAuthDraft extends Equatable {
   const JwtAuthDraft({
     this.token = '',
@@ -155,6 +183,9 @@ class JwtAuthDraft extends Equatable {
     this.payload = '',
     this.secret = '',
     this.algorithm = 'HS256',
+    this.base64EncodedSecret = false,
+    this.privateKey = '',
+    this.sendAsHeader = true,
     this.prefix = 'Bearer',
   });
 
@@ -163,10 +194,74 @@ class JwtAuthDraft extends Equatable {
   final String payload;
   final String secret;
   final String algorithm;
+  final bool base64EncodedSecret;
+  final String privateKey;
+  final bool sendAsHeader;
   final String prefix;
 
+  /// Returns the selected algorithm enum, defaulting to HS256 for unknown persisted values.
+  JwtAlgorithm get selectedAlgorithm {
+    for (final candidate in JwtAlgorithm.values) {
+      if (candidate.label == algorithm) {
+        return candidate;
+      }
+    }
+
+    return JwtAlgorithm.hs256;
+  }
+
+  /// Returns true when the selected JWT algorithm uses an HMAC shared secret.
+  bool get isHmacAlgorithm => selectedAlgorithm.isHmac;
+
+  /// Returns true when the selected JWT algorithm requires a private key.
+  bool get isPrivateKeyAlgorithm => selectedAlgorithm.isPrivateKey;
+
+  /// Returns the Authorization value while avoiding duplicate whitespace.
+  String authorizationValueForToken(String jwtToken) {
+    final trimmedToken = jwtToken.trim();
+    final trimmedPrefix = prefix.trim();
+    if (trimmedPrefix.isEmpty) {
+      return trimmedToken;
+    }
+
+    return '$trimmedPrefix $trimmedToken';
+  }
+
+  /// Creates a new JWT draft with any updated signing fields applied.
+  JwtAuthDraft copyWith({
+    String? token,
+    String? header,
+    String? payload,
+    String? secret,
+    String? algorithm,
+    bool? base64EncodedSecret,
+    String? privateKey,
+    bool? sendAsHeader,
+    String? prefix,
+  }) => JwtAuthDraft(
+    token: token ?? this.token,
+    header: header ?? this.header,
+    payload: payload ?? this.payload,
+    secret: secret ?? this.secret,
+    algorithm: algorithm ?? this.algorithm,
+    base64EncodedSecret: base64EncodedSecret ?? this.base64EncodedSecret,
+    privateKey: privateKey ?? this.privateKey,
+    sendAsHeader: sendAsHeader ?? this.sendAsHeader,
+    prefix: prefix ?? this.prefix,
+  );
+
   @override
-  List<Object> get props => [token, header, payload, secret, algorithm, prefix];
+  List<Object> get props => [
+    token,
+    header,
+    payload,
+    secret,
+    algorithm,
+    base64EncodedSecret,
+    privateKey,
+    sendAsHeader,
+    prefix,
+  ];
 }
 
 class NtlmAuthDraft extends Equatable {
@@ -181,6 +276,22 @@ class NtlmAuthDraft extends Equatable {
   final String password;
   final String domain;
   final String workstation;
+
+  /// Returns true when NTLM has the minimum credentials required to authenticate.
+  bool get canApplyNtlm => username.trim().isNotEmpty && password.isNotEmpty;
+
+  /// Creates a new NTLM draft with any updated credential fields applied.
+  NtlmAuthDraft copyWith({
+    String? username,
+    String? password,
+    String? domain,
+    String? workstation,
+  }) => NtlmAuthDraft(
+    username: username ?? this.username,
+    password: password ?? this.password,
+    domain: domain ?? this.domain,
+    workstation: workstation ?? this.workstation,
+  );
 
   @override
   List<Object> get props => [username, password, domain, workstation];
@@ -218,9 +329,16 @@ class OAuth1AuthDraft extends Equatable {
     this.token = '',
     this.tokenSecret = '',
     this.signatureMethod = 'HMAC-SHA1',
+    this.verifier = '',
+    this.callback = '',
     this.nonce = '',
     this.timestamp = '',
     this.version = '1.0',
+    this.realm = '',
+    this.asHeader = false,
+    this.includeBodyHash = false,
+    this.encodeSignature = true,
+    this.includeEmptyParameters = false,
   });
 
   final String consumerKey;
@@ -228,9 +346,58 @@ class OAuth1AuthDraft extends Equatable {
   final String token;
   final String tokenSecret;
   final String signatureMethod;
+  final String verifier;
+  final String callback;
   final String nonce;
   final String timestamp;
   final String version;
+  final String realm;
+  final bool asHeader;
+  final bool includeBodyHash;
+  final bool encodeSignature;
+  final bool includeEmptyParameters;
+
+  /// Returns true when the selected signature method is one of the unsupported RSA variants.
+  bool get usesRsaSignature =>
+      signatureMethod == 'RSA-SHA1' ||
+      signatureMethod == 'RSA-SHA256' ||
+      signatureMethod == 'RSA-SHA512';
+
+  /// Creates a new OAuth1 draft with any updated credential or signing fields applied.
+  OAuth1AuthDraft copyWith({
+    String? consumerKey,
+    String? consumerSecret,
+    String? token,
+    String? tokenSecret,
+    String? signatureMethod,
+    String? verifier,
+    String? callback,
+    String? nonce,
+    String? timestamp,
+    String? version,
+    String? realm,
+    bool? asHeader,
+    bool? includeBodyHash,
+    bool? encodeSignature,
+    bool? includeEmptyParameters,
+  }) => OAuth1AuthDraft(
+    consumerKey: consumerKey ?? this.consumerKey,
+    consumerSecret: consumerSecret ?? this.consumerSecret,
+    token: token ?? this.token,
+    tokenSecret: tokenSecret ?? this.tokenSecret,
+    signatureMethod: signatureMethod ?? this.signatureMethod,
+    verifier: verifier ?? this.verifier,
+    callback: callback ?? this.callback,
+    nonce: nonce ?? this.nonce,
+    timestamp: timestamp ?? this.timestamp,
+    version: version ?? this.version,
+    realm: realm ?? this.realm,
+    asHeader: asHeader ?? this.asHeader,
+    includeBodyHash: includeBodyHash ?? this.includeBodyHash,
+    encodeSignature: encodeSignature ?? this.encodeSignature,
+    includeEmptyParameters:
+        includeEmptyParameters ?? this.includeEmptyParameters,
+  );
 
   @override
   List<Object> get props => [
@@ -239,9 +406,16 @@ class OAuth1AuthDraft extends Equatable {
     token,
     tokenSecret,
     signatureMethod,
+    verifier,
+    callback,
     nonce,
     timestamp,
     version,
+    realm,
+    asHeader,
+    includeBodyHash,
+    encodeSignature,
+    includeEmptyParameters,
   ];
 }
 
@@ -269,6 +443,8 @@ class OAuth2AuthDraft extends Equatable {
     this.clientSecret = '',
     this.tokenUrl = '',
     this.scopes = const <String>[],
+    this.username = '',
+    this.password = '',
   });
 
   final OAuth2GrantType grantType;
@@ -293,6 +469,8 @@ class OAuth2AuthDraft extends Equatable {
   final String clientSecret;
   final String tokenUrl;
   final List<String> scopes;
+  final String username;
+  final String password;
 
   /// Returns true when the selected OAuth2 grant type uses the manual token flow.
   bool get isManual => grantType == OAuth2GrantType.manual;
@@ -302,7 +480,7 @@ class OAuth2AuthDraft extends Equatable {
 
   /// Returns true when an implemented OAuth2 flow has produced a token that can be applied to the request.
   bool get canApplyAccessToken =>
-      (isManual || isAuthorizationCode) && accessToken.trim().isNotEmpty;
+      isImplementedGrantType && accessToken.trim().isNotEmpty;
 
   /// Returns true when the manual token should be synchronized into the Authorization header.
   bool get sendsTokenAsHeader => addTokenToHeader;
@@ -310,6 +488,25 @@ class OAuth2AuthDraft extends Equatable {
   /// Returns true when the selected OAuth2 grant type uses the authorization code flow.
   bool get isAuthorizationCode =>
       grantType == OAuth2GrantType.authorizationCode;
+
+  /// Returns true when the selected OAuth2 grant type uses the implicit flow.
+  bool get isImplicit => grantType == OAuth2GrantType.implicit;
+
+  /// Returns true when the selected OAuth2 grant type uses the password credentials flow.
+  bool get isPasswordCredentials =>
+      grantType == OAuth2GrantType.passwordCredentials;
+
+  /// Returns true when the selected OAuth2 grant type uses the client credentials flow.
+  bool get isClientCredentials =>
+      grantType == OAuth2GrantType.clientCredentials;
+
+  /// Returns true when the selected OAuth2 grant type has an implemented flow.
+  bool get isImplementedGrantType =>
+      isManual ||
+      isAuthorizationCode ||
+      isImplicit ||
+      isPasswordCredentials ||
+      isClientCredentials;
 
   /// Returns the token endpoint used for authorization code exchange.
   String get resolvedAccessTokenUrl {
@@ -371,6 +568,8 @@ class OAuth2AuthDraft extends Equatable {
     String? clientSecret,
     String? tokenUrl,
     List<String>? scopes,
+    String? username,
+    String? password,
   }) => OAuth2AuthDraft(
     grantType: grantType ?? this.grantType,
     accessToken: accessToken ?? this.accessToken,
@@ -394,6 +593,8 @@ class OAuth2AuthDraft extends Equatable {
     clientSecret: clientSecret ?? this.clientSecret,
     tokenUrl: tokenUrl ?? this.tokenUrl,
     scopes: scopes ?? this.scopes,
+    username: username ?? this.username,
+    password: password ?? this.password,
   );
 
   @override
@@ -420,6 +621,8 @@ class OAuth2AuthDraft extends Equatable {
     clientSecret,
     tokenUrl,
     scopes,
+    username,
+    password,
   ];
 }
 
@@ -489,6 +692,9 @@ class RequestAuthDraft extends Equatable {
   final AwsAuthDraft aws;
   final OAuth1AuthDraft oauth1;
   final OAuth2AuthDraft oauth2;
+
+  /// Returns true when the selected auth mode is NTLM and has the minimum credentials to send.
+  bool get canApplyNtlm => type == AuthType.ntlm && ntlm.canApplyNtlm;
 
   @override
   List<Object> get props => [

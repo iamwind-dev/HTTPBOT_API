@@ -10,6 +10,7 @@ const _sensitiveBodyFieldKeys = <String>{
   'code_verifier',
   'id_token',
   'token',
+  'password',
 };
 
 /// Masks a secret while leaving a short prefix visible for user-facing debug output.
@@ -33,7 +34,9 @@ String maskSensitiveFieldValue(String key, String value) {
     return value;
   }
 
-  if (normalizedKey == 'client_secret' || normalizedKey == 'code_verifier') {
+  if (normalizedKey == 'client_secret' ||
+      normalizedKey == 'code_verifier' ||
+      normalizedKey == 'password') {
     return _fullyMaskedValue;
   }
 

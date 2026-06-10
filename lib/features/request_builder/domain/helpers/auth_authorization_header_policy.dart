@@ -19,7 +19,7 @@ String? buildBasicAuthorizationValue({
 String? buildBearerAuthorizationValue(String token) =>
     _buildBearerAuthorizationHeaderUseCase(BearerTokenAuthDraft(token: token));
 
-/// Returns the Bearer Authorization header value for a JWT token.
+/// Returns the Bearer Authorization header value for a prebuilt JWT token.
 String? buildJwtAuthorizationValue(String jwt) =>
     _buildBearerAuthorizationHeaderUseCase(BearerTokenAuthDraft(token: jwt));
 
@@ -33,11 +33,11 @@ String? buildAuthorizationValueFromAuth(RequestAuthDraft auth) {
     AuthType.bearerToken => buildBearerAuthorizationValue(
       auth.bearerToken.token,
     ),
-    AuthType.jwt => buildJwtAuthorizationValue(auth.jwt.token),
     AuthType.none ||
     AuthType.apiKey ||
     AuthType.digest ||
     AuthType.hawk ||
+    AuthType.jwt ||
     AuthType.ntlm ||
     AuthType.awsSignature ||
     AuthType.oauth1 ||

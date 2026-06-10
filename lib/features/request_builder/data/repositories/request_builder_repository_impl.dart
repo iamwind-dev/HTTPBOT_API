@@ -426,6 +426,9 @@ class RequestBuilderRepositoryImpl implements RequestBuilderRepository {
       'payload': auth.jwt.payload,
       'secret': auth.jwt.secret,
       'algorithm': auth.jwt.algorithm,
+      'base64EncodedSecret': auth.jwt.base64EncodedSecret,
+      'privateKey': auth.jwt.privateKey,
+      'sendAsHeader': auth.jwt.sendAsHeader,
       'prefix': auth.jwt.prefix,
     },
     'ntlm': {
@@ -447,9 +450,16 @@ class RequestBuilderRepositoryImpl implements RequestBuilderRepository {
       'token': auth.oauth1.token,
       'tokenSecret': auth.oauth1.tokenSecret,
       'signatureMethod': auth.oauth1.signatureMethod,
+      'verifier': auth.oauth1.verifier,
+      'callback': auth.oauth1.callback,
       'nonce': auth.oauth1.nonce,
       'timestamp': auth.oauth1.timestamp,
       'version': auth.oauth1.version,
+      'realm': auth.oauth1.realm,
+      'asHeader': auth.oauth1.asHeader,
+      'includeBodyHash': auth.oauth1.includeBodyHash,
+      'encodeSignature': auth.oauth1.encodeSignature,
+      'includeEmptyParameters': auth.oauth1.includeEmptyParameters,
     },
     'oauth2': {
       'grantType': auth.oauth2.grantType.name,
@@ -544,6 +554,9 @@ class RequestBuilderRepositoryImpl implements RequestBuilderRepository {
     payload: json['payload'] as String? ?? '',
     secret: json['secret'] as String? ?? '',
     algorithm: json['algorithm'] as String? ?? 'HS256',
+    base64EncodedSecret: json['base64EncodedSecret'] as bool? ?? false,
+    privateKey: json['privateKey'] as String? ?? '',
+    sendAsHeader: json['sendAsHeader'] as bool? ?? true,
     prefix: json['prefix'] as String? ?? 'Bearer',
   );
 
@@ -570,9 +583,17 @@ class RequestBuilderRepositoryImpl implements RequestBuilderRepository {
         token: json['token'] as String? ?? '',
         tokenSecret: json['tokenSecret'] as String? ?? '',
         signatureMethod: json['signatureMethod'] as String? ?? 'HMAC-SHA1',
+        verifier: json['verifier'] as String? ?? '',
+        callback: json['callback'] as String? ?? '',
         nonce: json['nonce'] as String? ?? '',
         timestamp: json['timestamp'] as String? ?? '',
         version: json['version'] as String? ?? '1.0',
+        realm: json['realm'] as String? ?? '',
+        asHeader: json['asHeader'] as bool? ?? false,
+        includeBodyHash: json['includeBodyHash'] as bool? ?? false,
+        encodeSignature: json['encodeSignature'] as bool? ?? true,
+        includeEmptyParameters:
+            json['includeEmptyParameters'] as bool? ?? false,
       );
 
   OAuth2AuthDraft _oAuth2AuthDraftFromJson(Map<String, dynamic> json) =>
