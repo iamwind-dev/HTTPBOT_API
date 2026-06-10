@@ -36,6 +36,14 @@ dependencies:
   dio: ^5.9.0
   get_it: ^8.2.0
   equatable: ^2.0.7
+  flutter_svg: ^2.0.10+1
+  flutter_screenutil: ^5.9.0
+  shared_preferences: ^2.5.3
+  intl: ^0.20.2
+  crypto: ^3.0.6
+  app_links: ^7.1.1
+  url_launcher: ^6.3.2
+  
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
@@ -44,24 +52,52 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  bloc_test: ^10.0.0
+  flutter_lints: ^5.0.0
+  build_runner: ^2.4.13 
+  freezed: ^3.2.0
+  json_serializable: ^6.7.1
+  auto_route_generator: ^10.2.4
+  flutter_gen_runner: ^5.4.0
+  intl_utils: ^2.8.7
+  injectable_generator: ^2.6.1
 
-  # The "flutter_lints" package below contains a set of recommended lints to
-  # encourage good coding practices. The lint set provided by the package is
-  # activated in the `analysis_options.yaml` file located at the root of your
-  # package. See that file for information about deactivating specific lint
-  # rules and activating additional ones.
-  flutter_lints: ^6.0.0
-
-# For information on the generic Dart part of this file, see the
-# following page: https://dart.dev/tools/pub/pubspec
-
-# The following section is specific to Flutter packages.
 flutter:
-
-  # The following line ensures that the Material Icons font is
-  # included with your application, so that you can use the icons in
-  # the material Icons class.
+  generate: true
   uses-material-design: true
+  assets:
+    - assets/icons/
+    - .env
+  fonts:
+    - family: Roboto
+      fonts:
+        - asset: assets/fonts/Roboto/Roboto-Regular.ttf
+        - asset: assets/fonts/Roboto/Roboto-Medium.ttf
+        - asset: assets/fonts/Roboto/Roboto-Bold.ttf
+        - asset: assets/fonts/Roboto/Roboto-Thin.ttf
+
+flutter_gen:
+  output: lib/generated/
+  integrations:
+    flutter_svg: true
+  assets:
+    enabled: true
+    outputs:
+      package_parameter_enabled: false
+      style: dot-delimiter
+  fonts:
+    enabled: true
+  colors:
+    enabled: true
+    inputs:
+      - assets/color/colors.xml
+
+flutter_intl:
+  enabled: true
+  main_locale: "en"
+  arb_dir: assets/l10n
+  output_dir: lib/generated
+
 
   # To add assets to your application, add an assets section, like this:
   # assets:

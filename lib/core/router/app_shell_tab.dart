@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../constants/app_strings.dart';
 import '../keys/widget_keys.dart';
+import '../theme/app_spacing.dart';
+import '../../generated/assets.gen.dart';
 
 enum AppShellTab { requests, websockets, collections, postman, settings }
 
@@ -30,12 +32,33 @@ extension AppShellTabX on AppShellTab {
     AppShellTab.settings => AppStrings.settingsTabLabel,
   };
 
-  IconData get icon => switch (this) {
-    AppShellTab.requests => Icons.sync_alt_rounded,
-    AppShellTab.websockets => Icons.compare_arrows_rounded,
-    AppShellTab.collections => Icons.folder_rounded,
-    AppShellTab.postman => Icons.adjust_rounded,
-    AppShellTab.settings => Icons.settings_rounded,
+  /// Build the shell tab icon with the active or inactive color from the nav.
+  Widget buildIcon(Color color) => switch (this) {
+    AppShellTab.requests => Assets.icons.requestsIc.svg(
+      width: AppSpacing.large,
+      height: AppSpacing.large,
+      colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+    ),
+    AppShellTab.websockets => Assets.icons.websocketIc.svg(
+      width: AppSpacing.large,
+      height: AppSpacing.large,
+      colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+    ),
+    AppShellTab.collections => Assets.icons.collections.svg(
+      width: AppSpacing.large,
+      height: AppSpacing.large,
+      colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+    ),
+    AppShellTab.postman => Assets.icons.postmanIcon.svg(
+      width: AppSpacing.large,
+      height: AppSpacing.large,
+      colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+    ),
+    AppShellTab.settings => Assets.icons.settingsIc.svg(
+      width: AppSpacing.large,
+      height: AppSpacing.large,
+      colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+    ),
   };
 
   String get widgetKey => switch (this) {

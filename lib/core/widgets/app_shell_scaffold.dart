@@ -12,65 +12,68 @@ class AppShellScaffold extends StatelessWidget {
     required this.title,
     required this.body,
     required this.onTabSelected,
+    this.leading,
     this.trailing,
     this.bottomSlot,
     this.floatingActionButton,
-    this.floatingActionButtonLocation =
-        FloatingActionButtonLocation.endFloat,
+    this.floatingActionButtonLocation = FloatingActionButtonLocation.endFloat,
+    this.bodyHorizontalPadding = AppSpacing.medium,
   });
-
-  static const _headerTopInset = AppSpacing.xxSmall;
 
   final AppShellTab currentTab;
   final String title;
   final Widget body;
   final ValueChanged<AppShellTab> onTabSelected;
+  final Widget? leading;
   final Widget? trailing;
   final Widget? bottomSlot;
   final Widget? floatingActionButton;
   final FloatingActionButtonLocation floatingActionButtonLocation;
+  final double bodyHorizontalPadding;
 
   // Compose the global app shell around a route-specific body.
   @override
-  Widget build(BuildContext context) => Scaffold(
-    floatingActionButton: floatingActionButton,
-    floatingActionButtonLocation: floatingActionButtonLocation,
-    bottomNavigationBar: AppBottomNavigation<AppShellTab>(
-      items: AppShellTab.values
-          .map(
-            (tab) => AppBottomNavigationItem<AppShellTab>(
-              value: tab,
-              icon: tab.icon,
-              label: tab.label,
-              widgetKey: tab.widgetKey,
-            ),
-          )
-          .toList(growable: false),
-      selectedValue: currentTab,
-      onItemSelected: onTabSelected,
-    ),
-    body: SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.medium),
-        child: Stack(
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(
-                top: _headerTopInset + AppPageHeader.defaultHeight,
+  Widget build(BuildContext context) {
+    final headerHeight = AppPageHeader.heightFor(
+      hasBottomSlot: bottomSlot != null,
+    );
+
+    return Scaffold(
+      floatingActionButton: floatingActionButton,
+      floatingActionButtonLocation: floatingActionButtonLocation,
+      bottomNavigationBar: AppBottomNavigation<AppShellTab>(
+        items: AppShellTab.values
+            .map(
+              (tab) => AppBottomNavigationItem<AppShellTab>(
+                value: tab,
+                iconBuilder: tab.buildIcon,
+                label: tab.label,
+                widgetKey: tab.widgetKey,
               ),
-              child: body,
-            ),
-            Padding(
-              padding: const EdgeInsets.only(top: _headerTopInset),
-              child: AppPageHeader(
+            )
+            .toList(growable: false),
+        selectedValue: currentTab,
+        onItemSelected: onTabSelected,
+      ),
+      body: SafeArea(
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: bodyHorizontalPadding),
+          child: Stack(
+            children: [
+              Padding(
+                padding: EdgeInsets.only(top: headerHeight),
+                child: body,
+              ),
+              AppPageHeader(
                 title: title,
+                leading: leading,
                 trailing: trailing,
                 bottomSlot: bottomSlot,
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }

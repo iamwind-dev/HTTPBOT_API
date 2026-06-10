@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
 abstract final class AppColors {
-  static const background = Color(0xFFF5F7FA);
+  // static const background = Color(0xFFF5F7FA);
+  static const background = Color(0xFFFFFFFF);
   static const surface = Color(0xFFFFFFFF);
   static const surfaceMuted = Color(0xFFE9EDF2);
   static const primary = Color(0xFF1F3A5F);
@@ -20,4 +21,26 @@ abstract final class AppColors {
   static const methodOptions = Color(0xFF8B8F97);
   static const methodConnect = Color(0xFF8B8F97);
   static const textOnPrimary = Color(0xFFFFFFFF);
+  static const card = Color.fromARGB(255, 250, 248, 248);
+  // static const darkBackground = Color(0xFF0F131A);
+  static const darkBackground = Color(0xFF151B24);
+  static const darkSurface = Color(0xFF151B24);
+  static const darkSurfaceMuted = Color(0xFF202938);
+  static const darkCard = Color(0xFF1A2230);
+  static const darkBorder = Color(0xFF2A3444);
+  static const darkTextPrimary = Color(0xFFF4F7FB);
+  static const darkTextSecondary = Color(0xFF9BAAC0);
+  static const darkTextOnPrimary = Color(0xFF0B1017);
+  static const darkPrimary = Color(0xFF5AA9FF);
+  static const darkPrimarySoft = Color(0xFF173452);
+  static const darkSecondary = Color(0xFF8ABEFF);
+  static const darkChipNeutral = Color(0xFF8E9AAF);
+  static const darkMethodGet = Color(0xFF5AA9FF);
+  static const darkMethodPost = Color(0xFF48D07C);
+  static const darkMethodPut = Color(0xFFFFB454);
+  static const darkMethodDelete = Color(0xFFFF7D7D);
+  static const darkMethodPatch = Color(0xFFADB6C5);
+  static const darkMethodHead = Color(0xFFADB6C5);
+  static const darkMethodOptions = Color(0xFF98A4B8);
+  static const darkMethodConnect = Color(0xFF98A4B8);
 }
