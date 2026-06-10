@@ -5,7 +5,7 @@ import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_theme_context.dart';
 import '../cubit/postman_cubit.dart';
-import 'workspace_collection_picker_screen .dart';
+import 'workspace_collection_picker_screen.dart';
 
 class LinkPostmanBottomSheetBody extends StatefulWidget {
   const LinkPostmanBottomSheetBody({super.key});
@@ -27,8 +27,6 @@ class _LinkPostmanBottomSheetBodyState
     if (apiKey.isEmpty) return;
 
     final cubit = context.read<PostmanCubit>();
-    final rootContext = Navigator.of(context, rootNavigator: true).context;
-
     setState(() => _isSubmitting = true);
     try {
       final didLink = await cubit.linkPostman(apiKey: apiKey);
@@ -36,13 +34,14 @@ class _LinkPostmanBottomSheetBodyState
       if (!didLink) {
         final message =
             cubit.state.errorMessage ?? 'Unable to load Postman workspaces.';
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(message)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(message)));
         return;
       }
+      final rootContext = Navigator.of(context, rootNavigator: true).context;
+      if (!rootContext.mounted) return;
       Navigator.pop(context);
-      await Future<void>.delayed(Duration.zero);
       await showModalBottomSheet<void>(
         context: rootContext,
         useRootNavigator: true,
@@ -170,7 +169,9 @@ class _LinkPostmanBottomSheetBodyState
                 const SizedBox(height: AppSpacing.medium),
                 Container(
                   height: 58,
-                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.medium),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.medium,
+                  ),
                   decoration: BoxDecoration(
                     color: colors.surfaceMuted,
                     borderRadius: BorderRadius.circular(AppRadius.large),
@@ -198,7 +199,9 @@ class _LinkPostmanBottomSheetBodyState
                             border: InputBorder.none,
                             hintText: 'Enter Value',
                             hintStyle: theme.textTheme.titleMedium?.copyWith(
-                              color: colors.textSecondary.withValues(alpha: 0.7),
+                              color: colors.textSecondary.withValues(
+                                alpha: 0.7,
+                              ),
                             ),
                           ),
                         ),

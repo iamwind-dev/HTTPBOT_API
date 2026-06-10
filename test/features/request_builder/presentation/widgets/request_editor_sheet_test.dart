@@ -12,6 +12,8 @@ import 'package:httpbot_api/features/request_builder/domain/entities/request_aut
 import 'package:httpbot_api/features/request_builder/domain/entities/request_draft.dart';
 import 'package:httpbot_api/features/request_builder/domain/entities/request_variable_store.dart';
 import 'package:httpbot_api/features/request_builder/domain/usecases/exchange_oauth2_authorization_code_use_case.dart';
+import 'package:httpbot_api/features/request_builder/domain/usecases/request_oauth2_client_credentials_token_use_case.dart';
+import 'package:httpbot_api/features/request_builder/domain/usecases/request_oauth2_password_credentials_token_use_case.dart';
 import 'package:httpbot_api/features/request_builder/presentation/widgets/request_editor_sheet.dart';
 import 'package:httpbot_api/injection/injection.dart';
 
@@ -74,6 +76,55 @@ void main() {
         );
       },
     );
+
+    testWidgets('should show HMAC JWT fields by default', (tester) async {
+      final robot = RequestEditorSheetRobot(tester);
+
+      await robot.pumpScreen();
+      await robot.openEditor();
+      await robot.selectAuthType(AuthType.jwt);
+
+      robot.expectTextVisible('Header');
+      robot.expectTextVisible('Payload');
+      robot.expectTextVisible('Algorithm');
+      robot.expectTextVisible('Base64 Encoded Secret');
+      robot.expectTextVisible('Secret');
+      robot.expectTextVisible('Send as Header');
+      robot.expectTextVisible('Header Prefix');
+      robot.expectTextNotVisible('Private Key');
+    });
+
+    testWidgets('should show private key JWT fields for RS256', (tester) async {
+      final robot = RequestEditorSheetRobot(tester);
+
+      await robot.pumpScreen();
+      await robot.openEditor();
+      await robot.selectAuthType(AuthType.jwt);
+      await robot.selectAuthFieldOption('jwt_algorithm', 'RS256');
+
+      robot.expectTextVisible('Private Key');
+      robot.expectTextNotVisible('Base64 Encoded Secret');
+      robot.expectTextNotVisible('Secret');
+    });
+
+    testWidgets('should show private key JWT fields for PS256 and ES256', (
+      tester,
+    ) async {
+      final robot = RequestEditorSheetRobot(tester);
+
+      await robot.pumpScreen();
+      await robot.openEditor();
+      await robot.selectAuthType(AuthType.jwt);
+      await robot.selectAuthFieldOption('jwt_algorithm', 'PS256');
+      robot.expectTextVisible('Private Key');
+      robot.expectTextNotVisible('Base64 Encoded Secret');
+      robot.expectTextNotVisible('Secret');
+
+      await robot.selectAuthFieldOption('jwt_algorithm', 'ES256');
+      robot.expectTextVisible('Private Key');
+      robot.expectTextNotVisible('Base64 Encoded Secret');
+      robot.expectTextNotVisible('Secret');
+    });
 
     testWidgets(
       'should show OAuth2 manual controls and generated Authorization header',
@@ -191,28 +242,441 @@ void main() {
     );
 
     testWidgets(
-      'should show NTLM username, password, and domain fields',
+      'should complete OAuth2 implicit flow from deep link callback fragment',
+      (tester) async {
+        final callbackService = FakeOAuth2CallbackService();
+        final launcher = FakeExternalUriLauncher();
+
+        if (getIt.isRegistered<OAuth2CallbackService>()) {
+          getIt.unregister<OAuth2CallbackService>();
+        }
+        if (getIt.isRegistered<ExternalUriLauncher>()) {
+          getIt.unregister<ExternalUriLauncher>();
+        }
+
+        getIt.registerSingleton<OAuth2CallbackService>(callbackService);
+        getIt.registerSingleton<ExternalUriLauncher>(launcher);
+
+        launcher.onLaunch = (uri) {
+          final state = uri.queryParameters['state'] ?? '';
+          callbackService.emit(
+            Uri.parse(
+              'httpbot://oauth/callback#access_token=implicit-token&token_type=Bearer&expires_in=3600&state=$state&scope=openid',
+            ),
+          );
+        };
+
+        final robot = RequestEditorSheetRobot(tester);
+
+        await robot.pumpScreen(
+          initialDraft: const RequestDraft(
+            auth: RequestAuthDraft(
+              type: AuthType.oauth2,
+              oauth2: OAuth2AuthDraft(
+                grantType: OAuth2GrantType.implicit,
+                authorizationUrl: 'https://idp.example.com/oauth/authorize',
+                clientId: 'client-123',
+                redirectUri: defaultOAuth2MobileRedirectUri,
+                scope: 'openid profile',
+              ),
+            ),
+          ),
+        );
+        await robot.openEditor();
+        await robot.openOAuth2Configure();
+        await robot.tapGetAccessToken();
+        await tester.pump();
+        await tester.pumpAndSettle();
+
+        final launchedUri = launcher.lastLaunchedUri;
+        expect(launchedUri?.host, 'idp.example.com');
+        expect(launchedUri?.queryParameters['response_type'], 'token');
+        expect(
+          launchedUri?.queryParameters.containsKey('code_challenge'),
+          isFalse,
+        );
+        expect(
+          launchedUri?.queryParameters.containsKey('client_secret'),
+          isFalse,
+        );
+        robot.expectTextVisible(
+          AppStrings.requestEditorOAuth2TokenDetailsTitle,
+        );
+        await robot.closeTopSheet();
+        robot.expectHeaderValue(
+          section: 'headers',
+          index: 0,
+          field: 'key',
+          value: 'Authorization',
+        );
+        robot.expectHeaderValue(
+          section: 'headers',
+          index: 0,
+          field: 'value',
+          value: 'Bearer implicit-token',
+        );
+        await robot.openOAuth2Configure();
+        robot.expectAuthFieldValue(
+          'oauth2_sheet_access_token',
+          'implicit-token',
+        );
+      },
+    );
+
+    testWidgets(
+      'should show only implicit fields when implicit grant type is selected',
       (tester) async {
         final robot = RequestEditorSheetRobot(tester);
 
         await robot.pumpScreen(
           initialDraft: const RequestDraft(
-            auth: RequestAuthDraft(type: AuthType.ntlm),
+            auth: RequestAuthDraft(
+              type: AuthType.oauth2,
+              oauth2: OAuth2AuthDraft(grantType: OAuth2GrantType.implicit),
+            ),
           ),
         );
         await robot.openEditor();
-        await robot.enterAuthField('ntlm_username', 'svc-user');
-        await robot.enterAuthField('ntlm_password', 'secret');
-        await robot.enterAuthField('ntlm_domain', 'CORP');
+        await robot.openOAuth2Configure();
 
-        robot.expectAuthFieldValue('ntlm_username', 'svc-user');
-        robot.expectAuthFieldValue('ntlm_password', 'secret');
-        robot.expectAuthFieldValue('ntlm_domain', 'CORP');
-        robot.expectTextVisible(
-          'NTLM authenticates the connection during send; no Authorization header is added here.',
+        for (final visibleField in const <String>[
+          'oauth2_authorization_url',
+          'oauth2_client_id',
+          'oauth2_redirect_uri',
+          'oauth2_scope',
+          'oauth2_state',
+          'oauth2_sheet_access_token',
+        ]) {
+          expect(
+            find.byKey(
+              ValueKey<String>(
+                AppWidgetKeys.requestsEditorAuthField(visibleField),
+              ),
+            ),
+            findsOneWidget,
+            reason: '$visibleField should be visible for implicit',
+          );
+        }
+        expect(
+          find.byKey(
+            const ValueKey<String>(
+              AppWidgetKeys.requestsEditorOAuth2GetAccessTokenButton,
+            ),
+          ),
+          findsOneWidget,
+        );
+        robot.expectTextVisible(AppStrings.requestEditorOAuth2AuthUrlParams);
+
+        for (final hiddenField in const <String>[
+          'oauth2_access_token_url',
+          'oauth2_client_secret',
+          'oauth2_pkce_method',
+          'oauth2_client_authentication',
+          'oauth2_refresh_token_url',
+        ]) {
+          expect(
+            find.byKey(
+              ValueKey<String>(
+                AppWidgetKeys.requestsEditorAuthField(hiddenField),
+              ),
+            ),
+            findsNothing,
+            reason: '$hiddenField should be hidden for implicit',
+          );
+        }
+        expect(find.text(AppStrings.requestEditorOAuth2UsePkce), findsNothing);
+        expect(
+          find.text(AppStrings.requestEditorOAuth2TokenRequestParams),
+          findsNothing,
         );
       },
     );
+
+    testWidgets(
+      'should complete OAuth2 password credentials flow from token endpoint',
+      (tester) async {
+        final passwordTokenUseCase =
+            FakeRequestOAuth2PasswordCredentialsTokenUseCase();
+
+        if (getIt
+            .isRegistered<RequestOAuth2PasswordCredentialsTokenUseCase>()) {
+          getIt.unregister<RequestOAuth2PasswordCredentialsTokenUseCase>();
+        }
+
+        getIt.registerSingleton<RequestOAuth2PasswordCredentialsTokenUseCase>(
+          passwordTokenUseCase,
+        );
+
+        final robot = RequestEditorSheetRobot(tester);
+
+        await robot.pumpScreen(
+          initialDraft: const RequestDraft(
+            auth: RequestAuthDraft(
+              type: AuthType.oauth2,
+              oauth2: OAuth2AuthDraft(
+                grantType: OAuth2GrantType.passwordCredentials,
+                accessTokenUrl: 'https://idp.example.com/oauth/token',
+                clientId: 'client-123',
+                clientSecret: 'secret-456',
+                scope: 'openid profile',
+                username: 'alice',
+                password: 'pass-123',
+              ),
+            ),
+          ),
+        );
+        await robot.openEditor();
+        await robot.openOAuth2Configure();
+        await robot.tapGetAccessToken();
+        await tester.pump();
+        await tester.pumpAndSettle();
+
+        expect(passwordTokenUseCase.lastAuth?.username, 'alice');
+        robot.expectTextVisible(
+          AppStrings.requestEditorOAuth2TokenDetailsTitle,
+        );
+        await robot.closeTopSheet();
+        robot.expectHeaderValue(
+          section: 'headers',
+          index: 0,
+          field: 'key',
+          value: 'Authorization',
+        );
+        robot.expectHeaderValue(
+          section: 'headers',
+          index: 0,
+          field: 'value',
+          value: 'Bearer access-123',
+        );
+        await robot.openOAuth2Configure();
+        robot.expectAuthFieldValue('oauth2_sheet_access_token', 'access-123');
+      },
+    );
+
+    testWidgets('should show only password credentials fields when selected', (
+      tester,
+    ) async {
+      final robot = RequestEditorSheetRobot(tester);
+
+      await robot.pumpScreen(
+        initialDraft: const RequestDraft(
+          auth: RequestAuthDraft(
+            type: AuthType.oauth2,
+            oauth2: OAuth2AuthDraft(
+              grantType: OAuth2GrantType.passwordCredentials,
+            ),
+          ),
+        ),
+      );
+      await robot.openEditor();
+      await robot.openOAuth2Configure();
+
+      for (final visibleField in const <String>[
+        'oauth2_access_token_url',
+        'oauth2_client_id',
+        'oauth2_client_secret',
+        'oauth2_scope',
+        'oauth2_username',
+        'oauth2_password',
+        'oauth2_client_authentication',
+        'oauth2_refresh_token_url',
+        'oauth2_sheet_access_token',
+      ]) {
+        expect(
+          find.byKey(
+            ValueKey<String>(
+              AppWidgetKeys.requestsEditorAuthField(visibleField),
+            ),
+          ),
+          findsOneWidget,
+          reason: '$visibleField should be visible for password credentials',
+        );
+      }
+      expect(
+        find.byKey(
+          const ValueKey<String>(
+            AppWidgetKeys.requestsEditorOAuth2GetAccessTokenButton,
+          ),
+        ),
+        findsOneWidget,
+      );
+      robot.expectTextVisible(AppStrings.requestEditorOAuth2TokenRequestParams);
+
+      for (final hiddenField in const <String>[
+        'oauth2_authorization_url',
+        'oauth2_redirect_uri',
+        'oauth2_state',
+        'oauth2_pkce_method',
+      ]) {
+        expect(
+          find.byKey(
+            ValueKey<String>(
+              AppWidgetKeys.requestsEditorAuthField(hiddenField),
+            ),
+          ),
+          findsNothing,
+          reason: '$hiddenField should be hidden for password credentials',
+        );
+      }
+      expect(find.text(AppStrings.requestEditorOAuth2UsePkce), findsNothing);
+      expect(
+        find.text(AppStrings.requestEditorOAuth2AuthUrlParams),
+        findsNothing,
+      );
+    });
+
+    testWidgets(
+      'should complete OAuth2 client credentials flow from token endpoint',
+      (tester) async {
+        final clientTokenUseCase =
+            FakeRequestOAuth2ClientCredentialsTokenUseCase();
+
+        if (getIt.isRegistered<RequestOAuth2ClientCredentialsTokenUseCase>()) {
+          getIt.unregister<RequestOAuth2ClientCredentialsTokenUseCase>();
+        }
+
+        getIt.registerSingleton<RequestOAuth2ClientCredentialsTokenUseCase>(
+          clientTokenUseCase,
+        );
+
+        final robot = RequestEditorSheetRobot(tester);
+
+        await robot.pumpScreen(
+          initialDraft: const RequestDraft(
+            auth: RequestAuthDraft(
+              type: AuthType.oauth2,
+              oauth2: OAuth2AuthDraft(
+                grantType: OAuth2GrantType.clientCredentials,
+                accessTokenUrl: 'https://idp.example.com/oauth/token',
+                clientId: 'client-123',
+                clientSecret: 'secret-456',
+                scope: 'read write',
+              ),
+            ),
+          ),
+        );
+        await robot.openEditor();
+        await robot.openOAuth2Configure();
+        await robot.tapGetAccessToken();
+        await tester.pump();
+        await tester.pumpAndSettle();
+
+        expect(clientTokenUseCase.lastAuth?.clientId, 'client-123');
+        robot.expectTextVisible(
+          AppStrings.requestEditorOAuth2TokenDetailsTitle,
+        );
+        await robot.closeTopSheet();
+        robot.expectHeaderValue(
+          section: 'headers',
+          index: 0,
+          field: 'key',
+          value: 'Authorization',
+        );
+        robot.expectHeaderValue(
+          section: 'headers',
+          index: 0,
+          field: 'value',
+          value: 'Bearer access-123',
+        );
+        await robot.openOAuth2Configure();
+        robot.expectAuthFieldValue('oauth2_sheet_access_token', 'access-123');
+      },
+    );
+
+    testWidgets('should show only client credentials fields when selected', (
+      tester,
+    ) async {
+      final robot = RequestEditorSheetRobot(tester);
+
+      await robot.pumpScreen(
+        initialDraft: const RequestDraft(
+          auth: RequestAuthDraft(
+            type: AuthType.oauth2,
+            oauth2: OAuth2AuthDraft(
+              grantType: OAuth2GrantType.clientCredentials,
+            ),
+          ),
+        ),
+      );
+      await robot.openEditor();
+      await robot.openOAuth2Configure();
+
+      for (final visibleField in const <String>[
+        'oauth2_access_token_url',
+        'oauth2_client_id',
+        'oauth2_client_secret',
+        'oauth2_scope',
+        'oauth2_client_authentication',
+        'oauth2_refresh_token_url',
+        'oauth2_sheet_access_token',
+      ]) {
+        expect(
+          find.byKey(
+            ValueKey<String>(
+              AppWidgetKeys.requestsEditorAuthField(visibleField),
+            ),
+          ),
+          findsOneWidget,
+          reason: '$visibleField should be visible for client credentials',
+        );
+      }
+      expect(
+        find.byKey(
+          const ValueKey<String>(
+            AppWidgetKeys.requestsEditorOAuth2GetAccessTokenButton,
+          ),
+        ),
+        findsOneWidget,
+      );
+      robot.expectTextVisible(AppStrings.requestEditorOAuth2TokenRequestParams);
+
+      for (final hiddenField in const <String>[
+        'oauth2_authorization_url',
+        'oauth2_redirect_uri',
+        'oauth2_state',
+        'oauth2_pkce_method',
+        'oauth2_username',
+        'oauth2_password',
+      ]) {
+        expect(
+          find.byKey(
+            ValueKey<String>(
+              AppWidgetKeys.requestsEditorAuthField(hiddenField),
+            ),
+          ),
+          findsNothing,
+          reason: '$hiddenField should be hidden for client credentials',
+        );
+      }
+      expect(find.text(AppStrings.requestEditorOAuth2UsePkce), findsNothing);
+      expect(
+        find.text(AppStrings.requestEditorOAuth2AuthUrlParams),
+        findsNothing,
+      );
+    });
+
+    testWidgets('should show NTLM username, password, and domain fields', (
+      tester,
+    ) async {
+      final robot = RequestEditorSheetRobot(tester);
+
+      await robot.pumpScreen(
+        initialDraft: const RequestDraft(
+          auth: RequestAuthDraft(type: AuthType.ntlm),
+        ),
+      );
+      await robot.openEditor();
+      await robot.enterAuthField('ntlm_username', 'svc-user');
+      await robot.enterAuthField('ntlm_password', 'secret');
+      await robot.enterAuthField('ntlm_domain', 'CORP');
+
+      robot.expectAuthFieldValue('ntlm_username', 'svc-user');
+      robot.expectAuthFieldValue('ntlm_password', 'secret');
+      robot.expectAuthFieldValue('ntlm_domain', 'CORP');
+      robot.expectTextVisible(
+        'NTLM authenticates the connection during send; no Authorization header is added here.',
+      );
+    });
   });
 }
 
@@ -323,6 +787,18 @@ class RequestEditorSheetRobot {
     await tester.pumpAndSettle();
   }
 
+  /// Selects one option from an auth dropdown field by semantic field key.
+  Future<void> selectAuthFieldOption(String fieldName, String option) async {
+    final fieldFinder = find.byKey(
+      ValueKey<String>(AppWidgetKeys.requestsEditorAuthField(fieldName)),
+    );
+    await tester.ensureVisible(fieldFinder);
+    await tester.tap(fieldFinder);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(option).last);
+    await tester.pumpAndSettle();
+  }
+
   /// Toggles the API key location switch to the requested header/query mode.
   Future<void> setApiKeySendAsHeader(bool sendAsHeader) async {
     final switchFinder = find.byKey(
@@ -361,6 +837,11 @@ class RequestEditorSheetRobot {
   /// Verifies a visible text label in the current sheet.
   void expectTextVisible(String text) {
     expect(find.text(text), findsWidgets);
+  }
+
+  /// Verifies that exact text is absent from the current widget tree.
+  void expectTextNotVisible(String text) {
+    expect(find.text(text), findsNothing);
   }
 
   /// Verifies an auth text field value by semantic field key.
@@ -416,6 +897,77 @@ class FakeExternalUriLauncher implements ExternalUriLauncher {
     lastLaunchedUri = uri;
     onLaunch?.call(uri);
     return true;
+  }
+}
+
+class FakeRequestOAuth2PasswordCredentialsTokenUseCase
+    implements RequestOAuth2PasswordCredentialsTokenUseCase {
+  OAuth2AuthDraft? lastAuth;
+
+  @override
+  /// Returns a fixed token so the widget test can verify the password grant UI flow.
+  Future<OAuth2TokenDetailsEntity> call({required OAuth2AuthDraft auth}) async {
+    lastAuth = auth;
+    return const OAuth2TokenDetailsEntity(
+      success: true,
+      resolvedAuthUrl: '',
+      accessToken: 'access-123',
+      tokenType: 'Bearer',
+      scope: 'openid profile',
+      refreshToken: 'refresh-123',
+      expiresIn: 3600,
+      request: OAuth2TokenRequestDebugInfo(
+        method: 'POST',
+        url: 'https://idp.example.com/oauth/token',
+        headers: <String, String>{'Accept': 'application/json'},
+        bodyFields: <String, String>{'grant_type': 'password'},
+        encodedBody: 'grant_type=password',
+      ),
+      response: OAuth2TokenResponseDebugInfo(
+        statusCode: 200,
+        headers: <String, String>{'content-type': 'application/json'},
+        jsonBody: <String, Object?>{
+          'access_token': 'access-123',
+          'token_type': 'Bearer',
+        },
+        rawBody: '{"access_token":"access-123","token_type":"Bearer"}',
+      ),
+    );
+  }
+}
+
+class FakeRequestOAuth2ClientCredentialsTokenUseCase
+    implements RequestOAuth2ClientCredentialsTokenUseCase {
+  OAuth2AuthDraft? lastAuth;
+
+  @override
+  /// Returns a fixed token so the widget test can verify the client credentials UI flow.
+  Future<OAuth2TokenDetailsEntity> call({required OAuth2AuthDraft auth}) async {
+    lastAuth = auth;
+    return const OAuth2TokenDetailsEntity(
+      success: true,
+      resolvedAuthUrl: '',
+      accessToken: 'access-123',
+      tokenType: 'Bearer',
+      scope: 'read write',
+      expiresIn: 3600,
+      request: OAuth2TokenRequestDebugInfo(
+        method: 'POST',
+        url: 'https://idp.example.com/oauth/token',
+        headers: <String, String>{'Accept': 'application/json'},
+        bodyFields: <String, String>{'grant_type': 'client_credentials'},
+        encodedBody: 'grant_type=client_credentials',
+      ),
+      response: OAuth2TokenResponseDebugInfo(
+        statusCode: 200,
+        headers: <String, String>{'content-type': 'application/json'},
+        jsonBody: <String, Object?>{
+          'access_token': 'access-123',
+          'token_type': 'Bearer',
+        },
+        rawBody: '{"access_token":"access-123","token_type":"Bearer"}',
+      ),
+    );
   }
 }
 

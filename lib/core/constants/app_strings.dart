@@ -72,6 +72,11 @@ abstract final class AppStrings {
       'The token response was malformed.';
   static const requestEditorOAuth2BuildUrlFailed =
       'Could not build authorize URL.';
+  static const requestEditorOAuth2OpenBrowserFailed =
+      'Could not open the authorize URL.';
+  static const requestEditorOAuth2Username = 'Username';
+  static const requestEditorOAuth2Password = 'Password';
+  static const requestEditorOAuth2RequestingToken = 'Requesting token...';
   static const requestEditorOAuth2RedirectUriInvalid =
       'Redirect URI must be httpbot://oauth/callback.';
   static const requestEditorOAuth2AuthUrlParamsTitle = 'Auth URL Params';

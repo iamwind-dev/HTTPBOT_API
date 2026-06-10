@@ -6,4 +6,12 @@ abstract class OAuth2Repository {
     required OAuth2AuthDraft auth,
     required String code,
   });
+
+  Future<OAuth2TokenDetailsEntity> requestPasswordCredentialsToken({
+    required OAuth2AuthDraft auth,
+  });
+
+  Future<OAuth2TokenDetailsEntity> requestClientCredentialsToken({
+    required OAuth2AuthDraft auth,
+  });
 }

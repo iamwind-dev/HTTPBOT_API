@@ -1,4 +1,3 @@
-import 'package:flutter/widgets.dart';
 import 'package:httpbot_api/core/keys/widget_keys.dart';
 import 'package:httpbot_api/core/theme/app_spacing.dart';
 import 'package:flutter/material.dart';
@@ -51,7 +50,7 @@ class WebsocketScreen extends StatelessWidget {
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: Container(
+                  child: SizedBox(
                     height: 60,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,

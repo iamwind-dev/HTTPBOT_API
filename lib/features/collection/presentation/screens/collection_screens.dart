@@ -4,7 +4,7 @@ import 'package:httpbot_api/features/collection/presentation/widget/collections_
 import 'package:httpbot_api/features/collection/presentation/model/list_collections.dart';
 
 class CollectionScreen extends StatelessWidget {
-  CollectionScreen({super.key});
+  const CollectionScreen({super.key});
 
   final List<CollectionItemModel> fakeCollections = const [
     CollectionItemModel(folderName: 'User APIs', itemCount: 12),
@@ -29,9 +29,7 @@ class CollectionScreen extends StatelessWidget {
               itemCount: fakeCollections.length,
               separatorBuilder: (_, __) => const SizedBox(height: 12),
               itemBuilder: (context, index) {
-                return CollectionsListItem(
-                  item: fakeCollections[index],
-                );
+                return CollectionsListItem(item: fakeCollections[index]);
               },
             ),
     );

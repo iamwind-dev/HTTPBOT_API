@@ -49,6 +49,8 @@ import '../features/request_builder/domain/repositories/request_execution_reposi
 import '../features/request_builder/domain/repositories/request_builder_repository.dart';
 import '../features/request_builder/domain/repositories/saved_credentials_repository.dart';
 import '../features/request_builder/domain/usecases/exchange_oauth2_authorization_code_use_case.dart';
+import '../features/request_builder/domain/usecases/request_oauth2_client_credentials_token_use_case.dart';
+import '../features/request_builder/domain/usecases/request_oauth2_password_credentials_token_use_case.dart';
 import '../features/request_builder/domain/usecases/get_saved_credentials_use_case.dart';
 import '../features/request_builder/domain/usecases/save_saved_credentials_use_case.dart';
 import '../features/request_builder/presentation/cubit/manage_credentials_cubit.dart';
@@ -217,6 +219,12 @@ void configureDependencies() {
   getIt.registerLazySingleton(ParseResponseUseCase.new);
   getIt.registerLazySingleton(
     () => ExchangeOAuth2AuthorizationCodeUseCase(getIt<OAuth2Repository>()),
+  );
+  getIt.registerLazySingleton(
+    () => RequestOAuth2PasswordCredentialsTokenUseCase(getIt<OAuth2Repository>()),
+  );
+  getIt.registerLazySingleton(
+    () => RequestOAuth2ClientCredentialsTokenUseCase(getIt<OAuth2Repository>()),
   );
   getIt.registerFactory(
     () => RequestSendBloc(

@@ -22,8 +22,12 @@ import '../../domain/entities/request_variable_store.dart';
 import '../../domain/entities/requests_method.dart';
 import '../../domain/helpers/oauth2_authorization_url_builder.dart';
 import '../../domain/helpers/oauth2_callback_parser.dart';
+import '../../domain/helpers/oauth2_implicit_authorize_url_builder.dart';
+import '../../domain/helpers/oauth2_implicit_callback_parser.dart';
 import '../../domain/helpers/oauth2_pkce.dart';
 import '../../domain/usecases/exchange_oauth2_authorization_code_use_case.dart';
+import '../../domain/usecases/request_oauth2_client_credentials_token_use_case.dart';
+import '../../domain/usecases/request_oauth2_password_credentials_token_use_case.dart';
 import '../bloc/request_send_bloc.dart';
 import '../bloc/request_send_event.dart';
 import '../bloc/request_send_state.dart';
@@ -2501,6 +2505,7 @@ class _AuthSection extends StatelessWidget {
           AuthType.jwt => _JwtAuthFields(jwt: auth.jwt),
           AuthType.awsSignature => _AwsAuthFields(aws: auth.aws),
           AuthType.apiKey => _ApiKeyAuthFields(apiKey: auth.apiKey),
+          AuthType.oauth1 => _OAuth1AuthFields(oauth1: auth.oauth1),
           AuthType.oauth2 => _OAuth2AuthFields(oauth2: auth.oauth2),
           AuthType.ntlm => _NtlmAuthFields(ntlm: auth.ntlm),
           _ => const _InfoCard(
@@ -2582,6 +2587,28 @@ class _GeneratedAuthFieldsCard extends StatelessWidget {
     return null;
   }
 
+  /// Returns the generated JWT query parameter currently synchronized into Query Params.
+  KeyValueItem? get _generatedJwtQueryParameter {
+    for (final queryParameter in queryParameters) {
+      if (queryParameter.isSystemGeneratedJwtQueryParameter) {
+        return queryParameter;
+      }
+    }
+
+    return null;
+  }
+
+  /// Returns the generated OAuth1 query parameter currently synchronized into Query Params.
+  KeyValueItem? get _generatedOAuth1QueryParameter {
+    for (final queryParameter in queryParameters) {
+      if (queryParameter.isSystemGeneratedOAuth1QueryParameter) {
+        return queryParameter;
+      }
+    }
+
+    return null;
+  }
+
   /// Builds a compact status card so auth-driven header sync is visible without scrolling back to Headers.
   @override
   Widget build(BuildContext context) {
@@ -2589,6 +2616,8 @@ class _GeneratedAuthFieldsCard extends StatelessWidget {
     final awsHeaders = _generatedAwsHeaders;
     final apiKeyHeader = _generatedApiKeyHeader;
     final apiKeyQueryParameter = _generatedApiKeyQueryParameter;
+    final jwtQueryParameter = _generatedJwtQueryParameter;
+    final oauth1QueryParameter = _generatedOAuth1QueryParameter;
     final oauth2QueryParameter = _generatedOAuth2QueryParameter;
 
     final message = switch (auth.type) {
@@ -2602,8 +2631,10 @@ class _GeneratedAuthFieldsCard extends StatelessWidget {
             : 'Enter a token to auto-add Authorization in Headers.',
       AuthType.jwt =>
         authorizationHeader != null
-            ? 'Authorization is synced to Headers as ${authorizationHeader.value}.'
-            : 'Enter a JWT token to auto-add Authorization in Headers.',
+            ? 'JWT is synced to Headers as Authorization.'
+            : jwtQueryParameter != null
+            ? 'JWT is synced to Query Params as token.'
+            : 'Enter JWT signing fields to generate a token.',
       AuthType.awsSignature =>
         awsHeaders.isNotEmpty
             ? 'AWS Signature headers are synced to Headers automatically.'
@@ -2614,12 +2645,18 @@ class _GeneratedAuthFieldsCard extends StatelessWidget {
             : apiKeyQueryParameter != null
             ? 'API Key is synced to Query Params as ${apiKeyQueryParameter.key}.'
             : 'Enter an API key name and value to sync it into Headers or Query Params.',
+      AuthType.oauth1 =>
+        authorizationHeader != null
+            ? 'OAuth 1.0a is synced to Headers as ${authorizationHeader.value}.'
+            : oauth1QueryParameter != null
+            ? 'OAuth 1.0a is synced to Query Params as ${oauth1QueryParameter.key}.'
+            : 'Enter OAuth 1.0a credentials to sign this request as Headers or Query Params.',
       AuthType.oauth2 =>
         authorizationHeader != null
             ? 'OAuth 2.0 is synced to Headers as ${authorizationHeader.value}.'
             : oauth2QueryParameter != null
             ? 'OAuth 2.0 is synced to Query Params as ${oauth2QueryParameter.key}.'
-            : auth.oauth2.isManual
+            : auth.oauth2.isImplementedGrantType
             ? 'Enter a token to sync OAuth 2.0 into Headers or Query Params.'
             : AppStrings.requestEditorOAuth2ImplementedLater,
       AuthType.ntlm =>
@@ -2636,27 +2673,135 @@ class _JwtAuthFields extends StatelessWidget {
 
   final JwtAuthDraft jwt;
 
-  /// Builds the JWT token field used to drive the generated Bearer header.
+  /// Builds the JWT signing fields used to generate header or query auth.
   @override
   Widget build(BuildContext context) {
     final editorCubit = context.read<RequestEditorCubit>();
 
-    return _EditorTextField(
-      fieldKey: AppWidgetKeys.requestsEditorAuthField('jwt_token'),
-      value: jwt.token,
-      label: 'Token',
-      onChanged: (value) => editorCubit.updateAuth(
-        editorCubit.state.draft.auth.copyWith(
-          jwt: JwtAuthDraft(
-            token: value,
-            header: jwt.header,
-            payload: jwt.payload,
-            secret: jwt.secret,
-            algorithm: jwt.algorithm,
-            prefix: jwt.prefix,
+    void updateJwt(JwtAuthDraft next) {
+      editorCubit.updateAuth(editorCubit.state.draft.auth.copyWith(jwt: next));
+    }
+
+    return Column(
+      children: [
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField('jwt_header'),
+          value: jwt.header,
+          label: 'Header',
+          hintText: 'Enter Value',
+          onChanged: (value) => updateJwt(jwt.copyWith(header: value)),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField('jwt_payload'),
+          value: jwt.payload,
+          label: 'Payload',
+          hintText: 'Enter Value',
+          onChanged: (value) => updateJwt(jwt.copyWith(payload: value)),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorDropdownField<String>(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField('jwt_algorithm'),
+          label: 'Algorithm',
+          value: jwt.selectedAlgorithm.label,
+          items: JwtAlgorithm.values
+              .map(
+                (algorithm) => DropdownMenuItem<String>(
+                  value: algorithm.label,
+                  child: Text(algorithm.label),
+                ),
+              )
+              .toList(growable: false),
+          onChanged: (value) {
+            if (value != null) {
+              updateJwt(jwt.copyWith(algorithm: value));
+            }
+          },
+        ),
+        if (jwt.isHmacAlgorithm) ...[
+          const SizedBox(height: AppSpacing.small),
+          DecoratedBox(
+            decoration: _buildCardDecoration(context),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.large,
+                vertical: AppSpacing.medium,
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Base64 Encoded Secret',
+                      style: Theme.of(context).textTheme.bodyLarge,
+                    ),
+                  ),
+                  Switch.adaptive(
+                    key: const ValueKey<String>(
+                      'requests_editor_auth_jwt_base64_secret_switch',
+                    ),
+                    value: jwt.base64EncodedSecret,
+                    onChanged: (value) =>
+                        updateJwt(jwt.copyWith(base64EncodedSecret: value)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.small),
+          _EditorTextField(
+            fieldKey: AppWidgetKeys.requestsEditorAuthField('jwt_secret'),
+            value: jwt.secret,
+            label: 'Secret',
+            obscureText: true,
+            onChanged: (value) => updateJwt(jwt.copyWith(secret: value)),
+          ),
+        ],
+        if (jwt.isPrivateKeyAlgorithm) ...[
+          const SizedBox(height: AppSpacing.small),
+          _EditorTextField(
+            fieldKey: AppWidgetKeys.requestsEditorAuthField('jwt_private_key'),
+            value: jwt.privateKey,
+            label: 'Private Key',
+            obscureText: true,
+            onChanged: (value) => updateJwt(jwt.copyWith(privateKey: value)),
+          ),
+        ],
+        const SizedBox(height: AppSpacing.small),
+        DecoratedBox(
+          decoration: _buildCardDecoration(context),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.large,
+              vertical: AppSpacing.medium,
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Send as Header',
+                    style: Theme.of(context).textTheme.bodyLarge,
+                  ),
+                ),
+                Switch.adaptive(
+                  key: const ValueKey<String>(
+                    'requests_editor_auth_jwt_send_as_header_switch',
+                  ),
+                  value: jwt.sendAsHeader,
+                  onChanged: (value) =>
+                      updateJwt(jwt.copyWith(sendAsHeader: value)),
+                ),
+              ],
+            ),
           ),
         ),
-      ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField('jwt_header_prefix'),
+          value: jwt.prefix,
+          label: 'Header Prefix',
+          onChanged: (value) => updateJwt(jwt.copyWith(prefix: value)),
+        ),
+      ],
     );
   }
 }
@@ -2939,6 +3084,255 @@ class _ApiKeyAuthFields extends StatelessWidget {
   }
 }
 
+class _OAuth1AuthFields extends StatelessWidget {
+  const _OAuth1AuthFields({required this.oauth1});
+
+  final OAuth1AuthDraft oauth1;
+
+  static const List<String> _signatureMethods = <String>[
+    'HMAC-SHA1',
+    'HMAC-SHA256',
+    'HMAC-SHA512',
+    'RSA-SHA1',
+    'RSA-SHA256',
+    'RSA-SHA512',
+    'PLAINTEXT',
+  ];
+
+  /// Builds the OAuth 1.0a credential and signing controls used by the editor.
+  @override
+  Widget build(BuildContext context) {
+    final editorCubit = context.read<RequestEditorCubit>();
+
+    void updateOAuth1(OAuth1AuthDraft next) {
+      editorCubit.updateAuth(
+        editorCubit.state.draft.auth.copyWith(oauth1: next),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField(
+            'oauth1_consumer_key',
+          ),
+          value: oauth1.consumerKey,
+          label: 'Consumer Key',
+          onChanged: (value) =>
+              updateOAuth1(oauth1.copyWith(consumerKey: value)),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField(
+            'oauth1_consumer_secret',
+          ),
+          value: oauth1.consumerSecret,
+          label: 'Consumer Secret',
+          obscureText: true,
+          onChanged: (value) =>
+              updateOAuth1(oauth1.copyWith(consumerSecret: value)),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField('oauth1_token'),
+          value: oauth1.token,
+          label: 'Token',
+          onChanged: (value) => updateOAuth1(oauth1.copyWith(token: value)),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField(
+            'oauth1_token_secret',
+          ),
+          value: oauth1.tokenSecret,
+          label: 'Token Secret',
+          obscureText: true,
+          onChanged: (value) =>
+              updateOAuth1(oauth1.copyWith(tokenSecret: value)),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorDropdownField<String>(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField(
+            'oauth1_signature_method',
+          ),
+          label: 'Signature Method',
+          value: oauth1.signatureMethod,
+          items: _signatureMethods
+              .map(
+                (method) => DropdownMenuItem<String>(
+                  value: method,
+                  child: Text(method),
+                ),
+              )
+              .toList(growable: false),
+          onChanged: (value) {
+            if (value != null) {
+              updateOAuth1(oauth1.copyWith(signatureMethod: value));
+            }
+          },
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField('oauth1_verifier'),
+          value: oauth1.verifier,
+          label: 'Verifier',
+          onChanged: (value) => updateOAuth1(oauth1.copyWith(verifier: value)),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField('oauth1_callback'),
+          value: oauth1.callback,
+          label: 'Callback URL',
+          onChanged: (value) => updateOAuth1(oauth1.copyWith(callback: value)),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField('oauth1_timestamp'),
+          value: oauth1.timestamp,
+          label: 'Timestamp',
+          keyboardType: TextInputType.number,
+          onChanged: (value) => updateOAuth1(oauth1.copyWith(timestamp: value)),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField('oauth1_nonce'),
+          value: oauth1.nonce,
+          label: 'Nonce',
+          onChanged: (value) => updateOAuth1(oauth1.copyWith(nonce: value)),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField('oauth1_version'),
+          value: oauth1.version,
+          label: 'Version',
+          onChanged: (value) => updateOAuth1(oauth1.copyWith(version: value)),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField('oauth1_realm'),
+          value: oauth1.realm,
+          label: 'Realm',
+          onChanged: (value) => updateOAuth1(oauth1.copyWith(realm: value)),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        DecoratedBox(
+          decoration: _buildCardDecoration(context),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.large,
+              vertical: AppSpacing.medium,
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Send As Authorization Header',
+                    style: Theme.of(context).textTheme.bodyLarge,
+                  ),
+                ),
+                Switch.adaptive(
+                  key: const ValueKey<String>(
+                    'requests_editor_auth_oauth1_as_header_switch',
+                  ),
+                  value: oauth1.asHeader,
+                  onChanged: (value) =>
+                      updateOAuth1(oauth1.copyWith(asHeader: value)),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        DecoratedBox(
+          decoration: _buildCardDecoration(context),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.large,
+              vertical: AppSpacing.medium,
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Include Body Hash',
+                    style: Theme.of(context).textTheme.bodyLarge,
+                  ),
+                ),
+                Switch.adaptive(
+                  key: const ValueKey<String>(
+                    'requests_editor_auth_oauth1_include_body_hash_switch',
+                  ),
+                  value: oauth1.includeBodyHash,
+                  onChanged: (value) =>
+                      updateOAuth1(oauth1.copyWith(includeBodyHash: value)),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        DecoratedBox(
+          decoration: _buildCardDecoration(context),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.large,
+              vertical: AppSpacing.medium,
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Percent-Encode Signature',
+                    style: Theme.of(context).textTheme.bodyLarge,
+                  ),
+                ),
+                Switch.adaptive(
+                  key: const ValueKey<String>(
+                    'requests_editor_auth_oauth1_encode_signature_switch',
+                  ),
+                  value: oauth1.encodeSignature,
+                  onChanged: (value) =>
+                      updateOAuth1(oauth1.copyWith(encodeSignature: value)),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        DecoratedBox(
+          decoration: _buildCardDecoration(context),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.large,
+              vertical: AppSpacing.medium,
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Include Empty Parameters',
+                    style: Theme.of(context).textTheme.bodyLarge,
+                  ),
+                ),
+                Switch.adaptive(
+                  key: const ValueKey<String>(
+                    'requests_editor_auth_oauth1_include_empty_params_switch',
+                  ),
+                  value: oauth1.includeEmptyParameters,
+                  onChanged: (value) => updateOAuth1(
+                    oauth1.copyWith(includeEmptyParameters: value),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _OAuth2AuthFields extends StatelessWidget {
   const _OAuth2AuthFields({required this.oauth2});
 
@@ -3076,7 +3470,7 @@ class _OAuth2AuthFields extends StatelessWidget {
             ),
           ),
         ),
-        if (!oauth2.isManual) ...[
+        if (!oauth2.isImplementedGrantType) ...[
           const SizedBox(height: AppSpacing.small),
           const _InfoCard(
             message: AppStrings.requestEditorOAuth2ImplementedLater,
@@ -3311,6 +3705,266 @@ class _OAuth2ConfigurationSheetState extends State<_OAuth2ConfigurationSheet> {
       }
 
       await _showFlowFailedSheet('Token exchange failed.');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isAuthorizing = false;
+        });
+      }
+    }
+  }
+
+  /// Returns the first blocking validation error for the implicit flow.
+  String? _implicitValidationError(OAuth2AuthDraft oauth2) {
+    if (oauth2.authorizationUrl.trim().isEmpty) {
+      return 'Missing Auth URL.';
+    }
+    if (oauth2.clientId.trim().isEmpty) {
+      return 'Missing Client ID.';
+    }
+    if (oauth2.redirectUri.trim().isEmpty) {
+      return 'Missing Redirect URI.';
+    }
+    if (oauth2.redirectUri.trim() != defaultOAuth2MobileRedirectUri) {
+      return AppStrings.requestEditorOAuth2RedirectUriInvalid;
+    }
+
+    return null;
+  }
+
+  /// Builds the implicit token details from the parsed callback and closes the sheet.
+  void _completeImplicitFlow({
+    required OAuth2AuthDraft preparedOauth2,
+    required OAuth2ImplicitCallbackData callbackData,
+    required Uri authorizationUrl,
+  }) {
+    final tokenType = callbackData.tokenType.trim();
+    final nextPrefix = tokenType.isEmpty
+        ? preparedOauth2.headerPrefix
+        : tokenType;
+    final tokenDetails = OAuth2TokenDetailsEntity(
+      success: true,
+      resolvedAuthUrl: authorizationUrl.toString(),
+      accessToken: callbackData.accessToken,
+      tokenType: tokenType,
+      scope: callbackData.scope,
+      expiresIn: callbackData.expiresIn,
+      // Implicit has no token exchange request, so the debug view shows the
+      // authorization request and the parsed callback payload instead.
+      request: OAuth2TokenRequestDebugInfo(
+        method: 'GET',
+        url: authorizationUrl.toString(),
+        headers: const <String, String>{},
+        bodyFields: const <String, String>{},
+        encodedBody: '',
+      ),
+      response: OAuth2TokenResponseDebugInfo(
+        statusCode: null,
+        headers: const <String, String>{},
+        jsonBody: <String, Object?>{
+          'access_token': callbackData.accessToken,
+          if (tokenType.isNotEmpty) 'token_type': tokenType,
+          if (callbackData.expiresIn != null)
+            'expires_in': callbackData.expiresIn,
+          if (callbackData.state.isNotEmpty) 'state': callbackData.state,
+          if (callbackData.scope.isNotEmpty) 'scope': callbackData.scope,
+        },
+        rawBody: '',
+      ),
+    );
+
+    Navigator.of(context).pop(
+      _OAuth2ConfigurationResult(
+        oauth2: preparedOauth2.copyWith(
+          accessToken: callbackData.accessToken,
+          headerPrefix: nextPrefix,
+          scope: callbackData.scope.isEmpty ? null : callbackData.scope,
+        ),
+        tokenDetails: tokenDetails,
+      ),
+    );
+  }
+
+  /// Runs the Implicit flow by launching the browser and parsing the token from the callback fragment.
+  Future<void> _handleImplicitGetAccessToken() async {
+    final validationError = _implicitValidationError(_oauth2);
+    if (validationError != null) {
+      await _showFlowFailedSheet(validationError);
+      return;
+    }
+
+    final preparedOauth2 = _oauth2.copyWith(
+      state: _ensureStateValue(_oauth2.state),
+    );
+    final authorizationUrl = buildOAuth2ImplicitAuthorizationUrl(
+      preparedOauth2,
+    );
+    if (authorizationUrl == null) {
+      await _showFlowFailedSheet(AppStrings.requestEditorOAuth2BuildUrlFailed);
+      return;
+    }
+
+    final callbackService = getIt<OAuth2CallbackService>();
+    callbackService.clearPendingCallback();
+
+    setState(() {
+      _oauth2 = preparedOauth2;
+      _isAuthorizing = true;
+    });
+
+    try {
+      final launched = await getIt<ExternalUriLauncher>().launchExternal(
+        authorizationUrl,
+      );
+      if (!launched) {
+        if (!mounted) {
+          return;
+        }
+
+        await _showFlowFailedSheet(
+          AppStrings.requestEditorOAuth2OpenBrowserFailed,
+        );
+        return;
+      }
+
+      final callbackUri = await _waitForOAuthCallback();
+      final callbackData = parseOAuth2ImplicitCallbackUri(
+        callbackUri: callbackUri,
+        expectedState: preparedOauth2.state,
+      );
+      if (!mounted) {
+        return;
+      }
+
+      _completeImplicitFlow(
+        preparedOauth2: preparedOauth2,
+        callbackData: callbackData,
+        authorizationUrl: authorizationUrl,
+      );
+    } on FormatException catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      await _showFlowFailedSheet(error.message);
+    } on Object {
+      if (!mounted) {
+        return;
+      }
+
+      await _showFlowFailedSheet(
+        AppStrings.requestEditorOAuth2OpenBrowserFailed,
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isAuthorizing = false;
+        });
+      }
+    }
+  }
+
+  /// Returns the first blocking validation error for the password credentials flow.
+  String? _passwordCredentialsValidationError(OAuth2AuthDraft oauth2) {
+    if (oauth2.resolvedAccessTokenUrl.trim().isEmpty) {
+      return 'Missing Access Token URL.';
+    }
+    if (oauth2.username.trim().isEmpty) {
+      return 'Username is required.';
+    }
+    if (oauth2.password.isEmpty) {
+      return 'Password is required.';
+    }
+
+    return null;
+  }
+
+  /// Returns the first blocking validation error for the client credentials flow.
+  String? _clientCredentialsValidationError(OAuth2AuthDraft oauth2) {
+    if (oauth2.resolvedAccessTokenUrl.trim().isEmpty) {
+      return 'Missing Access Token URL.';
+    }
+    if (oauth2.clientId.trim().isEmpty) {
+      return 'Missing Client ID.';
+    }
+    if (oauth2.clientSecret.trim().isEmpty) {
+      return 'Missing Client Secret.';
+    }
+
+    return null;
+  }
+
+  /// Runs the password credentials flow by posting directly to the token endpoint.
+  Future<void> _handlePasswordCredentialsGetAccessToken() =>
+      _runDirectTokenGrantFlow(
+        validationError: _passwordCredentialsValidationError(_oauth2),
+        requestToken: () =>
+            getIt<RequestOAuth2PasswordCredentialsTokenUseCase>()(
+              auth: _oauth2,
+            ),
+      );
+
+  /// Runs the client credentials flow by posting directly to the token endpoint.
+  Future<void> _handleClientCredentialsGetAccessToken() =>
+      _runDirectTokenGrantFlow(
+        validationError: _clientCredentialsValidationError(_oauth2),
+        requestToken: () =>
+            getIt<RequestOAuth2ClientCredentialsTokenUseCase>()(auth: _oauth2),
+      );
+
+  /// Runs a browserless grant that exchanges credentials directly at the token endpoint.
+  Future<void> _runDirectTokenGrantFlow({
+    required String? validationError,
+    required Future<OAuth2TokenDetailsEntity> Function() requestToken,
+  }) async {
+    if (validationError != null) {
+      await _showFlowFailedSheet(validationError);
+      return;
+    }
+
+    setState(() {
+      _isAuthorizing = true;
+    });
+
+    try {
+      final tokenDetails = await requestToken();
+
+      if (!mounted) {
+        return;
+      }
+
+      final resolvedTokenDetails = tokenDetails.copyWith(
+        resolvedAuthUrl: _oauth2.resolvedAccessTokenUrl,
+      );
+      final tokenType = resolvedTokenDetails.tokenType.trim();
+      final nextPrefix = tokenType.isEmpty ? _oauth2.headerPrefix : tokenType;
+
+      Navigator.of(context).pop(
+        _OAuth2ConfigurationResult(
+          oauth2: _oauth2.copyWith(
+            accessToken: resolvedTokenDetails.accessToken,
+            refreshToken:
+                resolvedTokenDetails.refreshToken ?? _oauth2.refreshToken,
+            headerPrefix: nextPrefix,
+            scope: resolvedTokenDetails.scope.trim().isEmpty
+                ? null
+                : resolvedTokenDetails.scope,
+          ),
+          tokenDetails: resolvedTokenDetails,
+        ),
+      );
+    } on FormatException catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      await _showFlowFailedSheet(error.message);
+    } on Object {
+      if (!mounted) {
+        return;
+      }
+
+      await _showFlowFailedSheet('Could not request access token.');
     } finally {
       if (mounted) {
         setState(() {
@@ -3606,9 +4260,416 @@ class _OAuth2ConfigurationSheetState extends State<_OAuth2ConfigurationSheet> {
           ),
         ),
       ],
-      _ => [
-        const _InfoCard(
-          message: AppStrings.requestEditorOAuth2ImplementedLater,
+      OAuth2GrantType.clientCredentials => [
+        const _EditorSectionTitle(
+          title: AppStrings.requestEditorOAuth2Configuration,
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField(
+            'oauth2_access_token_url',
+          ),
+          value: _oauth2.accessTokenUrl,
+          label: AppStrings.requestEditorOAuth2AccessTokenUrl,
+          onChanged: (value) => setState(() {
+            _oauth2 = _oauth2.copyWith(accessTokenUrl: value);
+          }),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField('oauth2_client_id'),
+          value: _oauth2.clientId,
+          label: AppStrings.requestEditorOAuth2ClientId,
+          onChanged: (value) => setState(() {
+            _oauth2 = _oauth2.copyWith(clientId: value);
+          }),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField(
+            'oauth2_client_secret',
+          ),
+          value: _oauth2.clientSecret,
+          label: AppStrings.requestEditorOAuth2ClientSecret,
+          obscureText: true,
+          onChanged: (value) => setState(() {
+            _oauth2 = _oauth2.copyWith(clientSecret: value);
+          }),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField('oauth2_scope'),
+          value: _oauth2.scope,
+          label: AppStrings.requestEditorOAuth2Scope,
+          onChanged: (value) => setState(() {
+            _oauth2 = _oauth2.copyWith(scope: value);
+          }),
+        ),
+        const SizedBox(height: AppSpacing.large),
+        const _EditorSectionTitle(
+          title: AppStrings.requestEditorOAuth2Advanced,
+        ),
+        const SizedBox(height: AppSpacing.small),
+        DecoratedBox(
+          decoration: _buildCardDecoration(context),
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.medium),
+            child: _EditorDropdownField<OAuth2ClientAuthentication>(
+              fieldKey: AppWidgetKeys.requestsEditorAuthField(
+                'oauth2_client_authentication',
+              ),
+              label: AppStrings.requestEditorOAuth2ClientAuthentication,
+              value: _oauth2.clientAuthentication,
+              items: OAuth2ClientAuthentication.values
+                  .map(
+                    (authentication) =>
+                        DropdownMenuItem<OAuth2ClientAuthentication>(
+                          value: authentication,
+                          child: Text(authentication.label),
+                        ),
+                  )
+                  .toList(growable: false),
+              onChanged: (value) {
+                if (value == null) {
+                  return;
+                }
+
+                setState(() {
+                  _oauth2 = _oauth2.copyWith(clientAuthentication: value);
+                });
+              },
+            ),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _OAuth2NavigationRow(
+          label: AppStrings.requestEditorOAuth2TokenRequestParams,
+          value: _countLabel(_oauth2.tokenRequestParams),
+          onTap: () async {
+            final updatedItems = await _openParamsSheet(
+              title: AppStrings.requestEditorOAuth2TokenRequestParamsTitle,
+              initialItems: _oauth2.tokenRequestParams,
+            );
+            if (!mounted || updatedItems == null) {
+              return;
+            }
+
+            setState(() {
+              _oauth2 = _oauth2.copyWith(tokenRequestParams: updatedItems);
+            });
+          },
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField(
+            'oauth2_refresh_token_url',
+          ),
+          value: _oauth2.refreshTokenUrl,
+          label: AppStrings.requestEditorOAuth2RefreshTokenUrl,
+          hintText: AppStrings.requestEditorOAuth2RefreshTokenUrlHint,
+          onChanged: (value) => setState(() {
+            _oauth2 = _oauth2.copyWith(refreshTokenUrl: value);
+          }),
+        ),
+        const SizedBox(height: AppSpacing.large),
+        const _EditorSectionTitle(title: AppStrings.requestEditorOAuth2Token),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField(
+            'oauth2_sheet_access_token',
+          ),
+          value: _oauth2.accessToken,
+          label: AppStrings.requestEditorOAuth2Token,
+          hintText: 'Enter Value',
+          onChanged: (value) => setState(() {
+            _oauth2 = _oauth2.copyWith(accessToken: value);
+          }),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: ElevatedButton(
+            key: const ValueKey<String>(
+              AppWidgetKeys.requestsEditorOAuth2GetAccessTokenButton,
+            ),
+            onPressed: _isAuthorizing
+                ? null
+                : _handleClientCredentialsGetAccessToken,
+            child: Text(
+              _isAuthorizing
+                  ? AppStrings.requestEditorOAuth2RequestingToken
+                  : AppStrings.requestEditorOAuth2GetAccessToken,
+            ),
+          ),
+        ),
+      ],
+      OAuth2GrantType.passwordCredentials => [
+        const _EditorSectionTitle(
+          title: AppStrings.requestEditorOAuth2Configuration,
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField(
+            'oauth2_access_token_url',
+          ),
+          value: _oauth2.accessTokenUrl,
+          label: AppStrings.requestEditorOAuth2AccessTokenUrl,
+          onChanged: (value) => setState(() {
+            _oauth2 = _oauth2.copyWith(accessTokenUrl: value);
+          }),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField('oauth2_client_id'),
+          value: _oauth2.clientId,
+          label: AppStrings.requestEditorOAuth2ClientId,
+          onChanged: (value) => setState(() {
+            _oauth2 = _oauth2.copyWith(clientId: value);
+          }),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField(
+            'oauth2_client_secret',
+          ),
+          value: _oauth2.clientSecret,
+          label: AppStrings.requestEditorOAuth2ClientSecret,
+          obscureText: true,
+          onChanged: (value) => setState(() {
+            _oauth2 = _oauth2.copyWith(clientSecret: value);
+          }),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField('oauth2_scope'),
+          value: _oauth2.scope,
+          label: AppStrings.requestEditorOAuth2Scope,
+          onChanged: (value) => setState(() {
+            _oauth2 = _oauth2.copyWith(scope: value);
+          }),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField('oauth2_username'),
+          value: _oauth2.username,
+          label: AppStrings.requestEditorOAuth2Username,
+          onChanged: (value) => setState(() {
+            _oauth2 = _oauth2.copyWith(username: value);
+          }),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField('oauth2_password'),
+          value: _oauth2.password,
+          label: AppStrings.requestEditorOAuth2Password,
+          obscureText: true,
+          onChanged: (value) => setState(() {
+            _oauth2 = _oauth2.copyWith(password: value);
+          }),
+        ),
+        const SizedBox(height: AppSpacing.large),
+        const _EditorSectionTitle(
+          title: AppStrings.requestEditorOAuth2Advanced,
+        ),
+        const SizedBox(height: AppSpacing.small),
+        DecoratedBox(
+          decoration: _buildCardDecoration(context),
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.medium),
+            child: _EditorDropdownField<OAuth2ClientAuthentication>(
+              fieldKey: AppWidgetKeys.requestsEditorAuthField(
+                'oauth2_client_authentication',
+              ),
+              label: AppStrings.requestEditorOAuth2ClientAuthentication,
+              value: _oauth2.clientAuthentication,
+              items: OAuth2ClientAuthentication.values
+                  .map(
+                    (authentication) =>
+                        DropdownMenuItem<OAuth2ClientAuthentication>(
+                          value: authentication,
+                          child: Text(authentication.label),
+                        ),
+                  )
+                  .toList(growable: false),
+              onChanged: (value) {
+                if (value == null) {
+                  return;
+                }
+
+                setState(() {
+                  _oauth2 = _oauth2.copyWith(clientAuthentication: value);
+                });
+              },
+            ),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _OAuth2NavigationRow(
+          label: AppStrings.requestEditorOAuth2TokenRequestParams,
+          value: _countLabel(_oauth2.tokenRequestParams),
+          onTap: () async {
+            final updatedItems = await _openParamsSheet(
+              title: AppStrings.requestEditorOAuth2TokenRequestParamsTitle,
+              initialItems: _oauth2.tokenRequestParams,
+            );
+            if (!mounted || updatedItems == null) {
+              return;
+            }
+
+            setState(() {
+              _oauth2 = _oauth2.copyWith(tokenRequestParams: updatedItems);
+            });
+          },
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField(
+            'oauth2_refresh_token_url',
+          ),
+          value: _oauth2.refreshTokenUrl,
+          label: AppStrings.requestEditorOAuth2RefreshTokenUrl,
+          hintText: AppStrings.requestEditorOAuth2RefreshTokenUrlHint,
+          onChanged: (value) => setState(() {
+            _oauth2 = _oauth2.copyWith(refreshTokenUrl: value);
+          }),
+        ),
+        const SizedBox(height: AppSpacing.large),
+        const _EditorSectionTitle(title: AppStrings.requestEditorOAuth2Token),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField(
+            'oauth2_sheet_access_token',
+          ),
+          value: _oauth2.accessToken,
+          label: AppStrings.requestEditorOAuth2Token,
+          hintText: 'Enter Value',
+          onChanged: (value) => setState(() {
+            _oauth2 = _oauth2.copyWith(accessToken: value);
+          }),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: ElevatedButton(
+            key: const ValueKey<String>(
+              AppWidgetKeys.requestsEditorOAuth2GetAccessTokenButton,
+            ),
+            onPressed: _isAuthorizing
+                ? null
+                : _handlePasswordCredentialsGetAccessToken,
+            child: Text(
+              _isAuthorizing
+                  ? AppStrings.requestEditorOAuth2RequestingToken
+                  : AppStrings.requestEditorOAuth2GetAccessToken,
+            ),
+          ),
+        ),
+      ],
+      OAuth2GrantType.implicit => [
+        const _EditorSectionTitle(
+          title: AppStrings.requestEditorOAuth2Configuration,
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField(
+            'oauth2_authorization_url',
+          ),
+          value: _oauth2.authorizationUrl,
+          label: AppStrings.requestEditorOAuth2AuthUrl,
+          onChanged: (value) => setState(() {
+            _oauth2 = _oauth2.copyWith(authorizationUrl: value);
+          }),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField('oauth2_client_id'),
+          value: _oauth2.clientId,
+          label: AppStrings.requestEditorOAuth2ClientId,
+          onChanged: (value) => setState(() {
+            _oauth2 = _oauth2.copyWith(clientId: value);
+          }),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField(
+            'oauth2_redirect_uri',
+          ),
+          value: _oauth2.redirectUri,
+          label: AppStrings.requestEditorOAuth2RedirectUri,
+          hintText: defaultOAuth2MobileRedirectUri,
+          onChanged: (value) => setState(() {
+            _oauth2 = _oauth2.copyWith(redirectUri: value);
+          }),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField('oauth2_scope'),
+          value: _oauth2.scope,
+          label: AppStrings.requestEditorOAuth2Scope,
+          onChanged: (value) => setState(() {
+            _oauth2 = _oauth2.copyWith(scope: value);
+          }),
+        ),
+        const SizedBox(height: AppSpacing.large),
+        const _EditorSectionTitle(
+          title: AppStrings.requestEditorOAuth2Advanced,
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField('oauth2_state'),
+          value: _oauth2.state,
+          label: AppStrings.requestEditorOAuth2State,
+          hintText: 'Auto-generated',
+          onChanged: (value) => setState(() {
+            _oauth2 = _oauth2.copyWith(state: value);
+          }),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _OAuth2NavigationRow(
+          label: AppStrings.requestEditorOAuth2AuthUrlParams,
+          value: _countLabel(_oauth2.authUrlParams),
+          onTap: () async {
+            final updatedItems = await _openParamsSheet(
+              title: AppStrings.requestEditorOAuth2AuthUrlParamsTitle,
+              initialItems: _oauth2.authUrlParams,
+            );
+            if (!mounted || updatedItems == null) {
+              return;
+            }
+
+            setState(() {
+              _oauth2 = _oauth2.copyWith(authUrlParams: updatedItems);
+            });
+          },
+        ),
+        const SizedBox(height: AppSpacing.large),
+        const _EditorSectionTitle(title: AppStrings.requestEditorOAuth2Token),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField(
+            'oauth2_sheet_access_token',
+          ),
+          value: _oauth2.accessToken,
+          label: AppStrings.requestEditorOAuth2Token,
+          hintText: 'Enter Value',
+          onChanged: (value) => setState(() {
+            _oauth2 = _oauth2.copyWith(accessToken: value);
+          }),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: ElevatedButton(
+            key: const ValueKey<String>(
+              AppWidgetKeys.requestsEditorOAuth2GetAccessTokenButton,
+            ),
+            onPressed: _isAuthorizing ? null : _handleImplicitGetAccessToken,
+            child: Text(
+              _isAuthorizing
+                  ? AppStrings.requestEditorOAuth2WaitingForCallback
+                  : AppStrings.requestEditorOAuth2GetAccessToken,
+            ),
+          ),
         ),
       ],
     };

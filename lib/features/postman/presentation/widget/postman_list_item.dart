@@ -4,11 +4,7 @@ import 'package:httpbot_api/features/postman/presentation/model/postman_list_ite
 import 'package:httpbot_api/generated/assets.gen.dart';
 
 class PostmanListItem extends StatelessWidget {
-  const PostmanListItem({
-    super.key,
-    required this.item,
-    required this.onTap,
-  });
+  const PostmanListItem({super.key, required this.item, required this.onTap});
 
   final PostmanListItemModel item;
   final VoidCallback onTap;
@@ -35,10 +31,7 @@ class PostmanListItem extends StatelessWidget {
               Expanded(
                 child: Text(
                   item.folderName,
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: colors.textPrimary,
-                  ),
+                  style: TextStyle(fontSize: 16, color: colors.textPrimary),
                 ),
               ),
               Container(
@@ -51,17 +44,14 @@ class PostmanListItem extends StatelessWidget {
                 child: Center(
                   child: Text(
                     '${item.itemCount}',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: colors.secondary,
-                    ),
+                    style: TextStyle(fontSize: 14, color: colors.secondary),
                   ),
                 ),
               ),
               const SizedBox(width: 10),
               Icon(
                 Icons.arrow_forward_ios,
-                color: colors.secondary.withOpacity(0.3),
+                color: colors.secondary.withValues(alpha: 0.3),
                 size: 18,
               ),
             ],

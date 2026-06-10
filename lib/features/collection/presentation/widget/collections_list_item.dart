@@ -30,7 +30,7 @@ class CollectionsListItem extends StatelessWidget {
               width: 35,
               height: 23,
               decoration: BoxDecoration(
-                color: Colors.grey.withOpacity(0.1),
+                color: Colors.grey.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(14),
               ),
               child: Center(
@@ -43,7 +43,7 @@ class CollectionsListItem extends StatelessWidget {
             SizedBox(width: 10),
             Icon(
               Icons.arrow_forward_ios,
-              color: colors.secondary.withOpacity(0.3),
+              color: colors.secondary.withValues(alpha: 0.3),
             ),
           ],
         ),

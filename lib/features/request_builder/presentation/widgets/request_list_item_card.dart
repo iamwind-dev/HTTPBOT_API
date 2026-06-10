@@ -35,8 +35,8 @@ class RequestListItemCard extends StatelessWidget {
   });
 
   final RequestListItem item;
-  final VoidCallback onTap;
   final ValueChanged<RequestListItemAction> onActionSelected;
+  final VoidCallback onTap;
 
   /// Builds a tappable request summary card for the requests list.
   @override

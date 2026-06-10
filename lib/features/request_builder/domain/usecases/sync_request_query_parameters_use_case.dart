@@ -17,12 +17,11 @@ class SyncRequestQueryParametersUseCase {
       return '?$managedQuery';
     }
 
-    final separator =
-        baseUrl.endsWith('?') || baseUrl.endsWith('&')
-            ? ''
-            : baseUrl.contains('?')
-            ? '&'
-            : '?';
+    final separator = baseUrl.endsWith('?') || baseUrl.endsWith('&')
+        ? ''
+        : baseUrl.contains('?')
+        ? '&'
+        : '?';
 
     return '$baseUrl$separator$managedQuery';
   }
@@ -49,14 +48,21 @@ class SyncRequestQueryParametersUseCase {
   }
 
   /// Builds the inline query string exactly as the editor rows describe it.
-  String _buildManagedQuery(List<KeyValueItem> queryParameters) => queryParameters
-      .where(_shouldIncludeInUrl)
-      .map(_serializeQueryParameter)
-      .join('&');
+  String _buildManagedQuery(List<KeyValueItem> queryParameters) =>
+      queryParameters
+          .where(_shouldIncludeInUrl)
+          .map(_serializeQueryParameter)
+          .join('&');
 
-  /// Includes only enabled rows that contain at least one non-empty side.
+  /// Includes only enabled user rows; auth-generated params stay out of the
+  /// visible URL and are appended to the execution URL at send time instead.
   bool _shouldIncludeInUrl(KeyValueItem item) =>
-      item.isEnabled && (item.key.isNotEmpty || item.value.isNotEmpty);
+      item.isEnabled &&
+      (item.key.isNotEmpty || item.value.isNotEmpty) &&
+      !item.isSystemGeneratedJwtQueryParameter &&
+      !item.isSystemGeneratedOAuth1QueryParameter &&
+      !item.isSystemGeneratedOAuth2QueryParameter &&
+      !item.isSystemGeneratedApiKeyQueryParameter;
 
   /// Serializes one row while intentionally preserving the `=value` shape for value-only entries.
   String _serializeQueryParameter(KeyValueItem item) {

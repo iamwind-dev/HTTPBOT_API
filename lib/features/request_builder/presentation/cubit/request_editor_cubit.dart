@@ -7,6 +7,8 @@ import '../../domain/entities/request_key_value.dart';
 import '../../domain/entities/requests_method.dart';
 import '../../domain/helpers/api_key_auth_ui_sync.dart';
 import '../../domain/helpers/content_type_header_updater.dart';
+import '../../domain/helpers/jwt_auth_ui_sync.dart';
+import '../../domain/helpers/oauth1_auth_ui_sync.dart';
 import '../../domain/helpers/oauth2_auth_ui_sync.dart';
 import '../../domain/usecases/sync_request_auth_headers_use_case.dart';
 import '../../domain/usecases/sync_request_query_parameters_use_case.dart';
@@ -52,8 +54,11 @@ class RequestEditorCubit extends Cubit<RequestEditorState> {
     required SyncRequestAuthHeadersUseCase authHeadersSyncUseCase,
   }) {
     final authSyncedFields = _syncAuthFieldsStatic(
+      method: initialDraft.method,
+      url: initialDraft.url,
       queryParameters: initialDraft.queryParameters,
       headers: initialDraft.headers,
+      body: initialDraft.body,
       auth: initialDraft.auth,
     );
     final queryParametersBaseUrl = queryParametersSyncUseCase.extractBaseUrl(
@@ -90,14 +95,23 @@ class RequestEditorCubit extends Cubit<RequestEditorState> {
 
   /// Updates the request method selected in the editor header.
   void updateMethod(HttpMethod method) {
+    final syncedAuthFields = _syncAuthFields(
+      method: method,
+      url: state.draft.url,
+      queryParameters: state.draft.queryParameters,
+      headers: state.draft.headers,
+      body: state.draft.body,
+      auth: state.draft.auth,
+    );
     emit(
       state.copyWith(
         draft: state.draft.copyWith(
           method: method,
+          queryParameters: syncedAuthFields.queryParameters,
           headers: _syncDerivedHeaders(
             method: method,
             url: state.draft.url,
-            headers: state.draft.headers,
+            headers: syncedAuthFields.headers,
             body: state.draft.body,
             auth: state.draft.auth,
           ),
@@ -108,23 +122,32 @@ class RequestEditorCubit extends Cubit<RequestEditorState> {
 
   /// Updates the request URL shown in the main editor field.
   void updateUrl(String url) {
-    final queryParametersBaseUrl = _queryParametersSyncUseCase.extractBaseUrl(
+    final syncedAuthFields = _syncAuthFields(
+      method: state.draft.method,
       url: url,
       queryParameters: state.draft.queryParameters,
+      headers: state.draft.headers,
+      body: state.draft.body,
+      auth: state.draft.auth,
+    );
+    final queryParametersBaseUrl = _queryParametersSyncUseCase.extractBaseUrl(
+      url: url,
+      queryParameters: syncedAuthFields.queryParameters,
     );
     final rebuiltUrl = _queryParametersSyncUseCase.rebuildUrl(
       baseUrl: queryParametersBaseUrl,
-      queryParameters: state.draft.queryParameters,
+      queryParameters: syncedAuthFields.queryParameters,
     );
 
     emit(
       state.copyWith(
         draft: state.draft.copyWith(
           url: rebuiltUrl,
+          queryParameters: syncedAuthFields.queryParameters,
           headers: _syncDerivedHeaders(
             method: state.draft.method,
             url: rebuiltUrl,
-            headers: state.draft.headers,
+            headers: syncedAuthFields.headers,
             body: state.draft.body,
             auth: state.draft.auth,
           ),
@@ -136,20 +159,28 @@ class RequestEditorCubit extends Cubit<RequestEditorState> {
 
   /// Replaces the full query parameter collection after list edits.
   void updateQueryParameters(List<KeyValueItem> queryParameters) {
+    final syncedAuthFields = _syncAuthFields(
+      method: state.draft.method,
+      url: state.draft.url,
+      queryParameters: queryParameters,
+      headers: state.draft.headers,
+      body: state.draft.body,
+      auth: state.draft.auth,
+    );
     final rebuiltUrl = _queryParametersSyncUseCase.rebuildUrl(
       baseUrl: state.queryParametersBaseUrl,
-      queryParameters: queryParameters,
+      queryParameters: syncedAuthFields.queryParameters,
     );
 
     emit(
       state.copyWith(
         draft: state.draft.copyWith(
-          queryParameters: queryParameters,
+          queryParameters: syncedAuthFields.queryParameters,
           url: rebuiltUrl,
           headers: _syncDerivedHeaders(
             method: state.draft.method,
             url: rebuiltUrl,
-            headers: state.draft.headers,
+            headers: syncedAuthFields.headers,
             body: state.draft.body,
             auth: state.draft.auth,
           ),
@@ -160,13 +191,22 @@ class RequestEditorCubit extends Cubit<RequestEditorState> {
 
   /// Replaces the full header collection after list edits.
   void updateHeaders(List<KeyValueItem> headers) {
+    final syncedAuthFields = _syncAuthFields(
+      method: state.draft.method,
+      url: state.draft.url,
+      queryParameters: state.draft.queryParameters,
+      headers: headers,
+      body: state.draft.body,
+      auth: state.draft.auth,
+    );
     emit(
       state.copyWith(
         draft: state.draft.copyWith(
+          queryParameters: syncedAuthFields.queryParameters,
           headers: _syncDerivedHeaders(
             method: state.draft.method,
             url: state.draft.url,
-            headers: headers,
+            headers: syncedAuthFields.headers,
             body: state.draft.body,
             auth: state.draft.auth,
           ),
@@ -217,14 +257,23 @@ class RequestEditorCubit extends Cubit<RequestEditorState> {
 
   /// Replaces the body draft after body mode or content changes.
   void updateBody(RequestBodyDraft body) {
+    final syncedAuthFields = _syncAuthFields(
+      method: state.draft.method,
+      url: state.draft.url,
+      queryParameters: state.draft.queryParameters,
+      headers: state.draft.headers,
+      body: body,
+      auth: state.draft.auth,
+    );
     emit(
       state.copyWith(
         draft: state.draft.copyWith(
           body: body,
+          queryParameters: syncedAuthFields.queryParameters,
           headers: _syncDerivedHeaders(
             method: state.draft.method,
             url: state.draft.url,
-            headers: state.draft.headers,
+            headers: syncedAuthFields.headers,
             body: body,
             auth: state.draft.auth,
           ),
@@ -261,8 +310,11 @@ class RequestEditorCubit extends Cubit<RequestEditorState> {
   /// Replaces the auth draft after auth mode or credential changes.
   void updateAuth(RequestAuthDraft auth) {
     final syncedAuthFields = _syncAuthFields(
+      method: state.draft.method,
+      url: state.draft.url,
       queryParameters: state.draft.queryParameters,
       headers: state.draft.headers,
+      body: state.draft.body,
       auth: auth,
     );
     final rebuiltUrl = _queryParametersSyncUseCase.rebuildUrl(
@@ -324,12 +376,18 @@ class RequestEditorCubit extends Cubit<RequestEditorState> {
 
   /// Applies the editor-managed auth rows to query params and headers.
   _AuthFieldSyncResult _syncAuthFields({
+    required HttpMethod method,
+    required String url,
     required List<KeyValueItem> queryParameters,
     required List<KeyValueItem> headers,
+    required RequestBodyDraft body,
     required RequestAuthDraft auth,
   }) => _syncAuthFieldsStatic(
+    method: method,
+    url: url,
     queryParameters: queryParameters,
     headers: headers,
+    body: body,
     auth: auth,
   );
 
@@ -359,13 +417,29 @@ class RequestEditorCubit extends Cubit<RequestEditorState> {
 
   /// Applies the editor-managed auth rows to query params and headers.
   static _AuthFieldSyncResult _syncAuthFieldsStatic({
+    required HttpMethod method,
+    required String url,
     required List<KeyValueItem> queryParameters,
     required List<KeyValueItem> headers,
+    required RequestBodyDraft body,
     required RequestAuthDraft auth,
   }) {
-    final oauth2SyncedFields = syncOAuth2AuthToRequestFields(
+    final jwtSyncedFields = syncJwtAuthToRequestFields(
       queryParameters: queryParameters,
       headers: headers,
+      auth: auth,
+    );
+    final oauth1SyncedFields = syncOAuth1AuthToRequestFields(
+      queryParameters: jwtSyncedFields.queryParameters,
+      headers: jwtSyncedFields.headers,
+      auth: auth,
+      method: method,
+      url: url,
+      body: body,
+    );
+    final oauth2SyncedFields = syncOAuth2AuthToRequestFields(
+      queryParameters: oauth1SyncedFields.queryParameters,
+      headers: oauth1SyncedFields.headers,
       auth: auth,
     );
     final apiKeySyncedFields = syncApiKeyAuthToRequestFields(
