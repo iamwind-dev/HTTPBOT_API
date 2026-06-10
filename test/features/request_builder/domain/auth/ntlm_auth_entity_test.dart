@@ -19,8 +19,11 @@ void main() {
     });
 
     test('is true with empty domain when username and password present', () {
-      const draft =
-          NtlmAuthDraft(username: 'user', password: 'pass', domain: '');
+      const draft = NtlmAuthDraft(
+        username: 'user',
+        password: 'pass',
+        domain: '',
+      );
       expect(draft.canApplyNtlm, isTrue);
     });
 

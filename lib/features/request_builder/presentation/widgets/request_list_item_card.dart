@@ -141,7 +141,7 @@ class _RequestMethodBadge extends StatelessWidget {
       width: AppSpacing.xxxLarge + AppSpacing.xSmall,
       alignment: Alignment.center,
       padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.small,
+        horizontal: AppSpacing.xSmall,
         vertical: AppSpacing.xxSmall,
       ),
       decoration: BoxDecoration(

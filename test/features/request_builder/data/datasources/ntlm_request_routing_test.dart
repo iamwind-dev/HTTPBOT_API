@@ -19,17 +19,30 @@ class _SpyNtlmHttpClient extends NtlmHttpClient {
   }
 }
 
-AuthAppliedRequest _request(AuthType type, {String url = 'https://example.com'}) =>
-    AuthAppliedRequest(
-      request: RequestDraft(url: url, auth: RequestAuthDraft(type: type)),
-      appliedAuthType: type,
-    );
+AuthAppliedRequest _request(
+  AuthType type, {
+  String url = 'https://example.com',
+}) {
+  final auth = type == AuthType.ntlm
+      ? const RequestAuthDraft(
+          type: AuthType.ntlm,
+          ntlm: NtlmAuthDraft(username: 'user', password: 'pass'),
+        )
+      : RequestAuthDraft(type: type);
+
+  return AuthAppliedRequest(
+    request: RequestDraft(url: url, auth: auth),
+    appliedAuthType: type,
+  );
+}
 
 void main() {
   test('NTLM requests are delegated to NtlmHttpClient', () async {
     final spy = _SpyNtlmHttpClient();
-    final repo =
-        RequestExecutionRepositoryImpl(const DioClient(), ntlmHttpClient: spy);
+    final repo = RequestExecutionRepositoryImpl(
+      const DioClient(),
+      ntlmHttpClient: spy,
+    );
 
     final result = await repo.executeRequest(_request(AuthType.ntlm));
 
@@ -37,10 +50,40 @@ void main() {
     expect(result.statusCode, 200);
   });
 
+  test(
+    'invalid NTLM requests are blocked before delegating to NtlmHttpClient',
+    () async {
+      final spy = _SpyNtlmHttpClient();
+      final repo = RequestExecutionRepositoryImpl(
+        const DioClient(),
+        ntlmHttpClient: spy,
+      );
+
+      final result = await repo.executeRequest(
+        AuthAppliedRequest(
+          request: RequestDraft(
+            url: 'https://example.com',
+            auth: const RequestAuthDraft(
+              type: AuthType.ntlm,
+              ntlm: NtlmAuthDraft(username: '', password: 'pass'),
+            ),
+          ),
+          appliedAuthType: AuthType.ntlm,
+        ),
+      );
+
+      expect(spy.called, isFalse);
+      expect(result.wasBlocked, isTrue);
+      expect(result.errorMessage, 'Username is required for NTLM.');
+    },
+  );
+
   test('non-NTLM requests are not delegated to NtlmHttpClient', () async {
     final spy = _SpyNtlmHttpClient();
-    final repo =
-        RequestExecutionRepositoryImpl(const DioClient(), ntlmHttpClient: spy);
+    final repo = RequestExecutionRepositoryImpl(
+      const DioClient(),
+      ntlmHttpClient: spy,
+    );
 
     // Unroutable port — the Dio path fails fast without a real network call.
     await repo.executeRequest(

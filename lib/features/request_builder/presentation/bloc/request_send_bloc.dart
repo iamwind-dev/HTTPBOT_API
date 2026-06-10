@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../domain/entities/request_body_draft.dart';
 import '../../domain/entities/request_draft.dart';
+import '../../domain/helpers/request_auth_validator.dart';
 import '../../domain/usecases/apply_request_auth_use_case.dart';
 import '../../domain/usecases/execute_request_use_case.dart';
 import '../../domain/usecases/parse_response_use_case.dart';
@@ -109,6 +110,15 @@ class RequestSendBloc extends Bloc<RequestSendEvent, RequestSendState> {
       return 'Request URL is required before sending.';
     }
 
+    if (!_isValidAbsoluteUrl(draft.url)) {
+      return 'Request URL must be a valid absolute URL.';
+    }
+
+    final authValidation = validateAuthBeforeSend(draft.auth);
+    if (!authValidation.isValid) {
+      return authValidation.errorMessage;
+    }
+
     if (draft.body.type == RequestBodyType.graphql) {
       final validationError = _validateGraphQlVariables(
         draft.body.graphQl.variables,
@@ -119,6 +129,17 @@ class RequestSendBloc extends Bloc<RequestSendEvent, RequestSendState> {
     }
 
     return null;
+  }
+
+  /// Returns true when the request URL can be sent through the transport layer as an absolute HTTP(S) URL.
+  bool _isValidAbsoluteUrl(String url) {
+    final uri = Uri.tryParse(url.trim());
+    if (uri == null) {
+      return false;
+    }
+
+    return (uri.scheme == 'http' || uri.scheme == 'https') &&
+        uri.host.trim().isNotEmpty;
   }
 
   String? _validateGraphQlVariables(String variables) {

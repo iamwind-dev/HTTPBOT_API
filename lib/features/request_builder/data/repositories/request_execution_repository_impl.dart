@@ -9,6 +9,7 @@ import '../../domain/entities/auth_applied_request.dart';
 import '../../domain/entities/request_auth_draft.dart';
 import '../../domain/entities/request_execution_result.dart';
 import '../../domain/entities/request_key_value.dart';
+import '../../domain/helpers/request_auth_validator.dart';
 import '../../domain/repositories/request_execution_repository.dart';
 
 class RequestExecutionRepositoryImpl implements RequestExecutionRepository {
@@ -26,6 +27,17 @@ class RequestExecutionRepositoryImpl implements RequestExecutionRepository {
     AuthAppliedRequest request,
   ) async {
     if (request.appliedAuthType == AuthType.ntlm) {
+      final authValidation = validateAuthBeforeSend(request.request.auth);
+      if (!authValidation.isValid) {
+        return RequestExecutionResult(
+          request: request.request,
+          errorType: RequestExecutionErrorType.blocked,
+          errorMessage: authValidation.errorMessage ?? '',
+          resolutionIssues: request.resolutionIssues,
+          authIssues: request.authIssues,
+        );
+      }
+
       return _ntlmHttpClient.execute(request);
     }
 

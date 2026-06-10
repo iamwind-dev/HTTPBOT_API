@@ -183,8 +183,7 @@ class NtlmAuthDraft extends Equatable {
   final String workstation;
 
   /// Returns true when NTLM has the minimum credentials required to authenticate.
-  bool get canApplyNtlm =>
-      username.trim().isNotEmpty && password.isNotEmpty;
+  bool get canApplyNtlm => username.trim().isNotEmpty && password.isNotEmpty;
 
   /// Creates a new NTLM draft with any updated credential fields applied.
   NtlmAuthDraft copyWith({
@@ -506,6 +505,9 @@ class RequestAuthDraft extends Equatable {
   final AwsAuthDraft aws;
   final OAuth1AuthDraft oauth1;
   final OAuth2AuthDraft oauth2;
+
+  /// Returns true when the selected auth mode is NTLM and has the minimum credentials to send.
+  bool get canApplyNtlm => type == AuthType.ntlm && ntlm.canApplyNtlm;
 
   @override
   List<Object> get props => [
