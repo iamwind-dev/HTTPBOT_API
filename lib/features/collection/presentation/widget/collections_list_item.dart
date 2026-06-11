@@ -29,6 +29,7 @@ class CollectionsListItem extends StatelessWidget {
                   colors.methodGet,
                   BlendMode.srcIn,
                 ),
+
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -62,6 +63,7 @@ class CollectionsListItem extends StatelessWidget {
           Divider(color: colors.divider, thickness: 1),
         ],
       ),
+
     );
   }
 }

@@ -4,35 +4,25 @@ import '../entities/request_auth_issue.dart';
 import '../entities/request_draft.dart';
 import '../entities/request_key_value.dart';
 import '../entities/resolved_request.dart';
-import 'build_basic_authorization_header_use_case.dart';
-import 'build_bearer_authorization_header_use_case.dart';
+import '../helpers/api_key_auth_ui_sync.dart';
+import '../helpers/jwt_auth_ui_sync.dart';
+import '../helpers/oauth1_auth_ui_sync.dart';
+import '../helpers/oauth2_auth_ui_sync.dart';
+import 'sync_request_auth_headers_use_case.dart';
 
 class ApplyRequestAuthUseCase {
   const ApplyRequestAuthUseCase({
-    BuildBasicAuthorizationHeaderUseCase
-    buildBasicAuthorizationHeaderUseCase =
-        const BuildBasicAuthorizationHeaderUseCase(),
-    BuildBearerAuthorizationHeaderUseCase
-    buildBearerAuthorizationHeaderUseCase =
-        const BuildBearerAuthorizationHeaderUseCase(),
-  }) : _buildBasicAuthorizationHeaderUseCase =
-           buildBasicAuthorizationHeaderUseCase,
-       _buildBearerAuthorizationHeaderUseCase =
-           buildBearerAuthorizationHeaderUseCase;
+    SyncRequestAuthHeadersUseCase syncRequestAuthHeadersUseCase =
+        const SyncRequestAuthHeadersUseCase(),
+  }) : _syncRequestAuthHeadersUseCase = syncRequestAuthHeadersUseCase;
 
-  final BuildBasicAuthorizationHeaderUseCase
-  _buildBasicAuthorizationHeaderUseCase;
-  final BuildBearerAuthorizationHeaderUseCase
-  _buildBearerAuthorizationHeaderUseCase;
+  final SyncRequestAuthHeadersUseCase _syncRequestAuthHeadersUseCase;
 
   /// Applies supported auth modes to request headers or query parameters after variable resolution.
   AuthAppliedRequest call({required ResolvedRequest resolvedRequest}) {
     final applier = _RequestAuthApplier(
       resolvedRequest: resolvedRequest,
-      buildBasicAuthorizationHeaderUseCase:
-          _buildBasicAuthorizationHeaderUseCase,
-      buildBearerAuthorizationHeaderUseCase:
-          _buildBearerAuthorizationHeaderUseCase,
+      syncRequestAuthHeadersUseCase: _syncRequestAuthHeadersUseCase,
     );
 
     return applier.apply();
@@ -42,15 +32,11 @@ class ApplyRequestAuthUseCase {
 class _RequestAuthApplier {
   const _RequestAuthApplier({
     required this.resolvedRequest,
-    required this.buildBasicAuthorizationHeaderUseCase,
-    required this.buildBearerAuthorizationHeaderUseCase,
+    required this.syncRequestAuthHeadersUseCase,
   });
 
   final ResolvedRequest resolvedRequest;
-  final BuildBasicAuthorizationHeaderUseCase
-  buildBasicAuthorizationHeaderUseCase;
-  final BuildBearerAuthorizationHeaderUseCase
-  buildBearerAuthorizationHeaderUseCase;
+  final SyncRequestAuthHeadersUseCase syncRequestAuthHeadersUseCase;
 
   /// Produces the request shape expected by the executor after auth mutations have been applied.
   AuthAppliedRequest apply() {
@@ -58,20 +44,22 @@ class _RequestAuthApplier {
 
     switch (auth.type) {
       case AuthType.none:
-        return _buildResult(request: _clearAuth(resolvedRequest.request));
       case AuthType.basic:
-        return _applyBasicAuth();
+      case AuthType.bearerToken:
+      case AuthType.awsSignature:
+        return _applyHeaderDrivenAuth();
+      case AuthType.jwt:
+        return _applyJwtAuth();
       case AuthType.apiKey:
         return _applyApiKeyAuth();
-      case AuthType.bearerToken:
-        return _applyBearerAuth();
+      case AuthType.oauth2:
+        return _applyOAuth2Auth();
+      case AuthType.ntlm:
+        return _applyNtlmAuth();
+      case AuthType.oauth1:
+        return _applyOAuth1Auth();
       case AuthType.digest:
       case AuthType.hawk:
-      case AuthType.jwt:
-      case AuthType.ntlm:
-      case AuthType.awsSignature:
-      case AuthType.oauth1:
-      case AuthType.oauth2:
         return _buildResult(
           request: resolvedRequest.request,
           authIssues: <RequestAuthIssue>[
@@ -86,67 +74,14 @@ class _RequestAuthApplier {
     }
   }
 
-  /// Applies the standard Basic auth header when both username and password are present.
-  AuthAppliedRequest _applyBasicAuth() {
-    final basic = resolvedRequest.request.auth.basic;
-    final issues = <RequestAuthIssue>[
-      ..._requireField(
-        authType: AuthType.basic,
-        fieldName: 'username',
-        value: basic.username,
-        issueType: RequestAuthIssueType.missingCredentials,
-        message: 'Basic auth requires a username.',
-      ),
-      ..._requireField(
-        authType: AuthType.basic,
-        fieldName: 'password',
-        value: basic.password,
-        issueType: RequestAuthIssueType.missingCredentials,
-        message: 'Basic auth requires a password.',
-      ),
-    ];
-
-    if (issues.isNotEmpty) {
-      return _buildResult(request: resolvedRequest.request, authIssues: issues);
-    }
-
-    final credentials = buildBasicAuthorizationHeaderUseCase(basic);
-    final nextHeaders = _upsertHeader(
-      resolvedRequest.request.headers,
-      key: 'Authorization',
-      value: credentials!,
-    );
-
-    return _buildResult(
-      request: _rebuildRequest(
-        headers: nextHeaders,
-        auth: const RequestAuthDraft.none(),
-      ),
-    );
-  }
-
-  /// Applies the standard Bearer auth header when the resolved token is present.
-  AuthAppliedRequest _applyBearerAuth() {
-    final bearerToken = resolvedRequest.request.auth.bearerToken;
-    final issues = _requireField(
-      authType: AuthType.bearerToken,
-      fieldName: 'token',
-      value: bearerToken.token,
-      issueType: RequestAuthIssueType.invalidConfiguration,
-      message: 'Bearer auth requires a token.',
-    );
-
-    if (issues.isNotEmpty) {
-      return _buildResult(request: resolvedRequest.request, authIssues: issues);
-    }
-
-    final authorizationValue = buildBearerAuthorizationHeaderUseCase(
-      bearerToken,
-    );
-    final nextHeaders = _upsertHeader(
-      resolvedRequest.request.headers,
-      key: 'Authorization',
-      value: authorizationValue!,
+  /// Applies sync-based auth headers directly to the resolved request shape.
+  AuthAppliedRequest _applyHeaderDrivenAuth() {
+    final nextHeaders = syncRequestAuthHeadersUseCase(
+      headers: resolvedRequest.request.headers,
+      auth: resolvedRequest.request.auth,
+      method: resolvedRequest.request.method,
+      url: resolvedRequest.request.url,
+      body: resolvedRequest.request.body,
     );
 
     return _buildResult(
@@ -160,6 +95,13 @@ class _RequestAuthApplier {
   /// Applies API key auth to the configured header, query, or cookie location.
   AuthAppliedRequest _applyApiKeyAuth() {
     final apiKey = resolvedRequest.request.auth.apiKey;
+    final sanitizedHeaders = syncRequestAuthHeadersUseCase(
+      headers: resolvedRequest.request.headers,
+      auth: const RequestAuthDraft.none(),
+      method: resolvedRequest.request.method,
+      url: resolvedRequest.request.url,
+      body: resolvedRequest.request.body,
+    );
     final issues = <RequestAuthIssue>[
       ..._requireField(
         authType: AuthType.apiKey,
@@ -182,30 +124,12 @@ class _RequestAuthApplier {
     }
 
     return switch (apiKey.location) {
-      ApiKeyLocation.header => _buildResult(
-        request: _rebuildRequest(
-          headers: _upsertHeader(
-            resolvedRequest.request.headers,
-            key: apiKey.name,
-            value: apiKey.value,
-          ),
-          auth: const RequestAuthDraft.none(),
-        ),
-      ),
-      ApiKeyLocation.query => _buildResult(
-        request: _rebuildRequest(
-          queryParameters: _upsertQueryParameter(
-            resolvedRequest.request.queryParameters,
-            key: apiKey.name,
-            value: apiKey.value,
-          ),
-          auth: const RequestAuthDraft.none(),
-        ),
-      ),
+      ApiKeyLocation.header ||
+      ApiKeyLocation.query => _applyEditorSyncedApiKey(),
       ApiKeyLocation.cookie => _buildResult(
         request: _rebuildRequest(
           headers: _upsertCookieHeader(
-            resolvedRequest.request.headers,
+            sanitizedHeaders,
             cookieName: apiKey.name,
             cookieValue: apiKey.value,
           ),
@@ -213,6 +137,128 @@ class _RequestAuthApplier {
         ),
       ),
     };
+  }
+
+  /// Re-synchronizes UI-backed API key fields once right before execution.
+  AuthAppliedRequest _applyEditorSyncedApiKey() {
+    final syncedFields = syncApiKeyAuthToRequestFields(
+      queryParameters: resolvedRequest.request.queryParameters,
+      headers: resolvedRequest.request.headers,
+      auth: resolvedRequest.request.auth,
+    );
+
+    return _buildResult(
+      request: _rebuildRequest(
+        headers: syncedFields.headers,
+        queryParameters: syncedFields.queryParameters,
+        auth: const RequestAuthDraft.none(),
+      ),
+    );
+  }
+
+  /// Re-synchronizes UI-backed OAuth2 fields once right before execution.
+  AuthAppliedRequest _applyOAuth2Auth() {
+    final syncedFields = syncOAuth2AuthToRequestFields(
+      queryParameters: resolvedRequest.request.queryParameters,
+      headers: resolvedRequest.request.headers,
+      auth: resolvedRequest.request.auth,
+    );
+
+    return _buildResult(
+      request: _rebuildRequest(
+        headers: syncedFields.headers,
+        queryParameters: syncedFields.queryParameters,
+        auth: const RequestAuthDraft.none(),
+      ),
+    );
+  }
+
+  /// Re-synchronizes UI-backed JWT fields once right before execution.
+  AuthAppliedRequest _applyJwtAuth() {
+    final syncedFields = syncJwtAuthToRequestFields(
+      queryParameters: resolvedRequest.request.queryParameters,
+      headers: resolvedRequest.request.headers,
+      auth: resolvedRequest.request.auth,
+    );
+
+    if (syncedFields.errorMessage != null) {
+      return _buildResult(
+        request: resolvedRequest.request,
+        authIssues: <RequestAuthIssue>[
+          RequestAuthIssue(
+            type: RequestAuthIssueType.invalidConfiguration,
+            authType: AuthType.jwt,
+            message: syncedFields.errorMessage!,
+          ),
+        ],
+      );
+    }
+
+    return _buildResult(
+      request: _rebuildRequest(
+        headers: syncedFields.headers,
+        queryParameters: syncedFields.queryParameters,
+        auth: const RequestAuthDraft.none(),
+      ),
+    );
+  }
+
+  /// Re-synchronizes UI-backed OAuth1 fields once right before execution.
+  AuthAppliedRequest _applyOAuth1Auth() {
+    final oauth1 = resolvedRequest.request.auth.oauth1;
+    final issues = <RequestAuthIssue>[
+      ..._requireOAuth1Field(
+        fieldName: 'consumerKey',
+        value: oauth1.consumerKey,
+        message: 'Consumer Key is required for OAuth 1.0a.',
+      ),
+      if (oauth1.usesRsaSignature)
+        const RequestAuthIssue(
+          type: RequestAuthIssueType.invalidConfiguration,
+          authType: AuthType.oauth1,
+          fieldName: 'signatureMethod',
+          message: 'RSA signature methods are not implemented yet.',
+        ),
+      ..._requireOAuth1Field(
+        fieldName: 'consumerSecret',
+        value: oauth1.consumerSecret,
+        message: 'Consumer Secret is required for OAuth 1.0a.',
+      ),
+    ];
+
+    if (issues.isNotEmpty) {
+      return _buildResult(request: resolvedRequest.request, authIssues: issues);
+    }
+
+    final syncedFields = syncOAuth1AuthToRequestFields(
+      queryParameters: resolvedRequest.request.queryParameters,
+      headers: resolvedRequest.request.headers,
+      auth: resolvedRequest.request.auth,
+      method: resolvedRequest.request.method,
+      url: resolvedRequest.request.url,
+      body: resolvedRequest.request.body,
+    );
+
+    if (syncedFields.errorMessage != null) {
+      return _buildResult(
+        request: resolvedRequest.request,
+        authIssues: <RequestAuthIssue>[
+          RequestAuthIssue(
+            type: RequestAuthIssueType.invalidConfiguration,
+            authType: AuthType.oauth1,
+            message: syncedFields.errorMessage!,
+          ),
+        ],
+      );
+    }
+
+    return _buildResult(
+      request: _rebuildRequest(
+        headers: syncedFields.headers,
+        queryParameters: syncedFields.queryParameters,
+        auth: const RequestAuthDraft.none(),
+      ),
+    );
   }
 
   /// Rebuilds the request with only the auth-mutated sections changed.
@@ -236,19 +282,6 @@ class _RequestAuthApplier {
     );
   }
 
-  /// Clears auth state once its side effects have been merged into the request shape.
-  RequestDraft _clearAuth(RequestDraft request) => RequestDraft(
-    method: request.method,
-    url: request.url,
-    queryParameters: request.queryParameters,
-    headers: request.headers,
-    variables: request.variables,
-    body: request.body,
-    auth: const RequestAuthDraft.none(),
-    timeout: request.timeout,
-    verifySsl: request.verifySsl,
-  );
-
   /// Builds the final auth-applied output while preserving any earlier resolution issues.
   AuthAppliedRequest _buildResult({
     required RequestDraft request,
@@ -260,6 +293,67 @@ class _RequestAuthApplier {
       resolutionIssues: resolvedRequest.issues,
       authIssues: authIssues,
     );
+  }
+
+  /// Validates NTLM credentials and passes the request through with auth intact.
+  ///
+  /// NTLM authenticates the connection during send, so no Authorization header
+  /// is synced into the request here.
+  AuthAppliedRequest _applyNtlmAuth() {
+    final ntlm = resolvedRequest.request.auth.ntlm;
+    final issues = <RequestAuthIssue>[
+      ..._requireNtlmField(
+        fieldName: 'username',
+        value: ntlm.username,
+        message: 'Username is required for NTLM.',
+      ),
+      ..._requireNtlmField(
+        fieldName: 'password',
+        value: ntlm.password,
+        message: 'Password is required for NTLM.',
+      ),
+    ];
+
+    return _buildResult(request: resolvedRequest.request, authIssues: issues);
+  }
+
+  /// Returns one blocking missing-credentials issue when an NTLM field is blank.
+  List<RequestAuthIssue> _requireNtlmField({
+    required String fieldName,
+    required String value,
+    required String message,
+  }) {
+    if (value.trim().isNotEmpty) {
+      return const <RequestAuthIssue>[];
+    }
+    return <RequestAuthIssue>[
+      RequestAuthIssue(
+        type: RequestAuthIssueType.missingCredentials,
+        authType: AuthType.ntlm,
+        fieldName: fieldName,
+        message: message,
+      ),
+    ];
+  }
+
+  /// Returns one blocking issue when an OAuth1 field is blank.
+  List<RequestAuthIssue> _requireOAuth1Field({
+    required String fieldName,
+    required String value,
+    required String message,
+  }) {
+    if (value.trim().isNotEmpty) {
+      return const <RequestAuthIssue>[];
+    }
+
+    return <RequestAuthIssue>[
+      RequestAuthIssue(
+        type: RequestAuthIssueType.invalidConfiguration,
+        authType: AuthType.oauth1,
+        fieldName: fieldName,
+        message: message,
+      ),
+    ];
   }
 
   /// Returns one blocking issue when a required auth field is blank.
@@ -284,28 +378,6 @@ class _RequestAuthApplier {
     ];
   }
 
-  /// Upserts an enabled header by case-insensitive key and removes duplicate enabled entries.
-  List<KeyValueItem> _upsertHeader(
-    List<KeyValueItem> headers, {
-    required String key,
-    required String value,
-  }) => _upsertItems(
-    headers,
-    matcher: (item) => item.key.toLowerCase() == key.toLowerCase(),
-    replacement: KeyValueItem(key: key, value: value),
-  );
-
-  /// Upserts a query parameter by exact key while preserving disabled duplicates.
-  List<KeyValueItem> _upsertQueryParameter(
-    List<KeyValueItem> queryParameters, {
-    required String key,
-    required String value,
-  }) => _upsertItems(
-    queryParameters,
-    matcher: (item) => item.key == key,
-    replacement: KeyValueItem(key: key, value: value),
-  );
-
   /// Upserts a cookie into the Cookie header while preserving other cookies.
   List<KeyValueItem> _upsertCookieHeader(
     List<KeyValueItem> headers, {
@@ -325,7 +397,11 @@ class _RequestAuthApplier {
       cookieValue: cookieValue,
     );
 
-    return _upsertHeader(headers, key: 'Cookie', value: nextCookieValue);
+    return _upsertItems(
+      headers,
+      matcher: (item) => item.key.toLowerCase() == 'cookie',
+      replacement: KeyValueItem(key: 'Cookie', value: nextCookieValue),
+    );
   }
 
   /// Merges one cookie pair into the existing cookie header string.

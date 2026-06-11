@@ -319,10 +319,7 @@ class RequestBuilderRepositoryImpl implements RequestBuilderRepository {
 
   Map<String, Object?> _requestBodyDraftToJson(RequestBodyDraft body) => {
     'type': body.type.name,
-    'raw': {
-      'subtype': body.raw.subtype.name,
-      'content': body.raw.content,
-    },
+    'raw': {'subtype': body.raw.subtype.name, 'content': body.raw.content},
     'formData': body.formData.map(_keyValueItemToJson).toList(growable: false),
     'urlEncoded': body.urlEncoded
         .map(_keyValueItemToJson)
@@ -429,6 +426,9 @@ class RequestBuilderRepositoryImpl implements RequestBuilderRepository {
       'payload': auth.jwt.payload,
       'secret': auth.jwt.secret,
       'algorithm': auth.jwt.algorithm,
+      'base64EncodedSecret': auth.jwt.base64EncodedSecret,
+      'privateKey': auth.jwt.privateKey,
+      'sendAsHeader': auth.jwt.sendAsHeader,
       'prefix': auth.jwt.prefix,
     },
     'ntlm': {
@@ -450,12 +450,39 @@ class RequestBuilderRepositoryImpl implements RequestBuilderRepository {
       'token': auth.oauth1.token,
       'tokenSecret': auth.oauth1.tokenSecret,
       'signatureMethod': auth.oauth1.signatureMethod,
+      'verifier': auth.oauth1.verifier,
+      'callback': auth.oauth1.callback,
       'nonce': auth.oauth1.nonce,
       'timestamp': auth.oauth1.timestamp,
       'version': auth.oauth1.version,
+      'realm': auth.oauth1.realm,
+      'asHeader': auth.oauth1.asHeader,
+      'includeBodyHash': auth.oauth1.includeBodyHash,
+      'encodeSignature': auth.oauth1.encodeSignature,
+      'includeEmptyParameters': auth.oauth1.includeEmptyParameters,
     },
     'oauth2': {
+      'grantType': auth.oauth2.grantType.name,
       'accessToken': auth.oauth2.accessToken,
+      'addTokenToHeader': auth.oauth2.addTokenToHeader,
+      'headerPrefix': auth.oauth2.headerPrefix,
+      'authorizationUrl': auth.oauth2.authorizationUrl,
+      'accessTokenUrl': auth.oauth2.accessTokenUrl,
+      'redirectUri': auth.oauth2.redirectUri,
+      'scope': auth.oauth2.scope,
+      'usePkce': auth.oauth2.usePkce,
+      'pkceMethod': auth.oauth2.pkceMethod.name,
+      'state': auth.oauth2.state,
+      'clientAuthentication': auth.oauth2.clientAuthentication.name,
+      'authUrlParams': auth.oauth2.authUrlParams
+          .map(_keyValueItemToJson)
+          .toList(growable: false),
+      'tokenRequestParams': auth.oauth2.tokenRequestParams
+          .map(_keyValueItemToJson)
+          .toList(growable: false),
+      'refreshTokenUrl': auth.oauth2.refreshTokenUrl,
+      'authorizationCode': auth.oauth2.authorizationCode,
+      'codeVerifier': auth.oauth2.codeVerifier,
       'refreshToken': auth.oauth2.refreshToken,
       'clientId': auth.oauth2.clientId,
       'clientSecret': auth.oauth2.clientSecret,
@@ -527,6 +554,9 @@ class RequestBuilderRepositoryImpl implements RequestBuilderRepository {
     payload: json['payload'] as String? ?? '',
     secret: json['secret'] as String? ?? '',
     algorithm: json['algorithm'] as String? ?? 'HS256',
+    base64EncodedSecret: json['base64EncodedSecret'] as bool? ?? false,
+    privateKey: json['privateKey'] as String? ?? '',
+    sendAsHeader: json['sendAsHeader'] as bool? ?? true,
     prefix: json['prefix'] as String? ?? 'Bearer',
   );
 
@@ -553,14 +583,46 @@ class RequestBuilderRepositoryImpl implements RequestBuilderRepository {
         token: json['token'] as String? ?? '',
         tokenSecret: json['tokenSecret'] as String? ?? '',
         signatureMethod: json['signatureMethod'] as String? ?? 'HMAC-SHA1',
+        verifier: json['verifier'] as String? ?? '',
+        callback: json['callback'] as String? ?? '',
         nonce: json['nonce'] as String? ?? '',
         timestamp: json['timestamp'] as String? ?? '',
         version: json['version'] as String? ?? '1.0',
+        realm: json['realm'] as String? ?? '',
+        asHeader: json['asHeader'] as bool? ?? false,
+        includeBodyHash: json['includeBodyHash'] as bool? ?? false,
+        encodeSignature: json['encodeSignature'] as bool? ?? true,
+        includeEmptyParameters:
+            json['includeEmptyParameters'] as bool? ?? false,
       );
 
   OAuth2AuthDraft _oAuth2AuthDraftFromJson(Map<String, dynamic> json) =>
       OAuth2AuthDraft(
+        grantType: _oAuth2GrantTypeFromName(json['grantType'] as String?),
         accessToken: json['accessToken'] as String? ?? '',
+        addTokenToHeader: json['addTokenToHeader'] as bool? ?? true,
+        headerPrefix: json['headerPrefix'] as String? ?? 'Bearer',
+        authorizationUrl: json['authorizationUrl'] as String? ?? '',
+        accessTokenUrl: json['accessTokenUrl'] as String? ?? '',
+        redirectUri: json['redirectUri'] as String? ?? '',
+        scope: json['scope'] as String? ?? '',
+        usePkce: json['usePkce'] as bool? ?? false,
+        pkceMethod: _oAuth2PkceMethodFromName(json['pkceMethod'] as String?),
+        state: json['state'] as String? ?? '',
+        clientAuthentication: _oAuth2ClientAuthenticationFromName(
+          json['clientAuthentication'] as String?,
+        ),
+        authUrlParams: _listFromJson(
+          json['authUrlParams'],
+          (value) => _keyValueItemFromJson(value),
+        ),
+        tokenRequestParams: _listFromJson(
+          json['tokenRequestParams'],
+          (value) => _keyValueItemFromJson(value),
+        ),
+        refreshTokenUrl: json['refreshTokenUrl'] as String? ?? '',
+        authorizationCode: json['authorizationCode'] as String? ?? '',
+        codeVerifier: json['codeVerifier'] as String? ?? '',
         refreshToken: json['refreshToken'] as String? ?? '',
         clientId: json['clientId'] as String? ?? '',
         clientSecret: json['clientSecret'] as String? ?? '',
@@ -632,21 +694,17 @@ class RequestBuilderRepositoryImpl implements RequestBuilderRepository {
   HttpMethod _httpMethodFromName(String? value) =>
       _enumValueOrFallback(HttpMethod.values, value, HttpMethod.get);
 
-  RequestBodyType _requestBodyTypeFromName(String? value) =>
-      switch (value) {
-        'json' => RequestBodyType.raw,
-        _ => _enumValueOrFallback(
-          RequestBodyType.values,
-          value,
-          RequestBodyType.none,
-        ),
-      };
+  RequestBodyType _requestBodyTypeFromName(String? value) => switch (value) {
+    'json' => RequestBodyType.raw,
+    _ => _enumValueOrFallback(
+      RequestBodyType.values,
+      value,
+      RequestBodyType.none,
+    ),
+  };
 
-  RawBodySubtype _rawBodySubtypeFromName(String? value) => _enumValueOrFallback(
-    RawBodySubtype.values,
-    value,
-    RawBodySubtype.text,
-  );
+  RawBodySubtype _rawBodySubtypeFromName(String? value) =>
+      _enumValueOrFallback(RawBodySubtype.values, value, RawBodySubtype.text);
 
   RawBodySubtype _rawBodySubtypeFromLegacyContentType(String value) {
     final normalized = value.trim().toLowerCase();
@@ -664,6 +722,28 @@ class RequestBuilderRepositoryImpl implements RequestBuilderRepository {
 
   ApiKeyLocation _apiKeyLocationFromName(String? value) =>
       _enumValueOrFallback(ApiKeyLocation.values, value, ApiKeyLocation.header);
+
+  OAuth2GrantType _oAuth2GrantTypeFromName(String? value) =>
+      _enumValueOrFallback(
+        OAuth2GrantType.values,
+        value,
+        OAuth2GrantType.manual,
+      );
+
+  OAuth2PkceMethod _oAuth2PkceMethodFromName(String? value) =>
+      _enumValueOrFallback(
+        OAuth2PkceMethod.values,
+        value,
+        OAuth2PkceMethod.sha256,
+      );
+
+  OAuth2ClientAuthentication _oAuth2ClientAuthenticationFromName(
+    String? value,
+  ) => _enumValueOrFallback(
+    OAuth2ClientAuthentication.values,
+    value,
+    OAuth2ClientAuthentication.basicAuthHeader,
+  );
 
   RequestVariableScope _requestVariableScopeFromName(String? value) =>
       _enumValueOrFallback(

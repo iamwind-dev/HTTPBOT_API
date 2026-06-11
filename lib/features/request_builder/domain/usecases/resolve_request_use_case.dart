@@ -379,6 +379,12 @@ class _ResolutionContext {
               auth.jwt.algorithm,
               source: 'auth.jwt.algorithm',
             ),
+            base64EncodedSecret: auth.jwt.base64EncodedSecret,
+            privateKey: resolveText(
+              auth.jwt.privateKey,
+              source: 'auth.jwt.privateKey',
+            ),
+            sendAsHeader: auth.jwt.sendAsHeader,
             prefix: resolveText(auth.jwt.prefix, source: 'auth.jwt.prefix'),
           ),
           ntlm: auth.ntlm,
@@ -472,6 +478,14 @@ class _ResolutionContext {
               auth.oauth1.signatureMethod,
               source: 'auth.oauth1.signatureMethod',
             ),
+            verifier: resolveText(
+              auth.oauth1.verifier,
+              source: 'auth.oauth1.verifier',
+            ),
+            callback: resolveText(
+              auth.oauth1.callback,
+              source: 'auth.oauth1.callback',
+            ),
             nonce: resolveText(auth.oauth1.nonce, source: 'auth.oauth1.nonce'),
             timestamp: resolveText(
               auth.oauth1.timestamp,
@@ -481,6 +495,11 @@ class _ResolutionContext {
               auth.oauth1.version,
               source: 'auth.oauth1.version',
             ),
+            realm: resolveText(auth.oauth1.realm, source: 'auth.oauth1.realm'),
+            asHeader: auth.oauth1.asHeader,
+            includeBodyHash: auth.oauth1.includeBodyHash,
+            encodeSignature: auth.oauth1.encodeSignature,
+            includeEmptyParameters: auth.oauth1.includeEmptyParameters,
           ),
           oauth2: auth.oauth2,
         );
@@ -497,9 +516,60 @@ class _ResolutionContext {
           aws: auth.aws,
           oauth1: auth.oauth1,
           oauth2: OAuth2AuthDraft(
+            grantType: auth.oauth2.grantType,
             accessToken: resolveText(
               auth.oauth2.accessToken,
               source: 'auth.oauth2.accessToken',
+            ),
+            addTokenToHeader: auth.oauth2.addTokenToHeader,
+            headerPrefix: resolveText(
+              auth.oauth2.headerPrefix,
+              source: 'auth.oauth2.headerPrefix',
+            ),
+            authorizationUrl: resolveText(
+              auth.oauth2.authorizationUrl,
+              source: 'auth.oauth2.authorizationUrl',
+            ),
+            accessTokenUrl: resolveText(
+              auth.oauth2.accessTokenUrl,
+              source: 'auth.oauth2.accessTokenUrl',
+            ),
+            redirectUri: resolveText(
+              auth.oauth2.redirectUri,
+              source: 'auth.oauth2.redirectUri',
+            ),
+            scope: resolveText(auth.oauth2.scope, source: 'auth.oauth2.scope'),
+            usePkce: auth.oauth2.usePkce,
+            pkceMethod: auth.oauth2.pkceMethod,
+            state: resolveText(auth.oauth2.state, source: 'auth.oauth2.state'),
+            clientAuthentication: auth.oauth2.clientAuthentication,
+            authUrlParams: auth.oauth2.authUrlParams
+                .map(
+                  (item) => resolveKeyValueItem(
+                    item,
+                    source: 'auth.oauth2.authUrlParams',
+                  ),
+                )
+                .toList(growable: false),
+            tokenRequestParams: auth.oauth2.tokenRequestParams
+                .map(
+                  (item) => resolveKeyValueItem(
+                    item,
+                    source: 'auth.oauth2.tokenRequestParams',
+                  ),
+                )
+                .toList(growable: false),
+            refreshTokenUrl: resolveText(
+              auth.oauth2.refreshTokenUrl,
+              source: 'auth.oauth2.refreshTokenUrl',
+            ),
+            authorizationCode: resolveText(
+              auth.oauth2.authorizationCode,
+              source: 'auth.oauth2.authorizationCode',
+            ),
+            codeVerifier: resolveText(
+              auth.oauth2.codeVerifier,
+              source: 'auth.oauth2.codeVerifier',
             ),
             refreshToken: resolveText(
               auth.oauth2.refreshToken,

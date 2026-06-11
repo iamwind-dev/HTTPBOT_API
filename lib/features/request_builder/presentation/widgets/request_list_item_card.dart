@@ -35,8 +35,8 @@ class RequestListItemCard extends StatelessWidget {
   });
 
   final RequestListItem item;
-  final VoidCallback onTap;
   final ValueChanged<RequestListItemAction> onActionSelected;
+  final VoidCallback onTap;
 
   /// Builds a tappable request summary card for the requests list.
   @override
@@ -141,7 +141,7 @@ class _RequestMethodBadge extends StatelessWidget {
       width: AppSpacing.xxxLarge + AppSpacing.xSmall,
       alignment: Alignment.center,
       padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.small,
+        horizontal: AppSpacing.xSmall,
         vertical: AppSpacing.xxSmall,
       ),
       decoration: BoxDecoration(

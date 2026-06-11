@@ -17,6 +17,9 @@ migrate_working_dir/
 .github/
 .history/
 openspec/
+.claude/
+CLAUDE.md
+.playwright-mcp/
 
 AGENTS.md
 .dart_skills/

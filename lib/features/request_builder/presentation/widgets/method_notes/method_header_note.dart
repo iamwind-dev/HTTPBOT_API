@@ -5,6 +5,8 @@ import '../../../../../core/theme/app_theme_context.dart';
 import '../../../domain/entities/request_body_draft.dart';
 import '../../../domain/entities/request_key_value.dart';
 import '../../../domain/entities/requests_method.dart';
+import '../../../domain/helpers/body_content_type_policy.dart';
+import '../../../domain/helpers/header_method_policy.dart';
 
 class MethodHeaderNote extends StatelessWidget {
   const MethodHeaderNote({
@@ -29,30 +31,19 @@ class MethodHeaderNote extends StatelessWidget {
       padding: const EdgeInsets.only(top: AppSpacing.small),
       child: Text(
         message,
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-          color: context.appColors.textSecondary,
-        ),
+        style: Theme.of(
+          context,
+        ).textTheme.bodySmall?.copyWith(color: context.appColors.textSecondary),
       ),
     );
   }
 
   String? get _message {
-    if (method == HttpMethod.get) {
-      return 'Content-Type will not be auto-added for GET.';
+    if (!shouldAutoAttachContentTypeForMethod(method)) {
+      return 'Content-Type will not be auto-added for ${method.wireName}.';
     }
 
-    if (method != HttpMethod.post && method != HttpMethod.patch) {
-      return null;
-    }
-
-    final suggestedContentType = switch (body.type) {
-      RequestBodyType.xWwwFormUrlEncoded =>
-        'application/x-www-form-urlencoded',
-      RequestBodyType.formData => 'multipart/form-data',
-      RequestBodyType.graphql => 'application/json',
-      RequestBodyType.raw => body.raw.syncedContentType,
-      RequestBodyType.none => null,
-    };
+    final suggestedContentType = contentTypeForBodyType(body.type);
 
     if (suggestedContentType == null) {
       return null;
@@ -62,12 +53,11 @@ class MethodHeaderNote extends StatelessWidget {
       return 'Your enabled Content-Type header will be kept as-is.';
     }
 
-    return 'Suggested Content-Type: $suggestedContentType. It will be auto-attached when sending.';
+    return 'Suggested Content-Type: $suggestedContentType. It will be synced into Headers automatically.';
   }
 
   bool get _hasEnabledContentTypeHeader => headers.any(
     (header) =>
-        header.isEnabled &&
-        header.key.trim().toLowerCase() == 'content-type',
+        header.isEnabled && header.key.trim().toLowerCase() == 'content-type',
   );
 }

@@ -1,6 +1,10 @@
+import 'package:app_links/app_links.dart';
 import 'package:get_it/get_it.dart';
 
 import '../core/network/dio_client.dart';
+import '../core/network/ntlm_http_client.dart';
+import '../core/services/external_uri_launcher.dart';
+import '../core/services/oauth2_callback_service.dart';
 import '../core/theme/cubit/theme_cubit.dart';
 import '../core/theme/shared_preferences_theme_mode_store.dart';
 import '../core/theme/theme_mode_store.dart';
@@ -37,8 +41,19 @@ import '../features/request_history/domain/usecases/save_request_history_entry_u
 import '../features/request_history/presentation/cubit/request_history_cubit.dart';
 import '../features/request_builder/data/repositories/request_execution_repository_impl.dart';
 import '../features/request_builder/data/repositories/request_builder_repository_impl.dart';
+import '../features/request_builder/data/datasources/oauth2_remote_datasource.dart';
+import '../features/request_builder/data/repositories/oauth2_repository_impl.dart';
+import '../features/request_builder/data/repositories/saved_credentials_repository_impl.dart';
+import '../features/request_builder/domain/repositories/oauth2_repository.dart';
 import '../features/request_builder/domain/repositories/request_execution_repository.dart';
 import '../features/request_builder/domain/repositories/request_builder_repository.dart';
+import '../features/request_builder/domain/repositories/saved_credentials_repository.dart';
+import '../features/request_builder/domain/usecases/exchange_oauth2_authorization_code_use_case.dart';
+import '../features/request_builder/domain/usecases/request_oauth2_client_credentials_token_use_case.dart';
+import '../features/request_builder/domain/usecases/request_oauth2_password_credentials_token_use_case.dart';
+import '../features/request_builder/domain/usecases/get_saved_credentials_use_case.dart';
+import '../features/request_builder/domain/usecases/save_saved_credentials_use_case.dart';
+import '../features/request_builder/presentation/cubit/manage_credentials_cubit.dart';
 import '../features/request_builder/domain/usecases/clear_current_request_draft_session_use_case.dart';
 import '../features/request_builder/domain/usecases/execute_request_use_case.dart';
 import '../features/request_builder/domain/usecases/get_current_request_draft_session_use_case.dart';
@@ -63,6 +78,14 @@ void configureDependencies() {
 
   getIt
     ..registerLazySingleton<DioClient>(DioClient.new)
+    ..registerLazySingleton<NtlmHttpClient>(NtlmHttpClient.new)
+    ..registerLazySingleton(AppLinks.new)
+    ..registerLazySingleton<OAuth2CallbackService>(
+      () => AppLinksOAuth2CallbackService(appLinks: getIt<AppLinks>()),
+    )
+    ..registerLazySingleton<ExternalUriLauncher>(
+      UrlLauncherExternalUriLauncher.new,
+    )
     ..registerLazySingleton<ThemeModeStore>(SharedPreferencesThemeModeStore.new)
     ..registerFactory(() => ThemeCubit(getIt<ThemeModeStore>()))
     ..registerLazySingleton<PostmanLocalDataSource>(
@@ -135,7 +158,16 @@ void configureDependencies() {
       RequestBuilderRepositoryImpl.new,
     )
     ..registerLazySingleton<RequestExecutionRepository>(
-      () => RequestExecutionRepositoryImpl(getIt<DioClient>()),
+      () => RequestExecutionRepositoryImpl(
+        getIt<DioClient>(),
+        ntlmHttpClient: getIt<NtlmHttpClient>(),
+      ),
+    )
+    ..registerLazySingleton(
+      () => OAuth2RemoteDataSource(dio: getIt<DioClient>().create()),
+    )
+    ..registerLazySingleton<OAuth2Repository>(
+      () => OAuth2RepositoryImpl(getIt<OAuth2RemoteDataSource>()),
     )
     ..registerLazySingleton<RequestHistoryRepository>(
       RequestHistoryRepositoryImpl.new,
@@ -185,6 +217,15 @@ void configureDependencies() {
   getIt.registerLazySingleton(ResolveRequestUseCase.new);
   getIt.registerLazySingleton(ApplyRequestAuthUseCase.new);
   getIt.registerLazySingleton(ParseResponseUseCase.new);
+  getIt.registerLazySingleton(
+    () => ExchangeOAuth2AuthorizationCodeUseCase(getIt<OAuth2Repository>()),
+  );
+  getIt.registerLazySingleton(
+    () => RequestOAuth2PasswordCredentialsTokenUseCase(getIt<OAuth2Repository>()),
+  );
+  getIt.registerLazySingleton(
+    () => RequestOAuth2ClientCredentialsTokenUseCase(getIt<OAuth2Repository>()),
+  );
   getIt.registerFactory(
     () => RequestSendBloc(
       resolveRequestUseCase: getIt<ResolveRequestUseCase>(),
@@ -198,6 +239,21 @@ void configureDependencies() {
     () => RequestHistoryCubit(
       getIt<GetRequestHistoryEntriesUseCase>(),
       getIt<ClearRequestHistoryUseCase>(),
+    ),
+  );
+  getIt.registerLazySingleton<SavedCredentialsRepository>(
+    SavedCredentialsRepositoryImpl.new,
+  );
+  getIt.registerLazySingleton(
+    () => GetSavedCredentialsUseCase(getIt<SavedCredentialsRepository>()),
+  );
+  getIt.registerLazySingleton(
+    () => SaveSavedCredentialsUseCase(getIt<SavedCredentialsRepository>()),
+  );
+  getIt.registerFactory(
+    () => ManageCredentialsCubit(
+      getSavedCredentialsUseCase: getIt<GetSavedCredentialsUseCase>(),
+      saveSavedCredentialsUseCase: getIt<SaveSavedCredentialsUseCase>(),
     ),
   );
 }
