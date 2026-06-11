@@ -540,9 +540,10 @@ class CollectionFileImporter {
   (List<ImportedCollectionFolderEntity>, List<ImportedCollectionRequestEntity>)
   _extractOpenApiRequests(Map<String, dynamic> root) {
     final paths = _asMap(root['paths'], 'Spec must contain "paths".');
-    final folderMap = <String, List<ImportedCollectionRequestEntity>>{};
+    final folderRoots = <_FolderBuilder>[];
     final rootRequests = <ImportedCollectionRequestEntity>[];
     final baseUrl = _extractBaseUrl(root);
+    final baseUrlValue = _extractConcreteBaseUrl(root);
 
     for (final pathEntry in paths.entries) {
       if (pathEntry.value is! Map) {
@@ -550,7 +551,8 @@ class CollectionFileImporter {
       }
 
       final path = pathEntry.key;
-      final operations = Map<String, dynamic>.from(pathEntry.value as Map);
+      final pathItem = Map<String, dynamic>.from(pathEntry.value as Map);
+      final operations = pathItem;
 
       for (final operationEntry in operations.entries) {
         final method = operationEntry.key.toLowerCase();
@@ -561,6 +563,11 @@ class CollectionFileImporter {
         final operation = Map<String, dynamic>.from(
           operationEntry.value as Map,
         );
+        final resolvedParameters = _mergeResolvedParameters(
+          root: root,
+          pathItem: pathItem,
+          operation: operation,
+        );
         final request = ImportedCollectionRequestEntity(
           method: method.toUpperCase(),
           title: _operationTitle(
@@ -569,25 +576,35 @@ class CollectionFileImporter {
             path: path,
           ),
           url: '$baseUrl$path',
+          baseUrlValue: baseUrlValue,
+          queryParameters: _extractImportedFields(
+            resolvedParameters,
+            location: 'query',
+          ),
+          headers: _extractImportedFields(
+            resolvedParameters,
+            location: 'header',
+          ),
+          bodyContent: _extractBodyContent(root: root, operation: operation),
+          bodyContentType: _extractBodyContentType(
+            root: root,
+            operation: operation,
+          ),
         );
-        final folderName = _folderNameForPath(path);
+        final folderSegments = _folderSegmentsForPath(path);
 
-        if (folderName == null) {
+        if (folderSegments.isEmpty) {
           rootRequests.add(request);
           continue;
         }
 
-        folderMap.putIfAbsent(folderName, () => []).add(request);
+        final folder = _ensureFolderPath(folderRoots, folderSegments);
+        folder.requests.add(request);
       }
     }
 
-    final folders = folderMap.entries
-        .map(
-          (entry) => ImportedCollectionFolderEntity(
-            name: entry.key,
-            requests: entry.value,
-          ),
-        )
+    final folders = folderRoots
+        .map((folder) => folder.build())
         .toList(growable: false);
 
     return (folders, rootRequests);
@@ -625,15 +642,12 @@ class CollectionFileImporter {
     return '${method.toUpperCase()} $path';
   }
 
-  String? _folderNameForPath(String path) {
-    final segments = path
+  List<String> _folderSegmentsForPath(String path) {
+    return path
         .split('/')
-        .where((segment) => segment.trim().isNotEmpty);
-    if (segments.isEmpty) {
-      return null;
-    }
-
-    return segments.first.trim();
+        .where((segment) => segment.trim().isNotEmpty)
+        .map((segment) => segment.trim())
+        .toList(growable: false);
   }
 
   String _extractBaseUrl(Map<String, dynamic> root) {
@@ -649,6 +663,32 @@ class CollectionFileImporter {
     }
 
     return '{{baseUrl}}';
+  }
+
+  String _extractConcreteBaseUrl(Map<String, dynamic> root) {
+    final servers = root['servers'];
+    if (servers is List && servers.isNotEmpty) {
+      final first = servers.first;
+      if (first is Map) {
+        final url = first['url'];
+        if (url is String && url.trim().isNotEmpty) {
+          return url.trim();
+        }
+      }
+    }
+
+    final host = (root['host'] as String?)?.trim();
+    if (host != null && host.isNotEmpty) {
+      final schemes = root['schemes'];
+      final scheme =
+          schemes is List && schemes.isNotEmpty && schemes.first is String
+          ? (schemes.first as String).trim()
+          : 'https';
+      final basePath = (root['basePath'] as String?)?.trim() ?? '';
+      return '$scheme://$host$basePath';
+    }
+
+    return '';
   }
 
   int _countPostmanRequests(List<dynamic> items) {
@@ -704,4 +744,358 @@ class CollectionFileImporter {
     final timestamp = DateTime.now().microsecondsSinceEpoch;
     return '${importType.name}_${timestamp}_${name.hashCode}';
   }
+
+  _FolderBuilder _ensureFolderPath(
+    List<_FolderBuilder> roots,
+    List<String> segments,
+  ) {
+    _FolderBuilder? current;
+    var currentLevel = roots;
+
+    for (final segment in segments) {
+      final existingIndex = currentLevel.indexWhere(
+        (folder) => folder.name == segment,
+      );
+      if (existingIndex >= 0) {
+        current = currentLevel[existingIndex];
+      } else {
+        final created = _FolderBuilder(name: segment);
+        currentLevel.add(created);
+        current = created;
+      }
+      currentLevel = current.folders;
+    }
+
+    return current!;
+  }
+
+  List<Map<String, dynamic>> _mergeResolvedParameters({
+    required Map<String, dynamic> root,
+    required Map<String, dynamic> pathItem,
+    required Map<String, dynamic> operation,
+  }) {
+    final resolved = <Map<String, dynamic>>[];
+
+    void addParameters(dynamic rawValue) {
+      if (rawValue is! List) {
+        return;
+      }
+
+      for (final item in rawValue) {
+        final parameter = _resolveReferencedMap(root, item);
+        if (parameter != null) {
+          resolved.add(parameter);
+        }
+      }
+    }
+
+    addParameters(pathItem['parameters']);
+    addParameters(operation['parameters']);
+    return resolved;
+  }
+
+  List<ImportedRequestFieldEntity> _extractImportedFields(
+    List<Map<String, dynamic>> parameters, {
+    required String location,
+  }) {
+    final fields = <ImportedRequestFieldEntity>[];
+
+    for (final parameter in parameters) {
+      final parameterLocation = (parameter['in'] as String?)?.trim();
+      final name = (parameter['name'] as String?)?.trim();
+      if (parameterLocation != location || name == null || name.isEmpty) {
+        continue;
+      }
+
+      fields.add(
+        ImportedRequestFieldEntity(
+          name: name,
+          value: _parameterDefaultValue(parameter),
+          description: (parameter['description'] as String?)?.trim() ?? '',
+        ),
+      );
+    }
+
+    return fields;
+  }
+
+  String _parameterDefaultValue(Map<String, dynamic> parameter) {
+    final schemaValue = _extractSchemaValue(parameter['schema']);
+    if (schemaValue.isNotEmpty) {
+      return schemaValue;
+    }
+
+    final example = _stringifyExampleValue(parameter['example']);
+    if (example.isNotEmpty) {
+      return example;
+    }
+
+    final examples = parameter['examples'];
+    if (examples is Map) {
+      for (final value in examples.values) {
+        if (value is Map) {
+          final candidate = _stringifyExampleValue(value['value']);
+          if (candidate.isNotEmpty) {
+            return candidate;
+          }
+        }
+      }
+    }
+
+    final directDefault = _stringifyExampleValue(parameter['default']);
+    return directDefault;
+  }
+
+  String _extractSchemaValue(dynamic schema) {
+    if (schema is! Map) {
+      return '';
+    }
+
+    final map = Map<String, dynamic>.from(schema);
+    final defaultValue = _stringifyExampleValue(map['default']);
+    if (defaultValue.isNotEmpty) {
+      return defaultValue;
+    }
+
+    final exampleValue = _stringifyExampleValue(map['example']);
+    if (exampleValue.isNotEmpty) {
+      return exampleValue;
+    }
+
+    return '';
+  }
+
+  String _extractBodyContent({
+    required Map<String, dynamic> root,
+    required Map<String, dynamic> operation,
+  }) {
+    final requestBody = _resolveRequestBody(root, operation);
+    if (requestBody == null) {
+      return '';
+    }
+
+    final content = requestBody['content'];
+    if (content is Map) {
+      final mediaTypeMap = _preferredMediaTypeMap(
+        Map<String, dynamic>.from(content),
+      );
+      if (mediaTypeMap != null) {
+        final example = _stringifyExampleValue(mediaTypeMap['example']);
+        if (example.isNotEmpty) {
+          return example;
+        }
+
+        final examples = mediaTypeMap['examples'];
+        if (examples is Map) {
+          for (final value in examples.values) {
+            if (value is Map) {
+              final candidate = _stringifyExampleValue(value['value']);
+              if (candidate.isNotEmpty) {
+                return candidate;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    final bodyParameter = _resolveSwaggerBodyParameter(root, operation);
+    if (bodyParameter != null) {
+      final schemaValue = _extractSchemaValue(bodyParameter['schema']);
+      if (schemaValue.isNotEmpty) {
+        return schemaValue;
+      }
+      return _stringifyExampleValue(bodyParameter['example']);
+    }
+
+    return '';
+  }
+
+  String _extractBodyContentType({
+    required Map<String, dynamic> root,
+    required Map<String, dynamic> operation,
+  }) {
+    final requestBody = _resolveRequestBody(root, operation);
+    if (requestBody != null) {
+      final content = requestBody['content'];
+      if (content is Map) {
+        final mediaType = _preferredMediaTypeName(
+          Map<String, dynamic>.from(content),
+        );
+        if (mediaType.isNotEmpty) {
+          return mediaType;
+        }
+      }
+    }
+
+    final consumes = operation['consumes'] ?? root['consumes'];
+    if (consumes is List && consumes.isNotEmpty) {
+      final first = consumes.first;
+      if (first is String && first.trim().isNotEmpty) {
+        return first.trim();
+      }
+    }
+
+    return '';
+  }
+
+  Map<String, dynamic>? _resolveRequestBody(
+    Map<String, dynamic> root,
+    Map<String, dynamic> operation,
+  ) {
+    final requestBody = operation['requestBody'];
+    return _resolveReferencedMap(root, requestBody);
+  }
+
+  Map<String, dynamic>? _resolveSwaggerBodyParameter(
+    Map<String, dynamic> root,
+    Map<String, dynamic> operation,
+  ) {
+    final parameters = operation['parameters'];
+    if (parameters is! List) {
+      return null;
+    }
+
+    for (final parameter in parameters) {
+      final resolved = _resolveReferencedMap(root, parameter);
+      if (resolved == null) {
+        continue;
+      }
+
+      if ((resolved['in'] as String?)?.trim() == 'body') {
+        return resolved;
+      }
+    }
+
+    return null;
+  }
+
+  Map<String, dynamic>? _preferredMediaTypeMap(Map<String, dynamic> content) {
+    final preferredKeys = <String>[
+      'application/json',
+      'application/*+json',
+      'application/x-www-form-urlencoded',
+      'multipart/form-data',
+      'text/plain',
+    ];
+
+    for (final key in preferredKeys) {
+      final value = content[key];
+      if (value is Map) {
+        return Map<String, dynamic>.from(value);
+      }
+    }
+
+    for (final value in content.values) {
+      if (value is Map) {
+        return Map<String, dynamic>.from(value);
+      }
+    }
+
+    return null;
+  }
+
+  String _preferredMediaTypeName(Map<String, dynamic> content) {
+    final preferredKeys = <String>[
+      'application/json',
+      'application/*+json',
+      'application/x-www-form-urlencoded',
+      'multipart/form-data',
+      'text/plain',
+    ];
+
+    for (final key in preferredKeys) {
+      if (content[key] is Map) {
+        return key;
+      }
+    }
+
+    for (final entry in content.entries) {
+      if (entry.value is Map) {
+        return entry.key;
+      }
+    }
+
+    return '';
+  }
+
+  Map<String, dynamic>? _resolveReferencedMap(
+    Map<String, dynamic> root,
+    dynamic value,
+  ) {
+    if (value is Map<String, dynamic>) {
+      final ref = value[r'$ref'];
+      if (ref is String) {
+        return _resolveRef(root, ref);
+      }
+      return value;
+    }
+    if (value is Map) {
+      final map = Map<String, dynamic>.from(value);
+      final ref = map[r'$ref'];
+      if (ref is String) {
+        return _resolveRef(root, ref);
+      }
+      return map;
+    }
+    return null;
+  }
+
+  Map<String, dynamic>? _resolveRef(Map<String, dynamic> root, String ref) {
+    if (!ref.startsWith('#/')) {
+      return null;
+    }
+
+    dynamic current = root;
+    for (final segment in ref.substring(2).split('/')) {
+      if (current is! Map) {
+        return null;
+      }
+
+      final map = current is Map<String, dynamic>
+          ? current
+          : Map<String, dynamic>.from(current);
+      current = map[segment];
+    }
+
+    if (current is Map<String, dynamic>) {
+      return current;
+    }
+    if (current is Map) {
+      return Map<String, dynamic>.from(current);
+    }
+    return null;
+  }
+
+  String _stringifyExampleValue(dynamic value) {
+    if (value == null) {
+      return '';
+    }
+    if (value is String) {
+      return value.trim();
+    }
+    if (value is num || value is bool) {
+      return value.toString();
+    }
+    try {
+      return const JsonEncoder.withIndent('  ').convert(value);
+    } catch (_) {
+      return value.toString();
+    }
+  }
+}
+
+class _FolderBuilder {
+  _FolderBuilder({required this.name});
+
+  final String name;
+  final List<_FolderBuilder> folders = <_FolderBuilder>[];
+  final List<ImportedCollectionRequestEntity> requests =
+      <ImportedCollectionRequestEntity>[];
+
+  ImportedCollectionFolderEntity build() => ImportedCollectionFolderEntity(
+    name: name,
+    folders: folders.map((folder) => folder.build()).toList(growable: false),
+    requests: List<ImportedCollectionRequestEntity>.unmodifiable(requests),
+  );
 }

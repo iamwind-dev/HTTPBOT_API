@@ -148,9 +148,10 @@ class CollectionsShellActionButton extends StatelessWidget {
   }
 
   Future<void> _showImportFromUrlDialog(BuildContext context) async {
-    final url = await showDialog<String>(
+    final url = await showModalBottomSheet<String>(
       context: context,
-      barrierDismissible: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (_) => const _ImportFromUrlDialog(),
     );
 
@@ -460,86 +461,111 @@ class _ImportFromUrlDialogState extends State<_ImportFromUrlDialog> {
   Widget build(BuildContext context) {
     final colors = context.appColors;
     final theme = Theme.of(context);
+    final viewInsets = MediaQuery.viewInsetsOf(context);
 
     return AnimatedPadding(
       duration: const Duration(milliseconds: 180),
       curve: Curves.easeOut,
-      padding: EdgeInsets.only(
-        left: AppSpacing.large,
-        right: AppSpacing.large,
-        bottom: MediaQuery.viewInsetsOf(context).bottom,
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.medium,
+        AppSpacing.medium,
+        AppSpacing.medium,
+        AppSpacing.medium + viewInsets.bottom,
       ),
-      child: Dialog(
-        insetPadding: const EdgeInsets.symmetric(horizontal: 28),
-        backgroundColor: Colors.transparent,
-        child: Container(
-          decoration: BoxDecoration(
-            color: colors.surface,
-            borderRadius: BorderRadius.circular(AppRadius.xxLarge),
-            border: Border.all(color: colors.border.withValues(alpha: 0.35)),
-          ),
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.large,
-            AppSpacing.large,
-            AppSpacing.large,
-            AppSpacing.large,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Import OpenAPI Spec',
-                textAlign: TextAlign.center,
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  color: colors.textPrimary,
-                  fontWeight: FontWeight.w500,
+      child: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          child: Container(
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: colors.surface,
+              borderRadius: BorderRadius.circular(AppRadius.xxLarge),
+              border: Border.all(color: colors.border.withValues(alpha: 0.35)),
+              boxShadow: [
+                BoxShadow(
+                  color: colors.modalShadow,
+                  blurRadius: 18,
+                  offset: const Offset(0, 8),
                 ),
-              ),
-              const SizedBox(height: AppSpacing.large),
-              Container(
-                decoration: BoxDecoration(
-                  color: colors.surfaceMuted,
-                  borderRadius: BorderRadius.circular(AppRadius.xLarge),
+              ],
+            ),
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.large,
+              AppSpacing.large,
+              AppSpacing.large,
+              AppSpacing.large,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 44,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: colors.sheetHandle,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
                 ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.medium,
-                ),
-                child: TextField(
-                  controller: _urlController,
-                  autofocus: true,
-                  keyboardType: TextInputType.url,
-                  textInputAction: TextInputAction.done,
-                  onSubmitted: (_) => _submit(),
+                const SizedBox(height: AppSpacing.medium),
+                Text(
+                  'Import OpenAPI Spec',
+                  textAlign: TextAlign.center,
                   style: theme.textTheme.headlineSmall?.copyWith(
                     color: colors.textPrimary,
-                    fontWeight: FontWeight.w400,
+                    fontWeight: FontWeight.w600,
                   ),
-                  decoration: InputDecoration(
-                    border: InputBorder.none,
-                    hintText: 'Enter URL',
-                    hintStyle: theme.textTheme.headlineSmall?.copyWith(
-                      color: colors.textSecondary.withValues(alpha: 0.75),
+                ),
+                const SizedBox(height: AppSpacing.large),
+                Container(
+                  decoration: BoxDecoration(
+                    color: colors.surfaceMuted,
+                    borderRadius: BorderRadius.circular(AppRadius.xLarge),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.medium,
+                  ),
+                  child: TextField(
+                    controller: _urlController,
+                    autofocus: true,
+                    keyboardType: TextInputType.url,
+                    textInputAction: TextInputAction.done,
+                    onSubmitted: (_) => _submit(),
+                    minLines: 1,
+                    maxLines: 2,
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                      color: colors.textPrimary,
                       fontWeight: FontWeight.w400,
+                    ),
+                    decoration: InputDecoration(
+                      border: InputBorder.none,
+                      hintText: 'Enter URL',
+                      hintStyle: theme.textTheme.headlineSmall?.copyWith(
+                        color: colors.textSecondary.withValues(alpha: 0.75),
+                        fontWeight: FontWeight.w400,
+                      ),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(height: AppSpacing.large),
-              Row(
-                children: [
-                  Expanded(
-                    child: _ImportDialogButton(
-                      label: 'Cancel',
-                      onTap: () => Navigator.of(context).pop(),
+                const SizedBox(height: AppSpacing.large),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _ImportDialogButton(
+                        label: 'Cancel',
+                        onTap: () => Navigator.of(context).pop(),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: AppSpacing.medium),
-                  Expanded(
-                    child: _ImportDialogButton(label: 'Import', onTap: _submit),
-                  ),
-                ],
-              ),
-            ],
+                    const SizedBox(width: AppSpacing.medium),
+                    Expanded(
+                      child: _ImportDialogButton(
+                        label: 'Import',
+                        onTap: _submit,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -568,7 +594,7 @@ class _ImportDialogButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppRadius.xLarge),
         onTap: onTap,
         child: Ink(
-          height: 72,
+          height: 60,
           decoration: BoxDecoration(
             color: colors.surfaceMuted,
             borderRadius: BorderRadius.circular(AppRadius.xLarge),
@@ -1001,26 +1027,7 @@ class _DirectoryVersionStep extends StatelessWidget {
           ),
         ),
         const SizedBox(height: AppSpacing.medium),
-        Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.large,
-            vertical: AppSpacing.large,
-          ),
-          decoration: BoxDecoration(
-            color: colors.surfaceMuted,
-            borderRadius: BorderRadius.circular(28),
-          ),
-          child: Text(
-            entry.description.isEmpty
-                ? 'No description available.'
-                : entry.description,
-            style: theme.textTheme.headlineSmall?.copyWith(
-              color: colors.textPrimary,
-              fontWeight: FontWeight.w400,
-              height: 1.3,
-            ),
-          ),
-        ),
+        _ExpandableDescriptionCard(description: entry.description),
         const SizedBox(height: AppSpacing.xLarge),
         Text(
           'Versions',
@@ -1039,6 +1046,76 @@ class _DirectoryVersionStep extends StatelessWidget {
           const SizedBox(height: AppSpacing.medium),
         ],
       ],
+    );
+  }
+}
+
+class _ExpandableDescriptionCard extends StatefulWidget {
+  const _ExpandableDescriptionCard({required this.description});
+
+  final String description;
+
+  @override
+  State<_ExpandableDescriptionCard> createState() =>
+      _ExpandableDescriptionCardState();
+}
+
+class _ExpandableDescriptionCardState
+    extends State<_ExpandableDescriptionCard> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+    final theme = Theme.of(context);
+    final text = widget.description.isEmpty
+        ? 'No description available.'
+        : widget.description;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.large,
+        vertical: AppSpacing.large,
+      ),
+      decoration: BoxDecoration(
+        color: colors.surfaceMuted,
+        borderRadius: BorderRadius.circular(28),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            text,
+            maxLines: _expanded ? null : 5,
+            overflow: _expanded ? TextOverflow.visible : TextOverflow.ellipsis,
+            style: theme.textTheme.headlineSmall?.copyWith(
+              color: colors.textPrimary,
+              fontWeight: FontWeight.w400,
+              height: 1.3,
+            ),
+          ),
+          if (widget.description.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.medium),
+            InkWell(
+              onTap: () => setState(() => _expanded = !_expanded),
+              borderRadius: BorderRadius.circular(AppRadius.medium),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.xxSmall,
+                  vertical: AppSpacing.xxSmall,
+                ),
+                child: Text(
+                  _expanded ? 'Show less' : 'Read more',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: colors.methodGet,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
