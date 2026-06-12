@@ -37,7 +37,9 @@ OAuth1AuthSyncResult syncOAuth1AuthToRequestFields({
 
   if (auth.type != AuthType.oauth1) {
     return OAuth1AuthSyncResult(
-      queryParameters: List<KeyValueItem>.unmodifiable(sanitizedQueryParameters),
+      queryParameters: List<KeyValueItem>.unmodifiable(
+        sanitizedQueryParameters,
+      ),
       headers: List<KeyValueItem>.unmodifiable(sanitizedHeaders),
     );
   }
@@ -51,7 +53,9 @@ OAuth1AuthSyncResult syncOAuth1AuthToRequestFields({
   );
   if (!signingResult.isValid) {
     return OAuth1AuthSyncResult(
-      queryParameters: List<KeyValueItem>.unmodifiable(sanitizedQueryParameters),
+      queryParameters: List<KeyValueItem>.unmodifiable(
+        sanitizedQueryParameters,
+      ),
       headers: List<KeyValueItem>.unmodifiable(sanitizedHeaders),
       errorMessage: signingResult.errorMessage,
     );
@@ -75,7 +79,9 @@ OAuth1AuthSyncResult syncOAuth1AuthToRequestFields({
     }
 
     return OAuth1AuthSyncResult(
-      queryParameters: List<KeyValueItem>.unmodifiable(sanitizedQueryParameters),
+      queryParameters: List<KeyValueItem>.unmodifiable(
+        sanitizedQueryParameters,
+      ),
       headers: List<KeyValueItem>.unmodifiable(<KeyValueItem>[
         ...sanitizedHeaders,
         KeyValueItem(

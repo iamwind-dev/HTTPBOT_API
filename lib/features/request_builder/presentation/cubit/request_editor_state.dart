@@ -21,7 +21,8 @@ class RequestEditorState extends Equatable {
   }) => RequestEditorState(
     title: title ?? this.title,
     draft: draft ?? this.draft,
-    queryParametersBaseUrl: queryParametersBaseUrl ?? this.queryParametersBaseUrl,
+    queryParametersBaseUrl:
+        queryParametersBaseUrl ?? this.queryParametersBaseUrl,
   );
 
   @override

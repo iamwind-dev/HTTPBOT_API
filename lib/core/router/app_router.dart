@@ -139,7 +139,7 @@ abstract final class AppRouter {
               GoRoute(
                 path: '/collections',
                 builder: (context, state) => BlocProvider(
-                  create: (_) => CollectionCubit(),
+                  create: (_) => CollectionCubit()..load(),
                   child: _CollectionsShell(
                     onTabSelected: (tab) =>
                         _handleShellTabSelection(context, tab),

@@ -120,6 +120,10 @@ class RequestSendBloc extends Bloc<RequestSendEvent, RequestSendState> {
     }
 
     if (draft.body.type == RequestBodyType.graphql) {
+      if (draft.body.graphQl.query.trim().isEmpty) {
+        return 'GraphQL query is required before sending.';
+      }
+
       final validationError = _validateGraphQlVariables(
         draft.body.graphQl.variables,
       );

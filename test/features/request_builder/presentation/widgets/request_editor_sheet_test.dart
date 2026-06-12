@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:httpbot_api/core/constants/app_strings.dart';
@@ -21,6 +22,52 @@ void main() {
   setUpAll(configureDependencies);
 
   group('request editor auth header UI sync', () {
+    testWidgets(
+      'should switch current request into GraphQL mode from more menu',
+      (tester) async {
+        final robot = RequestEditorSheetRobot(tester);
+
+        await robot.pumpScreen();
+        await robot.openEditor();
+        await robot.selectMoreAction('Use GraphQL');
+
+        robot.expectTextVisible('Query');
+        robot.expectTextVisible('Variables');
+        robot.expectHeaderValue(
+          section: 'headers',
+          index: 0,
+          field: 'key',
+          value: 'Content-Type',
+        );
+        robot.expectHeaderValue(
+          section: 'headers',
+          index: 0,
+          field: 'value',
+          value: 'application/json',
+        );
+        robot.expectTextVisible('POST');
+      },
+    );
+
+    testWidgets(
+      'should keep GraphQL variables editor open when json is invalid',
+      (tester) async {
+        final robot = RequestEditorSheetRobot(tester);
+
+        await robot.pumpScreen();
+        await robot.openEditor();
+        await robot.selectMoreAction('Use GraphQL');
+        await robot.openGraphQlVariablesEditor();
+        await robot.enterGraphQlEditorText('{id: 1}');
+        await robot.saveGraphQlEditor();
+
+        robot.expectTextVisible(
+          'GraphQL variables must be a valid JSON object.',
+        );
+        expect(find.byType(TextFormField).last, findsOneWidget);
+      },
+    );
+
     testWidgets(
       'should show authorization header row when bearer token auth is entered',
       (tester) async {
@@ -735,6 +782,41 @@ class RequestEditorSheetRobot {
     final optionFinder = find.text(type.label).last;
     await tester.ensureVisible(optionFinder);
     await tester.tap(optionFinder, warnIfMissed: false);
+    await tester.pumpAndSettle();
+  }
+
+  /// Opens the request more menu and selects one visible action label.
+  Future<void> selectMoreAction(String label) async {
+    final moreButton = find.byKey(
+      const ValueKey<String>(AppWidgetKeys.requestsEditorMoreButton),
+    );
+    await tester.ensureVisible(moreButton);
+    await tester.tap(moreButton);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(label).last);
+    await tester.pumpAndSettle();
+  }
+
+  /// Opens the GraphQL variables editor row from the request body card.
+  Future<void> openGraphQlVariablesEditor() async {
+    final rowFinder = find.byKey(
+      const ValueKey<String>(AppWidgetKeys.requestsEditorGraphQlVariablesField),
+    );
+    await tester.ensureVisible(rowFinder.first);
+    await tester.tap(rowFinder.first);
+    await tester.pumpAndSettle();
+  }
+
+  /// Enters text into the visible GraphQL query/variables editor field.
+  Future<void> enterGraphQlEditorText(String value) async {
+    final fieldFinder = find.byType(TextFormField).last;
+    await tester.enterText(fieldFinder, value);
+    await tester.pumpAndSettle();
+  }
+
+  /// Saves the active GraphQL editor sheet using the top-right check button.
+  Future<void> saveGraphQlEditor() async {
+    await tester.tap(find.byIcon(CupertinoIcons.check_mark).last);
     await tester.pumpAndSettle();
   }
 

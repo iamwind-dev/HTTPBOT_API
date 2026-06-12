@@ -37,9 +37,7 @@ OAuth2ImplicitCallbackData parseOAuth2ImplicitCallbackUri({
 
   final accessToken = parameters['access_token']?.trim() ?? '';
   if (accessToken.isEmpty) {
-    throw const FormatException(
-      'OAuth callback did not include access_token.',
-    );
+    throw const FormatException('OAuth callback did not include access_token.');
   }
 
   final state = parameters['state']?.trim() ?? '';

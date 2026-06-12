@@ -225,6 +225,10 @@ class _ResolutionContext {
               body.graphQl.variables,
               source: 'body.graphQl.variables',
             ),
+            operationName: resolveText(
+              body.graphQl.operationName ?? '',
+              source: 'body.graphQl.operationName',
+            ),
           ),
         );
     }

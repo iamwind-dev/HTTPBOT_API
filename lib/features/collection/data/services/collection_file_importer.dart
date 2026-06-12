@@ -237,6 +237,7 @@ class CollectionFileImporter {
       name: fallbackName,
       description: '',
       importType: CollectionImportType.har,
+      authLabel: 'No Auth',
       rootRequests: requests,
     );
   }
@@ -283,6 +284,8 @@ class CollectionFileImporter {
       name: name,
       description: description,
       importType: CollectionImportType.openApiSpec,
+      variables: _buildOpenApiCollectionVariables(root),
+      authLabel: 'No Auth',
       folders: folders,
       rootRequests: rootRequests,
     );
@@ -363,6 +366,7 @@ class CollectionFileImporter {
       name: name,
       description: '',
       importType: CollectionImportType.postmanCollection,
+      authLabel: 'No Auth',
       rootRequests: List<ImportedCollectionRequestEntity>.generate(
         requestCount,
         (index) => ImportedCollectionRequestEntity(
@@ -689,6 +693,19 @@ class CollectionFileImporter {
     }
 
     return '';
+  }
+
+  List<ImportedCollectionVariableEntity> _buildOpenApiCollectionVariables(
+    Map<String, dynamic> root,
+  ) {
+    final baseUrlValue = _extractConcreteBaseUrl(root);
+    if (baseUrlValue.trim().isEmpty) {
+      return const <ImportedCollectionVariableEntity>[];
+    }
+
+    return <ImportedCollectionVariableEntity>[
+      ImportedCollectionVariableEntity(name: 'baseUrl', value: baseUrlValue),
+    ];
   }
 
   int _countPostmanRequests(List<dynamic> items) {
