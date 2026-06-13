@@ -8,11 +8,15 @@ import '../../domain/entities/request_draft.dart';
 import '../../domain/entities/request_draft_session.dart';
 import '../../domain/entities/request_environment.dart';
 import '../../domain/entities/request_key_value.dart';
+import '../../domain/entities/request_settings.dart';
+import '../../domain/entities/request_test.dart';
 import '../../domain/entities/request_variable.dart';
 import '../../domain/entities/request_variable_store.dart';
 import '../../domain/entities/requests_method.dart';
 import '../../domain/entities/saved_request_draft.dart';
 import '../../domain/repositories/request_builder_repository.dart';
+import '../models/request_settings_model.dart';
+import '../models/request_test_model.dart';
 
 class RequestBuilderRepositoryImpl implements RequestBuilderRepository {
   RequestBuilderRepositoryImpl({RequestDraft? initialDraft})
@@ -219,6 +223,10 @@ class RequestBuilderRepositoryImpl implements RequestBuilderRepository {
         .map(_keyValueItemToJson)
         .toList(growable: false),
     'headers': draft.headers.map(_keyValueItemToJson).toList(growable: false),
+    'settings': RequestSettingsModel.fromEntity(draft.settings).toJson(),
+    'tests': draft.tests
+        .map((test) => RequestTestModel.fromEntity(test).toJson())
+        .toList(growable: false),
     'variables': draft.variables
         .map(_requestVariableToJson)
         .toList(growable: false),
@@ -271,6 +279,11 @@ class RequestBuilderRepositoryImpl implements RequestBuilderRepository {
   }
 
   RequestDraft _requestDraftFromJson(Map<String, dynamic> json) => RequestDraft(
+    settings: _requestSettingsFromJson(
+      json['settings'],
+      legacyTimeoutSeconds: (json['timeoutSeconds'] as num?)?.toInt(),
+      legacyVerifySsl: json['verifySsl'] as bool?,
+    ),
     method: _httpMethodFromName(json['method'] as String?),
     url: json['url'] as String? ?? _defaultDraft.url,
     queryParameters: _listFromJson(
@@ -281,15 +294,36 @@ class RequestBuilderRepositoryImpl implements RequestBuilderRepository {
       json['headers'],
       (value) => _keyValueItemFromJson(value),
     ),
+    tests: _requestTestsFromJson(json['tests']),
     variables: _listFromJson(
       json['variables'],
       (value) => _requestVariableFromJson(value),
     ),
     body: _requestBodyDraftFromJson(_mapFromJson(json['body'])),
     auth: _requestAuthDraftFromJson(_mapFromJson(json['auth'])),
-    timeout: Duration(seconds: (json['timeoutSeconds'] as num?)?.toInt() ?? 30),
-    verifySsl: json['verifySsl'] as bool? ?? true,
+    timeout: Duration(
+      seconds: _requestSettingsFromJson(
+        json['settings'],
+        legacyTimeoutSeconds: (json['timeoutSeconds'] as num?)?.toInt(),
+        legacyVerifySsl: json['verifySsl'] as bool?,
+      ).timeoutSeconds,
+    ),
+    verifySsl: _requestSettingsFromJson(
+      json['settings'],
+      legacyTimeoutSeconds: (json['timeoutSeconds'] as num?)?.toInt(),
+      legacyVerifySsl: json['verifySsl'] as bool?,
+    ).verifySsl,
   );
+
+  RequestSettings _requestSettingsFromJson(
+    Object? value, {
+    int? legacyTimeoutSeconds,
+    bool? legacyVerifySsl,
+  }) => RequestSettingsModel.fromJson(
+    _mapFromJson(value),
+    legacyTimeoutSeconds: legacyTimeoutSeconds,
+    legacyVerifySsl: legacyVerifySsl,
+  ).toEntity();
 
   Map<String, Object?> _requestVariableStoreToJson(
     RequestVariableStore store,
@@ -692,6 +726,22 @@ class RequestBuilderRepositoryImpl implements RequestBuilderRepository {
     contentType: json['contentType'] as String? ?? '',
     description: json['description'] as String? ?? '',
   );
+
+  List<RequestTest> _requestTestsFromJson(Object? value) {
+    if (value is! List) {
+      return const <RequestTest>[];
+    }
+
+    return value
+        .whereType<Map>()
+        .map(
+          (item) => RequestTestModel.fromJson(
+            Map<String, dynamic>.from(item),
+          ).toEntity(),
+        )
+        .where((test) => test.id.trim().isNotEmpty)
+        .toList(growable: false);
+  }
 
   HttpMethod _httpMethodFromName(String? value) =>
       _enumValueOrFallback(HttpMethod.values, value, HttpMethod.get);

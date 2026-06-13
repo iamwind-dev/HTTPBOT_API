@@ -9,6 +9,7 @@ class DioClient {
   /// Creates a configured Dio instance for one request execution, honoring timeout and SSL settings.
   Dio create({
     Duration timeout = const Duration(seconds: 15),
+    bool followRedirects = true,
     bool verifySsl = true,
   }) {
     final dio = Dio(
@@ -16,6 +17,8 @@ class DioClient {
         connectTimeout: timeout,
         receiveTimeout: timeout,
         sendTimeout: timeout,
+        followRedirects: followRedirects,
+        maxRedirects: followRedirects ? 5 : 0,
       ),
     );
 

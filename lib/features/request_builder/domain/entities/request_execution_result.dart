@@ -1,9 +1,12 @@
 import 'package:equatable/equatable.dart';
 
 import 'request_auth_issue.dart';
+import 'executed_request_snapshot.dart';
 import 'request_draft.dart';
+import 'request_test_result.dart';
 import 'request_key_value.dart';
 import 'request_resolution_issue.dart';
+import 'http_cookie_entity.dart';
 
 enum RequestExecutionErrorType {
   blocked,
@@ -25,6 +28,9 @@ class RequestExecutionResult extends Equatable {
     this.duration = Duration.zero,
     this.errorType,
     this.errorMessage = '',
+    this.executedRequestSnapshot,
+    this.responseCookies = const <HttpCookieEntity>[],
+    this.testResults = const <RequestTestResult>[],
     this.resolutionIssues = const <RequestResolutionIssue>[],
     this.authIssues = const <RequestAuthIssue>[],
   });
@@ -38,6 +44,9 @@ class RequestExecutionResult extends Equatable {
   final Duration duration;
   final RequestExecutionErrorType? errorType;
   final String errorMessage;
+  final ExecutedRequestSnapshot? executedRequestSnapshot;
+  final List<HttpCookieEntity> responseCookies;
+  final List<RequestTestResult> testResults;
   final List<RequestResolutionIssue> resolutionIssues;
   final List<RequestAuthIssue> authIssues;
 
@@ -51,6 +60,40 @@ class RequestExecutionResult extends Equatable {
   /// Returns the raw payload size in bytes so the parser or UI can format it later.
   int get payloadSizeBytes => bodyBytes.length;
 
+  RequestExecutionResult copyWith({
+    RequestDraft? request,
+    int? statusCode,
+    String? statusMessage,
+    List<KeyValueItem>? headers,
+    List<int>? bodyBytes,
+    String? bodyText,
+    Duration? duration,
+    RequestExecutionErrorType? errorType,
+    bool clearErrorType = false,
+    String? errorMessage,
+    ExecutedRequestSnapshot? executedRequestSnapshot,
+    List<HttpCookieEntity>? responseCookies,
+    List<RequestTestResult>? testResults,
+    List<RequestResolutionIssue>? resolutionIssues,
+    List<RequestAuthIssue>? authIssues,
+  }) => RequestExecutionResult(
+    request: request ?? this.request,
+    statusCode: statusCode ?? this.statusCode,
+    statusMessage: statusMessage ?? this.statusMessage,
+    headers: headers ?? this.headers,
+    bodyBytes: bodyBytes ?? this.bodyBytes,
+    bodyText: bodyText ?? this.bodyText,
+    duration: duration ?? this.duration,
+    errorType: clearErrorType ? null : (errorType ?? this.errorType),
+    errorMessage: errorMessage ?? this.errorMessage,
+    executedRequestSnapshot:
+        executedRequestSnapshot ?? this.executedRequestSnapshot,
+    responseCookies: responseCookies ?? this.responseCookies,
+    testResults: testResults ?? this.testResults,
+    resolutionIssues: resolutionIssues ?? this.resolutionIssues,
+    authIssues: authIssues ?? this.authIssues,
+  );
+
   @override
   List<Object?> get props => [
     request,
@@ -62,6 +105,9 @@ class RequestExecutionResult extends Equatable {
     duration,
     errorType,
     errorMessage,
+    executedRequestSnapshot,
+    responseCookies,
+    testResults,
     resolutionIssues,
     authIssues,
   ];

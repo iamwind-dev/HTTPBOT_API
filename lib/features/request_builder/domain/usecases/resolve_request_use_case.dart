@@ -54,9 +54,11 @@ class _RequestDraftResolver {
         headers: draft.headers
             .map((item) => context.resolveKeyValueItem(item, source: 'header'))
             .toList(growable: false),
+        tests: draft.tests,
         variables: draft.variables,
         body: context.resolveBody(draft.body),
         auth: context.resolveAuth(draft.auth),
+        settings: draft.settings,
         timeout: draft.timeout,
         verifySsl: draft.verifySsl,
       ),

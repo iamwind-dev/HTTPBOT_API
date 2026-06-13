@@ -29,6 +29,24 @@ abstract final class AppWidgetKeys {
       'requests_editor_form_data_file_selector';
   static const requestsEditorSendButton = 'requests_editor_send_button';
   static const requestsEditorResponseBadge = 'requests_editor_response_badge';
+  static const requestsCookiesSheet = 'requests_cookies_sheet';
+  static const requestsCookiesManageSheet = 'requests_cookies_manage_sheet';
+  static const requestsCookieEditorSheet = 'requests_cookie_editor_sheet';
+  static const requestsCookiesAddButton = 'requests_cookies_add_button';
+  static const requestsCookiesManageButton = 'requests_cookies_manage_button';
+  static const requestsCookiesCloseButton = 'requests_cookies_close_button';
+  static const requestsCookiesFilterButton = 'requests_cookies_filter_button';
+  static const requestsTestsSheet = 'requests_tests_sheet';
+  static const requestsTestEditorSheet = 'requests_test_editor_sheet';
+  static const requestsTestValueEditorSheet = 'requests_test_value_editor_sheet';
+  static const requestsTestsAddButton = 'requests_tests_add_button';
+  static const requestsTestsCloseButton = 'requests_tests_close_button';
+  static const requestsSettingsSheet = 'requests_settings_sheet';
+  static const requestsSettingsCloseButton = 'requests_settings_close_button';
+  static const requestsResponseViewSelectorButton =
+      'requests_response_view_selector_button';
+  static const requestsResponseViewSelectorMenu =
+      'requests_response_view_selector_menu';
   static const requestsResponseSheet = 'requests_response_sheet';
   static const requestsResponseCloseButton = 'requests_response_close_button';
   static const requestsResponseSendButton = 'requests_response_send_button';
@@ -78,6 +96,24 @@ abstract final class AppWidgetKeys {
   /// Builds a stable key for an auth credential field keyed by semantic name.
   static String requestsEditorAuthField(String fieldName) =>
       'requests_editor_auth_${fieldName}_field';
+
+  static String requestsCookieField(String fieldName) =>
+      'requests_cookie_${fieldName}_field';
+
+  static String requestsCookieListItemAt(int index) =>
+      'requests_cookie_item_$index';
+
+  static String requestsTestField(String fieldName) =>
+      'requests_test_${fieldName}_field';
+
+  static String requestsTestListItemAt(int index) =>
+      'requests_test_item_$index';
+
+  static String requestsSettingsField(String fieldName) =>
+      'requests_settings_${fieldName}_field';
+
+  static String requestsResponseViewSelectorItem(String mode) =>
+      'requests_response_view_selector_item_$mode';
 
   static const requestsEditorManageCredentialsButton =
       'requests_editor_manage_credentials_button';

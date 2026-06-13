@@ -3,9 +3,11 @@ import 'package:httpbot_api/core/network/dio_client.dart';
 import 'package:httpbot_api/core/network/ntlm_http_client.dart';
 import 'package:httpbot_api/features/request_builder/data/repositories/request_execution_repository_impl.dart';
 import 'package:httpbot_api/features/request_builder/domain/entities/auth_applied_request.dart';
+import 'package:httpbot_api/features/request_builder/domain/entities/http_cookie_entity.dart';
 import 'package:httpbot_api/features/request_builder/domain/entities/request_auth_draft.dart';
 import 'package:httpbot_api/features/request_builder/domain/entities/request_draft.dart';
 import 'package:httpbot_api/features/request_builder/domain/entities/request_execution_result.dart';
+import 'package:httpbot_api/features/request_builder/domain/repositories/http_cookie_repository.dart';
 
 class _SpyNtlmHttpClient extends NtlmHttpClient {
   _SpyNtlmHttpClient();
@@ -17,6 +19,38 @@ class _SpyNtlmHttpClient extends NtlmHttpClient {
     called = true;
     return RequestExecutionResult(request: request.request, statusCode: 200);
   }
+}
+
+class _NoopHttpCookieRepository implements HttpCookieRepository {
+  @override
+  Future<void> deleteCookie(String id) async {}
+
+  @override
+  Future<void> deleteExpiredCookies() async {}
+
+  @override
+  Future<List<HttpCookieEntity>> getAllCookies() async =>
+      const <HttpCookieEntity>[];
+
+  @override
+  Future<List<HttpCookieEntity>> getCookiesForDomain(String domain) async =>
+      const <HttpCookieEntity>[];
+
+  @override
+  Future<List<HttpCookieEntity>> getCookiesForRequestUrl(String url) async =>
+      const <HttpCookieEntity>[];
+
+  @override
+  Future<void> saveCookie(HttpCookieEntity cookie) async {}
+
+  @override
+  Future<void> updateCookie(HttpCookieEntity cookie) async {}
+
+  @override
+  Future<void> upsertCookiesFromSetCookieHeaders(
+    String requestUrl,
+    List<String> setCookieHeaders,
+  ) async {}
 }
 
 AuthAppliedRequest _request(
@@ -41,6 +75,7 @@ void main() {
     final spy = _SpyNtlmHttpClient();
     final repo = RequestExecutionRepositoryImpl(
       const DioClient(),
+      httpCookieRepository: _NoopHttpCookieRepository(),
       ntlmHttpClient: spy,
     );
 
@@ -56,6 +91,7 @@ void main() {
       final spy = _SpyNtlmHttpClient();
       final repo = RequestExecutionRepositoryImpl(
         const DioClient(),
+        httpCookieRepository: _NoopHttpCookieRepository(),
         ntlmHttpClient: spy,
       );
 
@@ -82,6 +118,7 @@ void main() {
     final spy = _SpyNtlmHttpClient();
     final repo = RequestExecutionRepositoryImpl(
       const DioClient(),
+      httpCookieRepository: _NoopHttpCookieRepository(),
       ntlmHttpClient: spy,
     );
 
