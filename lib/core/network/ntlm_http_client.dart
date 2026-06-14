@@ -5,6 +5,7 @@ import 'dart:typed_data';
 
 import '../../features/request_builder/data/helpers/request_transport_inputs.dart';
 import '../../features/request_builder/domain/entities/auth_applied_request.dart';
+import '../../features/request_builder/domain/entities/executed_request_snapshot.dart';
 import '../../features/request_builder/domain/entities/request_draft.dart';
 import '../../features/request_builder/domain/entities/request_execution_result.dart';
 import '../../features/request_builder/domain/entities/request_key_value.dart';
@@ -56,10 +57,24 @@ class NtlmHttpClient {
     final inputs = await buildRequestTransportInputs(draft);
     final uri = Uri.parse(inputs.url);
     final bodyBytes = _encodeBody(inputs);
+    final settings = draft.settings;
+    final requestHeaders = _injectSettingsUserAgent(
+      headers: inputs.headers,
+      userAgent: settings.normalizedUserAgent,
+    );
+    final executedRequestSnapshot = ExecutedRequestSnapshot(
+      method: draft.method.wireName,
+      url: inputs.url,
+      headers: <String, String>{
+        ...requestHeaders,
+        HttpHeaders.authorizationHeader: 'NTLM ${createType1Message()}',
+      },
+      body: _buildRequestBodyPreview(inputs),
+    );
 
     final client = _httpClientFactory();
-    client.connectionTimeout = draft.timeout;
-    if (!draft.verifySsl) {
+    client.connectionTimeout = Duration(seconds: settings.timeoutSeconds);
+    if (!settings.verifySsl) {
       client.badCertificateCallback = (_, _, _) => true;
     }
 
@@ -67,7 +82,8 @@ class NtlmHttpClient {
       // ── Type-1 (negotiate) ───────────────────────────────────────────────
       final httpRequest = await client.openUrl(draft.method.wireName, uri);
       httpRequest.persistentConnection = true;
-      inputs.headers.forEach(httpRequest.headers.set);
+      httpRequest.followRedirects = settings.followRedirects;
+      requestHeaders.forEach(httpRequest.headers.set);
       httpRequest.headers.set(
         HttpHeaders.authorizationHeader,
         'NTLM ${createType1Message()}',
@@ -84,6 +100,7 @@ class NtlmHttpClient {
           draft: draft,
           request: request,
           stopwatch: stopwatch,
+          executedRequestSnapshot: executedRequestSnapshot,
           errorType: RequestExecutionErrorType.unknown,
           message: 'Server did not request NTLM authentication.',
         );
@@ -107,10 +124,10 @@ class NtlmHttpClient {
           socket,
           method: draft.method.wireName,
           uri: uri,
-          headers: inputs.headers,
+          headers: requestHeaders,
           authorization: 'NTLM $type3',
           bodyBytes: bodyBytes,
-        ).timeout(draft.timeout);
+        ).timeout(Duration(seconds: settings.timeoutSeconds));
       } on TimeoutException {
         socket.destroy();
         rethrow; // mapped by the outer handler to a timeout result
@@ -127,6 +144,7 @@ class NtlmHttpClient {
           bodyBytes: rawResponse.bodyBytes,
           bodyText: utf8.decode(rawResponse.bodyBytes, allowMalformed: true),
           duration: stopwatch.elapsed,
+          executedRequestSnapshot: executedRequestSnapshot,
           errorType: RequestExecutionErrorType.unknown,
           errorMessage:
               'NTLM authentication failed. Check username, password, and domain.',
@@ -143,6 +161,7 @@ class NtlmHttpClient {
         bodyBytes: rawResponse.bodyBytes,
         bodyText: utf8.decode(rawResponse.bodyBytes, allowMalformed: true),
         duration: stopwatch.elapsed,
+        executedRequestSnapshot: executedRequestSnapshot,
         resolutionIssues: request.resolutionIssues,
         authIssues: request.authIssues,
       );
@@ -151,6 +170,7 @@ class NtlmHttpClient {
         draft: draft,
         request: request,
         stopwatch: stopwatch,
+        executedRequestSnapshot: executedRequestSnapshot,
         errorType: RequestExecutionErrorType.timeout,
         message: 'Request timed out.',
       );
@@ -159,6 +179,7 @@ class NtlmHttpClient {
         draft: draft,
         request: request,
         stopwatch: stopwatch,
+        executedRequestSnapshot: executedRequestSnapshot,
         errorType: RequestExecutionErrorType.unknown,
         message: 'Received a malformed NTLM challenge from the server.',
       );
@@ -167,6 +188,7 @@ class NtlmHttpClient {
         draft: draft,
         request: request,
         stopwatch: stopwatch,
+        executedRequestSnapshot: executedRequestSnapshot,
         errorType: RequestExecutionErrorType.ssl,
         message: 'SSL handshake failed.',
       );
@@ -175,6 +197,7 @@ class NtlmHttpClient {
         draft: draft,
         request: request,
         stopwatch: stopwatch,
+        executedRequestSnapshot: executedRequestSnapshot,
         errorType: RequestExecutionErrorType.connection,
         message: 'Network request failed.',
       );
@@ -183,6 +206,7 @@ class NtlmHttpClient {
         draft: draft,
         request: request,
         stopwatch: stopwatch,
+        executedRequestSnapshot: executedRequestSnapshot,
         errorType: RequestExecutionErrorType.unknown,
         message: error.message,
       );
@@ -425,6 +449,7 @@ class NtlmHttpClient {
     required RequestDraft draft,
     required AuthAppliedRequest request,
     required Stopwatch stopwatch,
+    required ExecutedRequestSnapshot executedRequestSnapshot,
     required RequestExecutionErrorType errorType,
     required String message,
   }) {
@@ -432,10 +457,51 @@ class NtlmHttpClient {
     return RequestExecutionResult(
       request: draft,
       duration: stopwatch.elapsed,
+      executedRequestSnapshot: executedRequestSnapshot,
       errorType: errorType,
       errorMessage: message,
       resolutionIssues: request.resolutionIssues,
       authIssues: request.authIssues,
     );
+  }
+
+  String? _buildRequestBodyPreview(RequestTransportInputs inputs) {
+    if (!inputs.canSendBody) {
+      return null;
+    }
+
+    final data = inputs.payload.data;
+    if (data == null) {
+      return null;
+    }
+
+    if (data is String) {
+      return data;
+    }
+
+    if (data is Map) {
+      const encoder = JsonEncoder.withIndent('  ');
+      return encoder.convert(data);
+    }
+
+    return data.toString();
+  }
+
+  Map<String, String> _injectSettingsUserAgent({
+    required Map<String, String> headers,
+    required String? userAgent,
+  }) {
+    if (userAgent == null) {
+      return headers;
+    }
+
+    final hasManualUserAgent = headers.keys.any(
+      (key) => key.trim().toLowerCase() == 'user-agent',
+    );
+    if (hasManualUserAgent) {
+      return headers;
+    }
+
+    return <String, String>{...headers, 'User-Agent': userAgent};
   }
 }

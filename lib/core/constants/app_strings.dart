@@ -106,6 +106,95 @@ abstract final class AppStrings {
   static const requestEditorOAuth2ExpiresIn = 'Expires In';
   static const requestEditorOAuth2Copied = 'Copied';
   static const requestEditorOAuth2NoValue = '—';
+  static const cookiesTitle = 'Cookies';
+  static const cookiesManageTitle = 'Manage Cookies';
+  static const cookiesNoCookiesTitle = 'No Cookies';
+  static const cookiesNoCookiesMessage =
+      'No cookies found. Tap + to add a new cookie.';
+  static const cookiesManageLink = 'Manage Cookies';
+  static const cookiesAllDomains = 'All Domains';
+  static const cookiesAddTitle = 'Add Cookie';
+  static const cookiesEditTitle = 'Edit Cookie';
+  static const cookiesName = 'Name';
+  static const cookiesDomain = 'Domain';
+  static const cookiesValue = 'Value';
+  static const cookiesPath = 'Path';
+  static const cookiesExpires = 'Expires';
+  static const cookiesSameSite = 'SameSite';
+  static const cookiesSession = 'Session';
+  static const cookiesDeleteTitle = 'Delete Item?';
+  static const cookiesDeleteMessage =
+      'Are you sure you would like to delete this item?';
+  static const cookiesDeleteAction = 'Delete';
+  static const cookiesEditAction = 'Edit';
+  static const cookiesSecure = 'Secure';
+  static const cookiesHttpOnly = 'HttpOnly';
+  static const cookiesEmptyManageMessage =
+      'No cookies have been saved yet. Tap + to add a new cookie.';
+  static const testsTitle = 'Tests';
+  static const testsNoTestsTitle = 'No Tests';
+  static const testsNoTestsMessage =
+      'Add tests to validate your API responses';
+  static const testsAddTitle = 'New Test';
+  static const testsEditTitle = 'Edit Test';
+  static const testsDeleteTitle = 'Delete Item?';
+  static const testsDeleteMessage =
+      'Are you sure you would like to delete this item?';
+  static const testsDeleteAction = 'Delete';
+  static const testsEditAction = 'Edit';
+  static const testsType = 'Test Type';
+  static const testsTypePlaceholder = 'Select Test Type';
+  static const testsComparator = 'Comparator';
+  static const testsExpectedValue = 'Expected Value';
+  static const testsMinValue = 'Min Value';
+  static const testsMaxValue = 'Max Value';
+  static const testsHeaderName = 'Header Name';
+  static const testsCookieName = 'Cookie Name';
+  static const testsJsonPath = 'JSON Path';
+  static const testsXPath = 'XPath';
+  static const testsTimeUnit = 'Time Unit';
+  static const testsSizeUnit = 'Size Unit';
+  static const testsCaseSensitive = 'Case-Sensitive';
+  static const testsUpdateValue = 'Update Value';
+  static const testsNoResultsTitle = 'No Tests Available';
+  static const testsNoResultsMessage =
+      'No tests have been created for this request';
+  static const testsNoResponseRunMessage = 'No tests were run for this request.';
+  static const requestSettingsTitle = 'Settings';
+  static const requestSettingsSavedResponsesInHistory =
+      'Saved responses in history';
+  static const requestSettingsTimeoutIntervalInSeconds =
+      'Timeout Interval in Seconds';
+  static const requestSettingsUserAgent = 'User-Agent';
+  static const requestSettingsFollowRedirects = 'Follow Redirects';
+  static const requestSettingsSendCookies = 'Send Cookies';
+  static const requestSettingsStoreCookies = 'Store Cookies';
+  static const requestSettingsVerifySsl = 'Verify SSL';
+  static const requestSettingsSavedResponsesError =
+      'Saved responses in history must be between 0 and 100.';
+  static const requestSettingsTimeoutError =
+      'Timeout must be between 1 and 600 seconds.';
+  static const requestSettingsDisableSslWarning =
+      'Disabling SSL verification is unsafe and should only be used for debugging.';
+  static const requestResponseViewRequest = 'Request';
+  static const requestResponseViewMetrics = 'Metrics';
+  static const requestResponseViewTests = 'Tests';
+  static const requestResponseViewCookies = 'Cookies';
+  static const requestResponseViewHeaders = 'Headers';
+  static const requestResponseViewBody = 'Body';
+  static const requestResponseNoHeaders = 'No Headers';
+  static const requestResponseNoCookies = 'No Cookies';
+  static const requestResponseNoMetrics = 'No Metrics';
+  static const requestResponseRequestHeaders = 'Headers';
+  static const requestResponseRequestBody = 'Body';
+  static const requestResponseRequestBodyEmpty = '<empty>';
+  static const requestResponseSentCookies = 'Sent Cookies';
+  static const requestResponseReceivedCookies = 'Received Cookies';
+  static const requestResponseStatus = 'Status';
+  static const requestResponseSize = 'Size';
+  static const requestResponseDuration = 'Duration';
+  static const requestResponseMethod = 'Method';
+  static const requestResponseUrl = 'URL';
   static const savedCredentialsTitle = 'Saved Credentials';
   static const savedCredentialsEmptyTitle = 'No Saved Credentials';
   static const savedCredentialsEmptyMessage =

@@ -274,9 +274,11 @@ class _RequestAuthApplier {
       url: request.url,
       queryParameters: queryParameters ?? request.queryParameters,
       headers: headers ?? request.headers,
+      tests: request.tests,
       variables: request.variables,
       body: request.body,
       auth: auth ?? request.auth,
+      settings: request.settings,
       timeout: request.timeout,
       verifySsl: request.verifySsl,
     );

@@ -48,7 +48,10 @@ import 'api_key_presets.dart';
 import 'method_notes/method_header_note.dart';
 import 'oauth2_token_details_sheet.dart';
 import 'request_modal_sheet.dart';
+import 'request_cookies_sheet.dart';
 import 'request_response_sheet.dart';
+import 'request_settings_sheet.dart';
+import 'request_tests_sheet.dart';
 import 'saved_credentials_sheet.dart';
 
 /// Presents the request editor as a full-screen sheet backed by a real request draft.
@@ -249,15 +252,24 @@ class _RequestEditorSheetState extends State<_RequestEditorSheet> {
   }
 
   Future<void> _openCookies() async {
-    // TODO: Open request cookie management for the current request.
+    await showRequestCookiesSheet(
+      context,
+      requestUrl: context.read<RequestEditorCubit>().state.draft.url,
+    );
   }
 
   Future<void> _openTests() async {
-    // TODO: Open request test scripts for the current request.
+    await showRequestTestsSheet(
+      context,
+      requestEditorCubit: context.read<RequestEditorCubit>(),
+    );
   }
 
   Future<void> _openRequestSettings() async {
-    // TODO: Open request-specific settings for the current request.
+    await showRequestSettingsSheet(
+      context,
+      requestEditorCubit: context.read<RequestEditorCubit>(),
+    );
   }
 
   Future<bool> _confirmCloseIfNeeded(RequestEditorState state) async {

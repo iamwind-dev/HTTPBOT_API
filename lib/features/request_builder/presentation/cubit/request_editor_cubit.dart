@@ -4,6 +4,8 @@ import '../../domain/entities/request_auth_draft.dart';
 import '../../domain/entities/request_body_draft.dart';
 import '../../domain/entities/request_draft.dart';
 import '../../domain/entities/request_key_value.dart';
+import '../../domain/entities/request_settings.dart';
+import '../../domain/entities/request_test.dart';
 import '../../domain/entities/requests_method.dart';
 import '../../domain/helpers/api_key_auth_ui_sync.dart';
 import '../../domain/helpers/content_type_header_updater.dart';
@@ -215,6 +217,22 @@ class RequestEditorCubit extends Cubit<RequestEditorState> {
     );
   }
 
+  void updateTests(List<RequestTest> tests) {
+    emit(state.copyWith(draft: state.draft.copyWith(tests: tests)));
+  }
+
+  void updateSettings(RequestSettings settings) {
+    emit(
+      state.copyWith(
+        draft: state.draft.copyWith(
+          settings: settings,
+          timeout: Duration(seconds: settings.timeoutSeconds),
+          verifySsl: settings.verifySsl,
+        ),
+      ),
+    );
+  }
+
   void addHeader() {
     updateHeaders([
       ...state.draft.headers,
@@ -380,18 +398,15 @@ class RequestEditorCubit extends Cubit<RequestEditorState> {
 
   /// Updates the timeout using whole seconds to match the current mobile form.
   void updateTimeoutSeconds(int timeoutSeconds) {
-    emit(
-      state.copyWith(
-        draft: state.draft.copyWith(
-          timeout: Duration(seconds: timeoutSeconds.clamp(1, 3600)),
-        ),
-      ),
+    final nextSettings = state.draft.settings.copyWith(
+      timeoutSeconds: timeoutSeconds.clamp(1, 600),
     );
+    updateSettings(nextSettings);
   }
 
   /// Updates whether SSL verification stays enabled for execution.
   void updateVerifySsl(bool verifySsl) {
-    emit(state.copyWith(draft: state.draft.copyWith(verifySsl: verifySsl)));
+    updateSettings(state.draft.settings.copyWith(verifySsl: verifySsl));
   }
 
   /// Applies every header that is derived from body or auth editor state.
