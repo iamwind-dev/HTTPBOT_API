@@ -67,8 +67,10 @@ class _SavedCredentialsSheet extends StatelessWidget {
     ),
   );
 
-  Future<void> _openCreateAuth(BuildContext context) =>
-      showCreateAuthSheet(context, cubit: context.read<ManageCredentialsCubit>());
+  Future<void> _openCreateAuth(BuildContext context) => showCreateAuthSheet(
+    context,
+    cubit: context.read<ManageCredentialsCubit>(),
+  );
 }
 
 class _Header extends StatelessWidget {
@@ -210,7 +212,9 @@ class _CredentialTile extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         key: ValueKey<String>(AppWidgetKeys.savedCredentialsItemAt(index)),
-        borderRadius: const BorderRadius.all(Radius.circular(AppRadius.xxLarge)),
+        borderRadius: const BorderRadius.all(
+          Radius.circular(AppRadius.xxLarge),
+        ),
         onTap: () => _apply(context),
         onLongPress: () => _showDeleteSheet(context),
         child: DecoratedBox(

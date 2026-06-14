@@ -8,15 +8,18 @@ class CollectionsListItem extends StatelessWidget {
     super.key,
     required this.item,
     required this.onTap,
+    required this.onMoreTap,
   });
 
   final CollectionItemModel item;
   final VoidCallback onTap;
+  final VoidCallback onMoreTap;
   @override
   Widget build(BuildContext context) {
     final colors = context.appColors;
     return InkWell(
       onTap: onTap,
+      onLongPress: onMoreTap,
       borderRadius: BorderRadius.circular(18),
       child: Column(
         children: [
@@ -29,7 +32,6 @@ class CollectionsListItem extends StatelessWidget {
                   colors.methodGet,
                   BlendMode.srcIn,
                 ),
-
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -53,9 +55,16 @@ class CollectionsListItem extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 10),
-              Icon(
-                Icons.arrow_forward_ios,
-                color: colors.secondary.withValues(alpha: 0.3),
+              InkWell(
+                onTap: onMoreTap,
+                borderRadius: BorderRadius.circular(18),
+                child: Padding(
+                  padding: const EdgeInsets.all(4),
+                  child: Icon(
+                    Icons.more_horiz_rounded,
+                    color: colors.secondary.withValues(alpha: 0.6),
+                  ),
+                ),
               ),
             ],
           ),
@@ -63,7 +72,6 @@ class CollectionsListItem extends StatelessWidget {
           Divider(color: colors.divider, thickness: 1),
         ],
       ),
-
     );
   }
 }

@@ -287,6 +287,44 @@ class RequestEditorCubit extends Cubit<RequestEditorState> {
     updateBody(state.draft.body.copyWith(type: type));
   }
 
+  /// Turns the current draft into a GraphQL request using the HTTPBot-style defaults.
+  void enableGraphQlMode() {
+    final nextGraphQl = state.draft.body.graphQl.copyWith(
+      query: state.draft.body.graphQl.query,
+      variables: state.draft.body.graphQl.variables,
+    );
+    final nextHeaders = _upsertJsonContentTypeHeader(state.draft.headers);
+    final nextBody = state.draft.body.copyWith(
+      type: RequestBodyType.graphql,
+      graphQl: nextGraphQl,
+    );
+    final syncedAuthFields = _syncAuthFields(
+      method: HttpMethod.post,
+      url: state.draft.url,
+      queryParameters: state.draft.queryParameters,
+      headers: nextHeaders,
+      body: nextBody,
+      auth: state.draft.auth,
+    );
+
+    emit(
+      state.copyWith(
+        draft: state.draft.copyWith(
+          method: HttpMethod.post,
+          body: nextBody,
+          queryParameters: syncedAuthFields.queryParameters,
+          headers: _syncDerivedHeaders(
+            method: HttpMethod.post,
+            url: state.draft.url,
+            headers: syncedAuthFields.headers,
+            body: nextBody,
+            auth: state.draft.auth,
+          ),
+        ),
+      ),
+    );
+  }
+
   /// Replaces the URL-encoded item collection used by the active body editor.
   void updateUrlEncodedBodyItems(List<KeyValueItem> items) {
     updateBody(state.draft.body.copyWith(urlEncoded: items));
@@ -452,5 +490,37 @@ class RequestEditorCubit extends Cubit<RequestEditorState> {
       queryParameters: apiKeySyncedFields.queryParameters,
       headers: apiKeySyncedFields.headers,
     );
+  }
+
+  List<KeyValueItem> _upsertJsonContentTypeHeader(List<KeyValueItem> headers) {
+    final nextHeaders = <KeyValueItem>[];
+    var updated = false;
+
+    for (final header in headers) {
+      if (header.key.trim().toLowerCase() == 'content-type') {
+        if (!updated) {
+          nextHeaders.add(
+            header.copyWith(
+              key: 'Content-Type',
+              value: 'application/json',
+              isEnabled: true,
+              description: '',
+            ),
+          );
+          updated = true;
+        }
+        continue;
+      }
+
+      nextHeaders.add(header);
+    }
+
+    if (!updated) {
+      nextHeaders.add(
+        const KeyValueItem(key: 'Content-Type', value: 'application/json'),
+      );
+    }
+
+    return List<KeyValueItem>.unmodifiable(nextHeaders);
   }
 }

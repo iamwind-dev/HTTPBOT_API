@@ -6,7 +6,10 @@ import 'package:httpbot_api/features/request_builder/domain/entities/request_key
 import 'package:httpbot_api/features/request_builder/domain/entities/resolved_request.dart';
 import 'package:httpbot_api/features/request_builder/domain/usecases/apply_request_auth_use_case.dart';
 
-ResolvedRequest _resolved(RequestAuthDraft auth, {List<KeyValueItem>? headers}) {
+ResolvedRequest _resolved(
+  RequestAuthDraft auth, {
+  List<KeyValueItem>? headers,
+}) {
   return ResolvedRequest(
     request: RequestDraft(
       url: 'https://example.com',
@@ -30,8 +33,9 @@ void main() {
     expect(result.request.auth.type, AuthType.ntlm);
     expect(result.authIssues, isEmpty);
     expect(
-      result.request.headers
-          .where((h) => h.key.toLowerCase() == 'authorization'),
+      result.request.headers.where(
+        (h) => h.key.toLowerCase() == 'authorization',
+      ),
       isEmpty,
     );
   });

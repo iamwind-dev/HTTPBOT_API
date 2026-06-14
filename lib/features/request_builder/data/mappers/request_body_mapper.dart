@@ -106,7 +106,10 @@ dynamic buildRawBody(RequestBodyDraft body) {
 Map<String, dynamic> buildGraphQLBody(RequestBodyDraft body) =>
     <String, dynamic>{
       'query': body.graphQl.query,
-      'variables': _parseGraphQlVariables(body.graphQl.variables),
+      if (body.graphQl.variables.trim().isNotEmpty)
+        'variables': _parseGraphQlVariables(body.graphQl.variables),
+      if (body.graphQl.operationName?.trim().isNotEmpty ?? false)
+        'operationName': body.graphQl.operationName!.trim(),
     };
 
 Map<String, dynamic> _parseGraphQlVariables(String variables) {

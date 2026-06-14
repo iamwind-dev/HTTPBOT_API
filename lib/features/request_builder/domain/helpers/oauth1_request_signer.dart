@@ -117,10 +117,7 @@ class OAuth1RequestSigner {
         '${method.wireName.toUpperCase()}&'
         '${oauth1PercentEncode(normalizedBaseUrl)}&'
         '${oauth1PercentEncode(normalizedParameters)}';
-    final signature = _buildSignature(
-      auth: auth,
-      baseString: baseString,
-    );
+    final signature = _buildSignature(auth: auth, baseString: baseString);
     if (signature == null) {
       return const OAuth1SigningResult(
         isValid: false,
@@ -162,7 +159,9 @@ class OAuth1RequestSigner {
       'oauth_signature_method': auth.signatureMethod.trim(),
       'oauth_timestamp': timestamp,
       'oauth_nonce': nonce,
-      'oauth_version': auth.version.trim().isEmpty ? '1.0' : auth.version.trim(),
+      'oauth_version': auth.version.trim().isEmpty
+          ? '1.0'
+          : auth.version.trim(),
     };
 
     _addOptionalParameter(
@@ -263,22 +262,23 @@ List<MapEntry<String, String>> _collectUrlEncodedBodyParameters(
 }
 
 String _normalizeParameters(List<MapEntry<String, String>> parameters) {
-  final encoded = parameters
-      .map(
-        (entry) => (
-          key: oauth1PercentEncode(entry.key),
-          value: oauth1PercentEncode(entry.value),
-        ),
-      )
-      .toList(growable: false)
-    ..sort((left, right) {
-      final keyComparison = left.key.compareTo(right.key);
-      if (keyComparison != 0) {
-        return keyComparison;
-      }
+  final encoded =
+      parameters
+          .map(
+            (entry) => (
+              key: oauth1PercentEncode(entry.key),
+              value: oauth1PercentEncode(entry.value),
+            ),
+          )
+          .toList(growable: false)
+        ..sort((left, right) {
+          final keyComparison = left.key.compareTo(right.key);
+          if (keyComparison != 0) {
+            return keyComparison;
+          }
 
-      return left.value.compareTo(right.value);
-    });
+          return left.value.compareTo(right.value);
+        });
 
   return encoded.map((entry) => '${entry.key}=${entry.value}').join('&');
 }
@@ -345,22 +345,26 @@ String _extractBodyText(RequestBodyDraft body) => switch (body.type) {
   RequestBodyType.raw => body.raw.content,
   RequestBodyType.graphql =>
     body.graphQl.query.trim().isEmpty &&
-            body.graphQl.variables.trim().isEmpty
+            body.graphQl.variables.trim().isEmpty &&
+            (body.graphQl.operationName?.trim().isEmpty ?? true)
         ? ''
         : jsonEncode({
             'query': body.graphQl.query,
-            'variables': body.graphQl.variables.trim().isEmpty
-                ? <String, String>{}
-                : jsonDecode(body.graphQl.variables),
+            if (body.graphQl.variables.trim().isNotEmpty)
+              'variables': jsonDecode(body.graphQl.variables),
+            if (body.graphQl.operationName?.trim().isNotEmpty ?? false)
+              'operationName': body.graphQl.operationName!.trim(),
           }),
-  RequestBodyType.xWwwFormUrlEncoded => body.urlEncoded
-      .where((item) => item.isEnabled && item.key.trim().isNotEmpty)
-      .map((item) => '${item.key}=${item.value}')
-      .join('&'),
-  RequestBodyType.formData => body.formData
-      .where((item) => item.isEnabled && item.key.trim().isNotEmpty)
-      .map((item) => '${item.key}=${item.value}')
-      .join('&'),
+  RequestBodyType.xWwwFormUrlEncoded =>
+    body.urlEncoded
+        .where((item) => item.isEnabled && item.key.trim().isNotEmpty)
+        .map((item) => '${item.key}=${item.value}')
+        .join('&'),
+  RequestBodyType.formData =>
+    body.formData
+        .where((item) => item.isEnabled && item.key.trim().isNotEmpty)
+        .map((item) => '${item.key}=${item.value}')
+        .join('&'),
 };
 
 String _buildAuthorizationHeader(
@@ -378,8 +382,7 @@ String _buildAuthorizationHeader(
     ..sort((left, right) => left.key.compareTo(right.key));
 
   for (final entry in entries) {
-    final encodedValue =
-        entry.key == 'oauth_signature' && !encodeSignature
+    final encodedValue = entry.key == 'oauth_signature' && !encodeSignature
         ? entry.value
         : oauth1PercentEncode(entry.value);
     headerSegments.add('${entry.key}="$encodedValue"');

@@ -342,7 +342,9 @@ class _InfoCard extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: colors.surfaceMuted,
-        borderRadius: const BorderRadius.all(Radius.circular(AppRadius.xxLarge)),
+        borderRadius: const BorderRadius.all(
+          Radius.circular(AppRadius.xxLarge),
+        ),
       ),
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.large),

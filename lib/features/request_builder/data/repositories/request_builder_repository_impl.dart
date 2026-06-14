@@ -327,6 +327,7 @@ class RequestBuilderRepositoryImpl implements RequestBuilderRepository {
     'graphQl': {
       'query': body.graphQl.query,
       'variables': body.graphQl.variables,
+      'operationName': body.graphQl.operationName,
     },
   };
 
@@ -390,6 +391,7 @@ class RequestBuilderRepositoryImpl implements RequestBuilderRepository {
       GraphQlBodyDraft(
         query: json['query'] as String? ?? '',
         variables: json['variables'] as String? ?? '',
+        operationName: json['operationName'] as String?,
       );
 
   Map<String, Object?> _requestAuthDraftToJson(RequestAuthDraft auth) => {

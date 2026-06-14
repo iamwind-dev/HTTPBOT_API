@@ -1,8 +1,7 @@
 import '../../domain/entities/request_key_value.dart';
 
-bool headersContainsContentType(Map<String, dynamic> headers) => headers.keys.any(
-  (key) => key.trim().toLowerCase() == 'content-type',
-);
+bool headersContainsContentType(Map<String, dynamic> headers) =>
+    headers.keys.any((key) => key.trim().toLowerCase() == 'content-type');
 
 Map<String, dynamic> buildEnabledHeaders(List<KeyValueItem> headers) {
   final enabledHeaders = <String, dynamic>{};
@@ -41,8 +40,5 @@ Map<String, dynamic> applyAutoContentTypeIfNeeded({
     return headers;
   }
 
-  return <String, dynamic>{
-    ...headers,
-    'Content-Type': trimmedContentType,
-  };
+  return <String, dynamic>{...headers, 'Content-Type': trimmedContentType};
 }

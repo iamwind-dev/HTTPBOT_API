@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:httpbot_api/core/widgets/body_empty.dart';
@@ -11,6 +13,7 @@ import 'package:httpbot_api/features/request_builder/domain/entities/request_var
 import 'package:httpbot_api/features/request_builder/domain/entities/requests_method.dart';
 import 'package:httpbot_api/features/request_builder/domain/usecases/get_request_variable_store_use_case.dart';
 import 'package:httpbot_api/features/request_builder/presentation/widgets/request_editor_sheet.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../../core/theme/app_theme_context.dart';
 import '../../../../injection/injection.dart';
@@ -51,17 +54,152 @@ class CollectionScreen extends StatelessWidget {
                   separatorBuilder: (_, __) => const SizedBox(height: 12),
                   itemBuilder: (context, index) {
                     final item = collections[index];
+                    final collection = state.items[index];
                     return CollectionsListItem(
                       item: item,
                       onTap: () => context
                           .read<CollectionCubit>()
                           .selectCollection(item.id),
+                      onMoreTap: () =>
+                          _showCollectionActions(context, collection),
                     );
                   },
                 ),
         );
       },
     );
+  }
+
+  Future<void> _showCollectionActions(
+    BuildContext context,
+    ImportedCollectionEntity collection,
+  ) async {
+    final action = await showModalBottomSheet<_CollectionListAction>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _CollectionActionsSheet(collection: collection),
+    );
+
+    if (!context.mounted || action == null) {
+      return;
+    }
+
+    switch (action) {
+      case _CollectionListAction.edit:
+        await _editCollection(context, collection);
+        break;
+      case _CollectionListAction.export:
+        await _exportCollection(collection);
+        break;
+      case _CollectionListAction.delete:
+        await _deleteCollection(context, collection);
+        break;
+    }
+  }
+
+  Future<void> _editCollection(
+    BuildContext context,
+    ImportedCollectionEntity collection,
+  ) async {
+    final updated = await Navigator.of(context).push<ImportedCollectionEntity>(
+      MaterialPageRoute<ImportedCollectionEntity>(
+        fullscreenDialog: true,
+        builder: (_) => _CollectionEditorPage(collection: collection),
+      ),
+    );
+
+    if (!context.mounted || updated == null) {
+      return;
+    }
+
+    context.read<CollectionCubit>().updateCollection(updated);
+  }
+
+  Future<void> _deleteCollection(
+    BuildContext context,
+    ImportedCollectionEntity collection,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (_) => _DeleteCollectionDialog(collectionName: collection.name),
+    );
+
+    if (!context.mounted || confirmed != true) {
+      return;
+    }
+
+    context.read<CollectionCubit>().deleteCollection(collection.id);
+  }
+
+  Future<void> _exportCollection(ImportedCollectionEntity collection) {
+    final payload = _collectionToExportPayload(collection);
+    return SharePlus.instance.share(
+      ShareParams(
+        subject: collection.name,
+        text: const JsonEncoder.withIndent('  ').convert(payload),
+      ),
+    );
+  }
+
+  Map<String, Object?> _collectionToExportPayload(
+    ImportedCollectionEntity collection,
+  ) {
+    return <String, Object?>{
+      'name': collection.name,
+      'description': collection.description,
+      'auth': collection.authLabel,
+      'variables': collection.variables
+          .map(
+            (variable) => <String, Object?>{
+              'name': variable.name,
+              'value': variable.value,
+              'enabled': variable.isEnabled,
+            },
+          )
+          .toList(growable: false),
+      'folders': collection.folders.map(_folderToJson).toList(growable: false),
+      'requests': collection.rootRequests
+          .map(_requestToJson)
+          .toList(growable: false),
+    };
+  }
+
+  Map<String, Object?> _folderToJson(ImportedCollectionFolderEntity folder) {
+    return <String, Object?>{
+      'name': folder.name,
+      'folders': folder.folders.map(_folderToJson).toList(growable: false),
+      'requests': folder.requests.map(_requestToJson).toList(growable: false),
+    };
+  }
+
+  Map<String, Object?> _requestToJson(ImportedCollectionRequestEntity request) {
+    return <String, Object?>{
+      'method': request.method,
+      'title': request.title,
+      'url': request.url,
+      'baseUrlValue': request.baseUrlValue,
+      'queryParameters': request.queryParameters
+          .map(
+            (item) => <String, Object?>{
+              'name': item.name,
+              'value': item.value,
+              'description': item.description,
+            },
+          )
+          .toList(growable: false),
+      'headers': request.headers
+          .map(
+            (item) => <String, Object?>{
+              'name': item.name,
+              'value': item.value,
+              'description': item.description,
+            },
+          )
+          .toList(growable: false),
+      'bodyContentType': request.bodyContentType,
+      'bodyContent': request.bodyContent,
+    };
   }
 }
 
@@ -179,7 +317,7 @@ class _CollectionDetailViewState extends State<_CollectionDetailView> {
       initialDraft: _draftFromImportedRequest(request),
       variableStore: _mergeImportedVariables(
         existingStore: variableStore,
-        request: request,
+        collection: widget.collection,
       ),
     );
   }
@@ -215,15 +353,18 @@ class _CollectionDetailViewState extends State<_CollectionDetailView> {
       queryParameters: queryParameters,
       headers: headers,
       body: body,
-      variables: request.baseUrlValue.trim().isEmpty
-          ? const <RequestVariable>[]
-          : <RequestVariable>[
-              RequestVariable(
-                key: 'baseUrl',
-                initialValue: request.baseUrlValue,
-                description: 'Imported from the selected API spec',
-              ),
-            ],
+      variables: widget.collection.variables
+          .where(
+            (variable) => variable.isEnabled && variable.name.trim().isNotEmpty,
+          )
+          .map(
+            (variable) => RequestVariable(
+              key: variable.name,
+              initialValue: variable.value,
+              description: 'Imported from the selected collection',
+            ),
+          )
+          .toList(growable: false),
     );
   }
 
@@ -277,24 +418,35 @@ class _CollectionDetailViewState extends State<_CollectionDetailView> {
 
   RequestVariableStore _mergeImportedVariables({
     required RequestVariableStore existingStore,
-    required ImportedCollectionRequestEntity request,
+    required ImportedCollectionEntity collection,
   }) {
-    if (request.baseUrlValue.trim().isEmpty) {
+    if (collection.variables.isEmpty) {
       return existingStore;
     }
 
     final variables =
         existingStore.globalVariables
-            .where((variable) => variable.key != 'baseUrl')
+            .where(
+              (variable) => !collection.variables.any(
+                (collectionVariable) => collectionVariable.name == variable.key,
+              ),
+            )
             .toList(growable: true)
-          ..insert(
+          ..insertAll(
             0,
-            RequestVariable(
-              key: 'baseUrl',
-              initialValue: request.baseUrlValue,
-              scope: RequestVariableScope.global,
-              description: 'Imported from the selected API spec',
-            ),
+            collection.variables
+                .where(
+                  (variable) =>
+                      variable.isEnabled && variable.name.trim().isNotEmpty,
+                )
+                .map(
+                  (variable) => RequestVariable(
+                    key: variable.name,
+                    initialValue: variable.value,
+                    scope: RequestVariableScope.global,
+                    description: 'Imported from the selected collection',
+                  ),
+                ),
           );
 
     return RequestVariableStore(
@@ -693,4 +845,584 @@ class _VisibleFolderNode {
   final String key;
   final List<_VisibleFolderNode> visibleChildren;
   final List<ImportedCollectionRequestEntity> visibleRequests;
+}
+
+enum _CollectionListAction { edit, export, delete }
+
+class _CollectionActionsSheet extends StatelessWidget {
+  const _CollectionActionsSheet({required this.collection});
+
+  final ImportedCollectionEntity collection;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        child: Align(
+          alignment: Alignment.bottomLeft,
+          child: Container(
+            width: 280,
+            decoration: BoxDecoration(
+              color: colors.surface,
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: [
+                BoxShadow(
+                  color: colors.modalShadow,
+                  blurRadius: 24,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _CollectionActionMenuItem(
+                  icon: Icons.edit_outlined,
+                  label: 'Edit',
+                  onTap: () =>
+                      Navigator.of(context).pop(_CollectionListAction.edit),
+                ),
+                _CollectionActionMenuItem(
+                  icon: Icons.ios_share_rounded,
+                  label: 'Export...',
+                  onTap: () =>
+                      Navigator.of(context).pop(_CollectionListAction.export),
+                ),
+                _CollectionActionMenuItem(
+                  icon: Icons.delete_outline_rounded,
+                  label: 'Delete',
+                  danger: true,
+                  onTap: () =>
+                      Navigator.of(context).pop(_CollectionListAction.delete),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CollectionActionMenuItem extends StatelessWidget {
+  const _CollectionActionMenuItem({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.danger = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool danger;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+    final foreground = danger ? const Color(0xFFFF453A) : colors.textPrimary;
+
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        child: Row(
+          children: [
+            Icon(icon, size: 28, color: foreground),
+            const SizedBox(width: 18),
+            Text(
+              label,
+              style: TextStyle(
+                color: foreground,
+                fontSize: 18,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DeleteCollectionDialog extends StatelessWidget {
+  const _DeleteCollectionDialog({required this.collectionName});
+
+  final String collectionName;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      child: Container(
+        decoration: BoxDecoration(
+          color: colors.surface,
+          borderRadius: BorderRadius.circular(28),
+        ),
+        padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Delete Collection',
+              style: TextStyle(
+                color: colors.textPrimary,
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Are you sure you would like to delete "$collectionName"?',
+              style: TextStyle(
+                color: colors.textSecondary,
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: _CollectionDialogButton(
+                    label: 'Cancel',
+                    onTap: () => Navigator.of(context).pop(false),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _CollectionDialogButton(
+                    label: 'Delete',
+                    danger: true,
+                    onTap: () => Navigator.of(context).pop(true),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CollectionDialogButton extends StatelessWidget {
+  const _CollectionDialogButton({
+    required this.label,
+    required this.onTap,
+    this.danger = false,
+  });
+
+  final String label;
+  final VoidCallback onTap;
+  final bool danger;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(22),
+        onTap: onTap,
+        child: Ink(
+          height: 56,
+          decoration: BoxDecoration(
+            color: colors.surfaceMuted,
+            borderRadius: BorderRadius.circular(22),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: danger ? const Color(0xFFFF453A) : colors.textPrimary,
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CollectionEditorPage extends StatefulWidget {
+  const _CollectionEditorPage({required this.collection});
+
+  final ImportedCollectionEntity collection;
+
+  @override
+  State<_CollectionEditorPage> createState() => _CollectionEditorPageState();
+}
+
+class _CollectionEditorPageState extends State<_CollectionEditorPage> {
+  late final TextEditingController _nameController;
+  late List<ImportedCollectionVariableEntity> _variables;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.collection.name);
+    _variables = widget.collection.variables.isEmpty
+        ? <ImportedCollectionVariableEntity>[
+            const ImportedCollectionVariableEntity(name: 'baseUrl', value: ''),
+          ]
+        : widget.collection.variables
+              .map((item) => item.copyWith())
+              .toList(growable: true);
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+
+    return Scaffold(
+      backgroundColor: colors.background,
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+          children: [
+            Row(
+              children: [
+                _HeaderCircleButton(
+                  icon: Icons.close_rounded,
+                  onTap: () => Navigator.of(context).pop(),
+                ),
+                Expanded(
+                  child: Text(
+                    'Collection',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: colors.textPrimary,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                _HeaderCircleButton(
+                  icon: Icons.check_rounded,
+                  filled: true,
+                  onTap: _save,
+                ),
+              ],
+            ),
+            const SizedBox(height: 28),
+            _EditorCard(
+              child: TextField(
+                controller: _nameController,
+                style: TextStyle(
+                  color: colors.textPrimary,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w500,
+                ),
+                decoration: const InputDecoration(
+                  border: InputBorder.none,
+                  hintText: 'Collection name',
+                ),
+              ),
+            ),
+            const SizedBox(height: 28),
+            Text(
+              'Variables',
+              style: TextStyle(
+                color: colors.textSecondary,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 14),
+            _EditorCard(
+              padding: EdgeInsets.zero,
+              child: Column(
+                children: [
+                  for (var i = 0; i < _variables.length; i++) ...[
+                    _VariableRow(
+                      variable: _variables[i],
+                      onChanged: (updated) =>
+                          setState(() => _variables[i] = updated),
+                    ),
+                    if (i != _variables.length - 1)
+                      Divider(
+                        height: 1,
+                        thickness: 1,
+                        color: colors.divider,
+                        indent: 64,
+                      ),
+                  ],
+                  Divider(
+                    height: 1,
+                    thickness: 1,
+                    color: colors.divider,
+                    indent: 64,
+                  ),
+                  InkWell(
+                    onTap: () => setState(() {
+                      _variables.add(
+                        const ImportedCollectionVariableEntity(
+                          name: '',
+                          value: '',
+                        ),
+                      );
+                    }),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 18,
+                      ),
+                      child: Row(
+                        children: [
+                          const _VariableStateDot(
+                            icon: Icons.add_rounded,
+                            filled: true,
+                          ),
+                          const SizedBox(width: 18),
+                          Text(
+                            'Add',
+                            style: TextStyle(
+                              color: colors.textSecondary,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 28),
+            Text(
+              'Auth',
+              style: TextStyle(
+                color: colors.textSecondary,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 14),
+            _EditorCard(
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Auth',
+                      style: TextStyle(
+                        color: colors.textPrimary,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    widget.collection.authLabel,
+                    style: TextStyle(
+                      color: colors.methodGet,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  Icon(
+                    Icons.unfold_more_rounded,
+                    color: colors.methodGet,
+                    size: 22,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _save() {
+    final cleanedVariables = _variables
+        .where((item) => item.name.trim().isNotEmpty)
+        .map(
+          (item) =>
+              item.copyWith(name: item.name.trim(), value: item.value.trim()),
+        )
+        .toList(growable: false);
+
+    Navigator.of(context).pop(
+      widget.collection.copyWith(
+        name: _nameController.text.trim().isEmpty
+            ? widget.collection.name
+            : _nameController.text.trim(),
+        variables: cleanedVariables,
+      ),
+    );
+  }
+}
+
+class _EditorCard extends StatelessWidget {
+  const _EditorCard({required this.child, this.padding});
+
+  final Widget child;
+  final EdgeInsetsGeometry? padding;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(26),
+      ),
+      padding:
+          padding ?? const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      child: child,
+    );
+  }
+}
+
+class _HeaderCircleButton extends StatelessWidget {
+  const _HeaderCircleButton({
+    required this.icon,
+    required this.onTap,
+    this.filled = false,
+  });
+
+  final IconData icon;
+  final VoidCallback onTap;
+  final bool filled;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: Ink(
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(
+            color: filled ? colors.methodGet : colors.surface,
+            shape: BoxShape.circle,
+            border: Border.all(color: colors.border.withValues(alpha: 0.3)),
+          ),
+          child: Icon(
+            icon,
+            color: filled ? colors.textOnPrimary : colors.textPrimary,
+            size: 30,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _VariableRow extends StatelessWidget {
+  const _VariableRow({required this.variable, required this.onChanged});
+
+  final ImportedCollectionVariableEntity variable;
+  final ValueChanged<ImportedCollectionVariableEntity> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+      child: Row(
+        children: [
+          InkWell(
+            onTap: () =>
+                onChanged(variable.copyWith(isEnabled: !variable.isEnabled)),
+            child: _VariableStateDot(
+              icon: variable.isEnabled
+                  ? Icons.check_rounded
+                  : Icons.circle_outlined,
+              filled: variable.isEnabled,
+            ),
+          ),
+          const SizedBox(width: 18),
+          Expanded(
+            child: TextFormField(
+              initialValue: variable.name,
+              onChanged: (value) => onChanged(variable.copyWith(name: value)),
+              decoration: const InputDecoration(
+                border: InputBorder.none,
+                hintText: 'Variable',
+              ),
+              style: TextStyle(
+                color: colors.textPrimary,
+                fontSize: 18,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: TextFormField(
+              initialValue: variable.value,
+              textAlign: TextAlign.right,
+              onChanged: (value) => onChanged(variable.copyWith(value: value)),
+              decoration: const InputDecoration(
+                border: InputBorder.none,
+                hintText: 'Value',
+              ),
+              style: TextStyle(
+                color: colors.textSecondary,
+                fontSize: 18,
+                fontWeight: FontWeight.w400,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _VariableStateDot extends StatelessWidget {
+  const _VariableStateDot({required this.icon, required this.filled});
+
+  final IconData icon;
+  final bool filled;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+
+    return Container(
+      width: 36,
+      height: 36,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: filled ? colors.methodGet : Colors.transparent,
+        border: Border.all(
+          color: filled ? colors.methodGet : colors.border,
+          width: 2,
+        ),
+      ),
+      child: Icon(
+        icon,
+        size: 22,
+        color: filled ? colors.textOnPrimary : colors.secondary,
+      ),
+    );
+  }
 }

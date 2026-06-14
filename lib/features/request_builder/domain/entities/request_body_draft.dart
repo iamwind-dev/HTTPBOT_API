@@ -55,23 +55,38 @@ class RawBodyDraft extends Equatable {
 }
 
 class GraphQlBodyDraft extends Equatable {
-  const GraphQlBodyDraft({this.query = '', this.variables = ''});
+  const GraphQlBodyDraft({
+    this.query = '',
+    this.variables = '',
+    this.operationName,
+  });
 
   final String query;
   final String variables;
+  final String? operationName;
 
   /// Returns true when any GraphQL-specific input has been provided.
-  bool get hasContent => query.trim().isNotEmpty || variables.trim().isNotEmpty;
+  bool get hasContent =>
+      query.trim().isNotEmpty ||
+      variables.trim().isNotEmpty ||
+      (operationName?.trim().isNotEmpty ?? false);
 
   /// Creates a new GraphQL draft with any updated fields applied.
-  GraphQlBodyDraft copyWith({String? query, String? variables}) =>
-      GraphQlBodyDraft(
-        query: query ?? this.query,
-        variables: variables ?? this.variables,
-      );
+  GraphQlBodyDraft copyWith({
+    String? query,
+    String? variables,
+    String? operationName,
+    bool clearOperationName = false,
+  }) => GraphQlBodyDraft(
+    query: query ?? this.query,
+    variables: variables ?? this.variables,
+    operationName: clearOperationName
+        ? null
+        : operationName ?? this.operationName,
+  );
 
   @override
-  List<Object> get props => [query, variables];
+  List<Object?> get props => [query, variables, operationName];
 }
 
 class RequestBodyDraft extends Equatable {

@@ -19,13 +19,11 @@ import 'request_modal_sheet.dart';
 
 /// Opens the response viewer as a full-screen slide-up sheet layered above the editor.
 Future<RequestEditorResponseBadgeData?> showRequestResponseSheet(
-  BuildContext context,
-  {
+  BuildContext context, {
   required RequestEditorCubit requestEditorCubit,
   required RequestSendBloc requestSendBloc,
   required RequestVariableStore variableStore,
-}
-) => showRequestModalSheet<RequestEditorResponseBadgeData>(
+}) => showRequestModalSheet<RequestEditorResponseBadgeData>(
   context,
   builder: (context) => MultiBlocProvider(
     providers: [
@@ -70,10 +68,7 @@ class _RequestResponseSheet extends StatelessWidget {
 
     context.read<RequestSendBloc>().add(const RequestSendResetRequested());
     context.read<RequestSendBloc>().add(
-      RequestSendRequested(
-        draft: draft,
-        variableStore: variableStore,
-      ),
+      RequestSendRequested(draft: draft, variableStore: variableStore),
     );
   }
 
@@ -251,14 +246,16 @@ class _ResponseBody extends StatelessWidget {
     }
 
     final parsedResponse = state.parsedResponse;
-    if (parsedResponse != null && parsedResponse.formattedBody.trim().isNotEmpty) {
+    if (parsedResponse != null &&
+        parsedResponse.formattedBody.trim().isNotEmpty) {
       return parsedResponse.formattedBody;
     }
 
     final issueLines = <String>[
       if (state.errorMessage.trim().isNotEmpty) state.errorMessage.trim(),
       ...state.resolutionIssues.map(
-        (issue) => 'Resolution issue: ${issue.placeholder} (${issue.type.name})',
+        (issue) =>
+            'Resolution issue: ${issue.placeholder} (${issue.type.name})',
       ),
       ...state.authIssues.map((issue) => 'Auth issue: ${issue.message}'),
     ];
