@@ -226,7 +226,7 @@ class _OpenApiDirectoryDialogState extends State<OpenApiDirectoryDialog> {
       if (statusCode != null) {
         return 'Unable to load the OpenAPI directory. HTTP $statusCode.';
       }
-
+ 
       return 'Unable to load the OpenAPI directory. Please check your internet connection.';
     }
 
