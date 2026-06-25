@@ -5,6 +5,7 @@ import '../entities/request_draft.dart';
 import '../entities/request_key_value.dart';
 import '../entities/resolved_request.dart';
 import '../helpers/api_key_auth_ui_sync.dart';
+import '../helpers/hawk_auth_ui_sync.dart';
 import '../helpers/jwt_auth_ui_sync.dart';
 import '../helpers/oauth1_auth_ui_sync.dart';
 import '../helpers/oauth2_auth_ui_sync.dart';
@@ -56,21 +57,12 @@ class _RequestAuthApplier {
         return _applyOAuth2Auth();
       case AuthType.ntlm:
         return _applyNtlmAuth();
+      case AuthType.digest:
+        return _applyDigestAuth();
       case AuthType.oauth1:
         return _applyOAuth1Auth();
-      case AuthType.digest:
       case AuthType.hawk:
-        return _buildResult(
-          request: resolvedRequest.request,
-          authIssues: <RequestAuthIssue>[
-            RequestAuthIssue(
-              type: RequestAuthIssueType.unsupportedAuthType,
-              authType: auth.type,
-              message:
-                  '${auth.type.label} auth is declared in the model but not implemented yet.',
-            ),
-          ],
-        );
+        return _applyHawkAuth();
     }
   }
 
@@ -314,6 +306,85 @@ class _RequestAuthApplier {
         value: ntlm.password,
         message: 'Password is required for NTLM.',
       ),
+    ];
+
+    return _buildResult(request: resolvedRequest.request, authIssues: issues);
+  }
+
+  /// Re-synchronizes the UI-backed Hawk Authorization header once right before execution.
+  AuthAppliedRequest _applyHawkAuth() {
+    final hawk = resolvedRequest.request.auth.hawk;
+    final issues = <RequestAuthIssue>[
+      if (hawk.identifier.trim().isEmpty)
+        const RequestAuthIssue(
+          type: RequestAuthIssueType.missingCredentials,
+          authType: AuthType.hawk,
+          fieldName: 'identifier',
+          message: 'Auth ID is required for Hawk.',
+        ),
+      if (hawk.key.isEmpty)
+        const RequestAuthIssue(
+          type: RequestAuthIssueType.missingCredentials,
+          authType: AuthType.hawk,
+          fieldName: 'key',
+          message: 'Auth Key is required for Hawk.',
+        ),
+    ];
+
+    if (issues.isNotEmpty) {
+      return _buildResult(request: resolvedRequest.request, authIssues: issues);
+    }
+
+    final syncedFields = syncHawkAuthToRequestFields(
+      headers: resolvedRequest.request.headers,
+      auth: resolvedRequest.request.auth,
+      method: resolvedRequest.request.method,
+      url: resolvedRequest.request.url,
+      body: resolvedRequest.request.body,
+    );
+
+    if (syncedFields.errorMessage != null) {
+      return _buildResult(
+        request: resolvedRequest.request,
+        authIssues: <RequestAuthIssue>[
+          RequestAuthIssue(
+            type: RequestAuthIssueType.invalidConfiguration,
+            authType: AuthType.hawk,
+            message: syncedFields.errorMessage!,
+          ),
+        ],
+      );
+    }
+
+    return _buildResult(
+      request: _rebuildRequest(
+        headers: syncedFields.headers,
+        auth: const RequestAuthDraft.none(),
+      ),
+    );
+  }
+
+  /// Validates Digest credentials and passes the request through with auth intact.
+  ///
+  /// Digest authenticates during send (manual header or 401 challenge retry),
+  /// so no Authorization header is synced into the request here.
+  AuthAppliedRequest _applyDigestAuth() {
+    final digest = resolvedRequest.request.auth.digest;
+    final issues = <RequestAuthIssue>[
+      if (digest.username.trim().isEmpty)
+        const RequestAuthIssue(
+          type: RequestAuthIssueType.missingCredentials,
+          authType: AuthType.digest,
+          fieldName: 'username',
+          message: 'Username is required for Digest.',
+        ),
+      if (digest.password.isEmpty)
+        const RequestAuthIssue(
+          type: RequestAuthIssueType.missingCredentials,
+          authType: AuthType.digest,
+          fieldName: 'password',
+          message: 'Password is required for Digest.',
+        ),
     ];
 
     return _buildResult(request: resolvedRequest.request, authIssues: issues);

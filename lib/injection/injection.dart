@@ -74,6 +74,7 @@ import '../features/request_builder/domain/usecases/parse_response_use_case.dart
 import '../features/request_builder/domain/usecases/apply_request_auth_use_case.dart';
 import '../features/request_builder/domain/usecases/save_current_request_draft_session_use_case.dart';
 import '../features/request_builder/domain/usecases/save_request_draft_use_case.dart';
+import '../features/request_builder/domain/usecases/save_request_variable_store_use_case.dart';
 import '../features/request_builder/domain/usecases/save_saved_request_drafts_use_case.dart';
 import '../features/request_builder/domain/usecases/resolve_request_use_case.dart';
 import '../features/request_builder/presentation/bloc/request_send_bloc.dart';
@@ -213,6 +214,9 @@ void configureDependencies() {
     );
   getIt.registerLazySingleton(
     () => GetRequestVariableStoreUseCase(getIt<RequestBuilderRepository>()),
+  );
+  getIt.registerLazySingleton(
+    () => SaveRequestVariableStoreUseCase(getIt<RequestBuilderRepository>()),
   );
   getIt.registerLazySingleton(
     () => ExecuteRequestUseCase(getIt<RequestExecutionRepository>()),

@@ -18,9 +18,11 @@ import '../../domain/entities/request_auth_draft.dart';
 import '../../domain/entities/oauth2_token_details_entity.dart';
 import '../../domain/entities/request_body_draft.dart';
 import '../../domain/entities/request_draft.dart';
+import '../../domain/entities/request_environment.dart';
 import '../../domain/entities/request_key_value.dart';
 import '../../domain/entities/request_variable_store.dart';
 import '../../domain/entities/requests_method.dart';
+import '../../domain/helpers/curl_command_builder.dart';
 import '../../domain/entities/saved_graphql_query_entity.dart';
 import '../../domain/entities/saved_graphql_variable_entity.dart';
 import '../../domain/entities/graphql_schema_view_entity.dart';
@@ -30,6 +32,10 @@ import '../../domain/helpers/oauth2_implicit_authorize_url_builder.dart';
 import '../../domain/helpers/oauth2_implicit_callback_parser.dart';
 import '../../domain/helpers/oauth2_pkce.dart';
 import '../../domain/usecases/exchange_oauth2_authorization_code_use_case.dart';
+import '../../domain/usecases/get_request_variable_store_use_case.dart';
+import '../../domain/usecases/request_oauth2_client_credentials_token_use_case.dart';
+import '../../domain/usecases/request_oauth2_password_credentials_token_use_case.dart';
+import '../../domain/usecases/save_request_variable_store_use_case.dart';
 import '../../domain/usecases/fetch_graphql_schema_use_case.dart';
 import '../../domain/usecases/get_saved_graphql_queries_use_case.dart';
 import '../../domain/usecases/get_saved_graphql_variables_use_case.dart';
@@ -40,19 +46,24 @@ import '../../domain/usecases/save_saved_graphql_variables_use_case.dart';
 import '../bloc/request_send_bloc.dart';
 import '../bloc/request_send_event.dart';
 import '../bloc/request_send_state.dart';
+import '../cubit/environment_menu_cubit.dart';
 import '../cubit/request_editor_cubit.dart';
 import '../cubit/request_editor_state.dart';
 import '../models/request_editor_response_badge_data.dart';
 import '../models/request_editor_result.dart';
 import 'api_key_presets.dart';
+import 'global_variables_sheet.dart';
+import 'manage_environments_sheet.dart';
 import 'method_notes/method_header_note.dart';
 import 'oauth2_token_details_sheet.dart';
+import 'request_environment_menu.dart';
 import 'request_modal_sheet.dart';
 import 'request_cookies_sheet.dart';
 import 'request_response_sheet.dart';
 import 'request_settings_sheet.dart';
 import 'request_tests_sheet.dart';
 import 'saved_credentials_sheet.dart';
+import 'view_curl_sheet.dart';
 
 /// Presents the request editor as a full-screen sheet backed by a real request draft.
 Future<RequestEditorResult?> showRequestEditorSheet(
@@ -140,6 +151,20 @@ class _RequestEditorSheet extends StatefulWidget {
 class _RequestEditorSheetState extends State<_RequestEditorSheet> {
   bool _isClosing = false;
   RequestEditorResponseBadgeData? _lastResponseBadge;
+  late final EnvironmentMenuCubit _environmentMenuCubit = EnvironmentMenuCubit(
+    getIt<GetRequestVariableStoreUseCase>(),
+    getIt<SaveRequestVariableStoreUseCase>(),
+    initialStore: widget.variableStore,
+  );
+
+  /// Returns the freshest variable store so sends honor the active environment.
+  RequestVariableStore get _variableStore => _environmentMenuCubit.state.store;
+
+  @override
+  void dispose() {
+    unawaited(_environmentMenuCubit.close());
+    super.dispose();
+  }
 
   /// Lets the method badge in the header update the request method in place.
   Future<void> _openMethodPicker(HttpMethod currentMethod) async {
@@ -187,7 +212,7 @@ class _RequestEditorSheetState extends State<_RequestEditorSheet> {
     requestSendBloc.add(
       RequestSendRequested(
         draft: editorCubit.state.draft,
-        variableStore: widget.variableStore,
+        variableStore: _variableStore,
       ),
     );
 
@@ -195,7 +220,7 @@ class _RequestEditorSheetState extends State<_RequestEditorSheet> {
       context,
       requestEditorCubit: editorCubit,
       requestSendBloc: requestSendBloc,
-      variableStore: widget.variableStore,
+      variableStore: _variableStore,
     );
 
     if (!mounted || badgeData == null) {
@@ -212,10 +237,8 @@ class _RequestEditorSheetState extends State<_RequestEditorSheet> {
 
   Future<void> _handleMoreAction(_RequestEditorMoreAction action) async {
     switch (action) {
-      case _RequestEditorMoreAction.globalVariables:
-        await _openGlobalVariables();
-      case _RequestEditorMoreAction.manageEnvironment:
-        await _openManageEnvironment();
+      case _RequestEditorMoreAction.environment:
+        await _openEnvironmentMenu();
       case _RequestEditorMoreAction.useGraphQl:
         _useGraphQlMode();
       case _RequestEditorMoreAction.viewCurl:
@@ -231,12 +254,81 @@ class _RequestEditorSheetState extends State<_RequestEditorSheet> {
     }
   }
 
-  Future<void> _openGlobalVariables() async {
-    // TODO: Open the global variables editor.
+  /// Opens the Environment submenu and routes the chosen action.
+  Future<void> _openEnvironmentMenu() async {
+    await _environmentMenuCubit.loadAvailableEnvironments();
+    if (!mounted) {
+      return;
+    }
+
+    final selection = await showRequestEnvironmentMenu(
+      context,
+      store: _variableStore,
+    );
+    if (!mounted || selection == null) {
+      return;
+    }
+
+    switch (selection.action) {
+      case RequestEnvironmentMenuAction.globalVariables:
+        await _openGlobalVariables();
+      case RequestEnvironmentMenuAction.manageEnvironments:
+        await _openManageEnvironments();
+      case RequestEnvironmentMenuAction.deactivate:
+        await _environmentMenuCubit.deactivateEnvironment();
+      case RequestEnvironmentMenuAction.select:
+        await _environmentMenuCubit.selectEnvironment(selection.environmentId);
+      case RequestEnvironmentMenuAction.edit:
+        await _editEnvironment(selection.environmentId);
+    }
   }
 
-  Future<void> _openManageEnvironment() async {
-    // TODO: Open the environment management screen.
+  Future<void> _openGlobalVariables() async {
+    final savedVariables = await showGlobalVariablesSheet(
+      context,
+      variables: _variableStore.globalVariables,
+    );
+    if (savedVariables == null) {
+      return;
+    }
+
+    await _environmentMenuCubit.saveGlobalVariables(savedVariables);
+  }
+
+  Future<void> _openManageEnvironments() =>
+      showManageEnvironmentsSheet(context, cubit: _environmentMenuCubit);
+
+  Future<void> _editEnvironment(String environmentId) async {
+    RequestEnvironment? environment;
+    for (final item in _variableStore.environments) {
+      if (item.id == environmentId) {
+        environment = item;
+        break;
+      }
+    }
+    if (environment == null) {
+      return;
+    }
+
+    final result = await showEnvironmentEditorSheet(
+      context,
+      environment: environment,
+      allowDelete: true,
+    );
+    if (result == null) {
+      return;
+    }
+
+    final environments = result.deleted
+        ? _variableStore.environments
+              .where((item) => item.id != environmentId)
+              .toList(growable: false)
+        : _variableStore.environments
+              .map(
+                (item) => item.id == environmentId ? result.environment! : item,
+              )
+              .toList(growable: false);
+    await _environmentMenuCubit.saveEnvironments(environments);
   }
 
   void _useGraphQlMode() {
@@ -244,7 +336,13 @@ class _RequestEditorSheetState extends State<_RequestEditorSheet> {
   }
 
   Future<void> _viewCurl() async {
-    // TODO: Generate and present the current request as a cURL command.
+    final draft = context.read<RequestEditorCubit>().state.draft;
+    final curlCommand = const CurlCommandBuilder().build(
+      draft: draft,
+      variableStore: _variableStore,
+    );
+
+    await showViewCurlSheet(context, curlCommand: curlCommand);
   }
 
   Future<void> _exportHar() async {
@@ -430,8 +528,6 @@ class _RequestEditorSheetState extends State<_RequestEditorSheet> {
                         queryParameters: draft.queryParameters,
                         headers: draft.headers,
                       ),
-                      const SizedBox(height: AppSpacing.large),
-                      _OptionsSection(draft: draft),
                       const SizedBox(height: AppSpacing.xxxLarge),
                     ],
                   ),
@@ -476,8 +572,7 @@ class _RequestEditorSheetState extends State<_RequestEditorSheet> {
 enum _UnsavedChangesAction { save, discard, cancel }
 
 enum _RequestEditorMoreAction {
-  globalVariables,
-  manageEnvironment,
+  environment,
   useGraphQl,
   viewCurl,
   exportHar,
@@ -488,8 +583,7 @@ enum _RequestEditorMoreAction {
 
 extension _RequestEditorMoreActionLabel on _RequestEditorMoreAction {
   String get label => switch (this) {
-    _RequestEditorMoreAction.globalVariables => 'Global Variables',
-    _RequestEditorMoreAction.manageEnvironment => 'Manage Environment',
+    _RequestEditorMoreAction.environment => 'Environment',
     _RequestEditorMoreAction.useGraphQl => 'Use GraphQL',
     _RequestEditorMoreAction.viewCurl => 'View curl',
     _RequestEditorMoreAction.exportHar => 'Export as HAR',
@@ -596,12 +690,11 @@ class _RequestEditorMoreButton extends StatelessWidget {
         onSelected: onSelected,
         itemBuilder: (context) => [
           PopupMenuItem<_RequestEditorMoreAction>(
-            value: _RequestEditorMoreAction.globalVariables,
-            child: const _RequestEditorMoreMenuRow(label: 'Global Variables'),
-          ),
-          PopupMenuItem<_RequestEditorMoreAction>(
-            value: _RequestEditorMoreAction.manageEnvironment,
-            child: const _RequestEditorMoreMenuRow(label: 'Manage Environment'),
+            value: _RequestEditorMoreAction.environment,
+            child: const _RequestEditorMoreMenuRow(
+              label: 'Environment',
+              showChevron: true,
+            ),
           ),
           for (final action in [
             _RequestEditorMoreAction.useGraphQl,
@@ -620,17 +713,33 @@ class _RequestEditorMoreButton extends StatelessWidget {
 }
 
 class _RequestEditorMoreMenuRow extends StatelessWidget {
-  const _RequestEditorMoreMenuRow({required this.label});
+  const _RequestEditorMoreMenuRow({
+    required this.label,
+    this.showChevron = false,
+  });
 
   final String label;
+  final bool showChevron;
 
   @override
-  Widget build(BuildContext context) => Text(
-    label,
-    style: TextStyle(
-      color: context.appColors.textPrimary,
-      fontWeight: FontWeight.w600,
-    ),
+  Widget build(BuildContext context) => Row(
+    children: [
+      Expanded(
+        child: Text(
+          label,
+          style: TextStyle(
+            color: context.appColors.textPrimary,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+      if (showChevron)
+        Icon(
+          CupertinoIcons.chevron_right,
+          size: AppSpacing.large,
+          color: context.appColors.textSecondary,
+        ),
+    ],
   );
 }
 
@@ -3770,10 +3879,8 @@ class _AuthSection extends StatelessWidget {
           AuthType.oauth1 => _OAuth1AuthFields(oauth1: auth.oauth1),
           AuthType.oauth2 => _OAuth2AuthFields(oauth2: auth.oauth2),
           AuthType.ntlm => _NtlmAuthFields(ntlm: auth.ntlm),
-          _ => const _InfoCard(
-            message:
-                'This auth mode is not supported in the request editor yet.',
-          ),
+          AuthType.digest => _DigestAuthFields(digest: auth.digest),
+          AuthType.hawk => _HawkAuthFields(hawk: auth.hawk),
         },
         if (auth.type != AuthType.none) ...[
           const SizedBox(height: AppSpacing.small),
@@ -3923,6 +4030,12 @@ class _GeneratedAuthFieldsCard extends StatelessWidget {
             : AppStrings.requestEditorOAuth2ImplementedLater,
       AuthType.ntlm =>
         'NTLM authenticates the connection during send; no Authorization header is added here.',
+      AuthType.digest =>
+        'Digest authenticates during send. Leave Realm and Nonce empty to negotiate them from the server 401 challenge.',
+      AuthType.hawk =>
+        authorizationHeader != null
+            ? 'Hawk is synced to Headers as Authorization.'
+            : 'Enter Auth ID and Auth Key to auto-add Authorization in Headers.',
       _ => 'This auth mode does not generate editor-managed headers yet.',
     };
 
@@ -4200,6 +4313,233 @@ class _NtlmAuthFields extends StatelessWidget {
           value: ntlm.domain,
           label: 'Domain',
           onChanged: (value) => updateNtlm(ntlm.copyWith(domain: value)),
+        ),
+      ],
+    );
+  }
+}
+
+class _HawkAuthFields extends StatelessWidget {
+  const _HawkAuthFields({required this.hawk});
+
+  final HawkAuthDraft hawk;
+
+  /// Builds the Hawk credential and signing fields used to MAC the request.
+  @override
+  Widget build(BuildContext context) {
+    final editorCubit = context.read<RequestEditorCubit>();
+
+    void updateHawk(HawkAuthDraft next) {
+      editorCubit.updateAuth(editorCubit.state.draft.auth.copyWith(hawk: next));
+    }
+
+    return Column(
+      children: [
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField('hawk_auth_id'),
+          value: hawk.identifier,
+          label: 'Auth ID',
+          onChanged: (value) => updateHawk(hawk.copyWith(identifier: value)),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField('hawk_auth_key'),
+          value: hawk.key,
+          label: 'Auth Key',
+          obscureText: true,
+          onChanged: (value) => updateHawk(hawk.copyWith(key: value)),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorDropdownField<String>(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField('hawk_algorithm'),
+          label: 'Algorithm',
+          value: hawk.selectedAlgorithm.label,
+          items: HawkAlgorithm.values
+              .map(
+                (algorithm) => DropdownMenuItem<String>(
+                  value: algorithm.label,
+                  child: Text(algorithm.label),
+                ),
+              )
+              .toList(growable: false),
+          onChanged: (value) {
+            if (value != null) {
+              updateHawk(hawk.copyWith(algorithm: value));
+            }
+          },
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField('hawk_user'),
+          value: hawk.user,
+          label: 'User',
+          onChanged: (value) => updateHawk(hawk.copyWith(user: value)),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField('hawk_nonce'),
+          value: hawk.nonce,
+          label: 'Nonce',
+          onChanged: (value) => updateHawk(hawk.copyWith(nonce: value)),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField('hawk_ext'),
+          value: hawk.ext,
+          label: 'Ext',
+          onChanged: (value) => updateHawk(hawk.copyWith(ext: value)),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField('hawk_app'),
+          value: hawk.app,
+          label: 'App',
+          onChanged: (value) => updateHawk(hawk.copyWith(app: value)),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField('hawk_dlg'),
+          value: hawk.delegation,
+          label: 'Dlg',
+          onChanged: (value) => updateHawk(hawk.copyWith(delegation: value)),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField('hawk_timestamp'),
+          value: hawk.timestamp,
+          label: 'Timestamp',
+          hintText: 'Enter Value',
+          onChanged: (value) => updateHawk(hawk.copyWith(timestamp: value)),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        DecoratedBox(
+          decoration: _buildCardDecoration(context),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.large,
+              vertical: AppSpacing.medium,
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Include Payload Hash',
+                    style: Theme.of(context).textTheme.bodyLarge,
+                  ),
+                ),
+                Switch.adaptive(
+                  key: const ValueKey<String>(
+                    'requests_editor_auth_hawk_include_payload_hash_switch',
+                  ),
+                  value: hawk.includePayloadHash,
+                  onChanged: (value) =>
+                      updateHawk(hawk.copyWith(includePayloadHash: value)),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DigestAuthFields extends StatelessWidget {
+  const _DigestAuthFields({required this.digest});
+
+  final DigestAuthDraft digest;
+
+  /// Builds the Digest credential and challenge fields used to sign the request.
+  @override
+  Widget build(BuildContext context) {
+    final editorCubit = context.read<RequestEditorCubit>();
+
+    void updateDigest(DigestAuthDraft next) {
+      editorCubit.updateAuth(
+        editorCubit.state.draft.auth.copyWith(digest: next),
+      );
+    }
+
+    return Column(
+      children: [
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField('digest_username'),
+          value: digest.username,
+          label: 'Username',
+          onChanged: (value) => updateDigest(digest.copyWith(username: value)),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField('digest_password'),
+          value: digest.password,
+          label: 'Password',
+          obscureText: true,
+          onChanged: (value) => updateDigest(digest.copyWith(password: value)),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField('digest_realm'),
+          value: digest.realm,
+          label: 'Realm',
+          onChanged: (value) => updateDigest(digest.copyWith(realm: value)),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField('digest_nonce'),
+          value: digest.nonce,
+          label: 'Nonce',
+          onChanged: (value) => updateDigest(digest.copyWith(nonce: value)),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorDropdownField<String>(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField('digest_algorithm'),
+          label: 'Algorithm',
+          value: digest.selectedAlgorithm.label,
+          items: DigestAlgorithm.values
+              .map(
+                (algorithm) => DropdownMenuItem<String>(
+                  value: algorithm.label,
+                  child: Text(algorithm.label),
+                ),
+              )
+              .toList(growable: false),
+          onChanged: (value) {
+            if (value != null) {
+              updateDigest(digest.copyWith(algorithm: value));
+            }
+          },
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField('digest_qop'),
+          value: digest.qop,
+          label: 'QOP',
+          onChanged: (value) => updateDigest(digest.copyWith(qop: value)),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField('digest_nonce_count'),
+          value: digest.nonceCount,
+          label: 'Nonce Count',
+          onChanged: (value) =>
+              updateDigest(digest.copyWith(nonceCount: value)),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField(
+            'digest_client_nonce',
+          ),
+          value: digest.clientNonce,
+          label: 'Client Nonce',
+          onChanged: (value) =>
+              updateDigest(digest.copyWith(clientNonce: value)),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _EditorTextField(
+          fieldKey: AppWidgetKeys.requestsEditorAuthField('digest_opaque'),
+          value: digest.opaque,
+          label: 'Opaque',
+          onChanged: (value) => updateDigest(digest.copyWith(opaque: value)),
         ),
       ],
     );
@@ -6501,66 +6841,6 @@ class _EditorSummaryRow extends StatelessWidget {
       ),
     ),
   );
-}
-
-class _OptionsSection extends StatelessWidget {
-  const _OptionsSection({required this.draft});
-
-  final RequestDraft draft;
-
-  /// Builds the timeout and SSL verification controls for the current request.
-  @override
-  Widget build(BuildContext context) {
-    final editorCubit = context.read<RequestEditorCubit>();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const _EditorSectionTitle(title: AppStrings.requestEditorOptions),
-        const SizedBox(height: AppSpacing.small),
-        _EditorTextField(
-          fieldKey: AppWidgetKeys.requestsEditorTimeoutField,
-          value: draft.timeout.inSeconds.toString(),
-          label: AppStrings.requestEditorTimeout,
-          keyboardType: TextInputType.number,
-          onChanged: (value) {
-            final timeoutSeconds = int.tryParse(value.trim());
-
-            if (timeoutSeconds != null) {
-              editorCubit.updateTimeoutSeconds(timeoutSeconds);
-            }
-          },
-        ),
-        const SizedBox(height: AppSpacing.small),
-        DecoratedBox(
-          decoration: _buildCardDecoration(context),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.large,
-              vertical: AppSpacing.medium,
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    AppStrings.requestEditorVerifySsl,
-                    style: Theme.of(context).textTheme.bodyLarge,
-                  ),
-                ),
-                Switch.adaptive(
-                  key: const ValueKey<String>(
-                    AppWidgetKeys.requestsEditorVerifySslSwitch,
-                  ),
-                  value: draft.verifySsl,
-                  onChanged: editorCubit.updateVerifySsl,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
 }
 
 class _SendButton extends StatelessWidget {

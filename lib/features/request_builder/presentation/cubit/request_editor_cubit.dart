@@ -10,6 +10,7 @@ import '../../domain/entities/requests_method.dart';
 import '../../domain/helpers/api_key_auth_ui_sync.dart';
 import '../../domain/helpers/content_type_header_updater.dart';
 import '../../domain/helpers/jwt_auth_ui_sync.dart';
+import '../../domain/helpers/hawk_auth_ui_sync.dart';
 import '../../domain/helpers/oauth1_auth_ui_sync.dart';
 import '../../domain/helpers/oauth2_auth_ui_sync.dart';
 import '../../domain/usecases/sync_request_auth_headers_use_case.dart';
@@ -490,9 +491,16 @@ class RequestEditorCubit extends Cubit<RequestEditorState> {
       url: url,
       body: body,
     );
+    final hawkSyncedFields = syncHawkAuthToRequestFields(
+      headers: oauth1SyncedFields.headers,
+      auth: auth,
+      method: method,
+      url: url,
+      body: body,
+    );
     final oauth2SyncedFields = syncOAuth2AuthToRequestFields(
       queryParameters: oauth1SyncedFields.queryParameters,
-      headers: oauth1SyncedFields.headers,
+      headers: hawkSyncedFields.headers,
       auth: auth,
     );
     final apiKeySyncedFields = syncApiKeyAuthToRequestFields(

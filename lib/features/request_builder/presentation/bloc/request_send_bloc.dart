@@ -46,11 +46,16 @@ class RequestSendBloc extends Bloc<RequestSendEvent, RequestSendState> {
     RequestSendRequested event,
     Emitter<RequestSendState> emit,
   ) async {
-    final validationError = _validateDraft(event.draft);
+    final resolvedRequest = _resolveRequestUseCase(
+      draft: event.draft,
+      variableStore: event.variableStore,
+    );
+    final validationError = _validateDraft(resolvedRequest.request);
     if (validationError != null) {
       emit(
         RequestSendState.blocked(
           draft: event.draft,
+          resolvedRequest: resolvedRequest,
           errorMessage: validationError,
         ),
       );
@@ -59,10 +64,6 @@ class RequestSendBloc extends Bloc<RequestSendEvent, RequestSendState> {
 
     emit(RequestSendState.sending(draft: event.draft));
 
-    final resolvedRequest = _resolveRequestUseCase(
-      draft: event.draft,
-      variableStore: event.variableStore,
-    );
     final authAppliedRequest = _applyRequestAuthUseCase(
       resolvedRequest: resolvedRequest,
     );
@@ -120,7 +121,7 @@ class RequestSendBloc extends Bloc<RequestSendEvent, RequestSendState> {
       return 'Request URL must be a valid absolute URL.';
     }
 
-    final authValidation = validateAuthBeforeSend(draft.auth);
+    final authValidation = validateAuthBeforeSend(draft.auth, body: draft.body);
     if (!authValidation.isValid) {
       return authValidation.errorMessage;
     }

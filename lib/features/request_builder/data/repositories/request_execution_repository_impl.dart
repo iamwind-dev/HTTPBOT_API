@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:dio/dio.dart';
 
+import '../../../../core/network/digest_http_client.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/network/ntlm_http_client.dart';
 import '../helpers/request_transport_inputs.dart';
@@ -20,12 +21,17 @@ class RequestExecutionRepositoryImpl implements RequestExecutionRepository {
     this._dioClient, {
     required HttpCookieRepository httpCookieRepository,
     NtlmHttpClient? ntlmHttpClient,
+    DigestHttpClient? digestHttpClient,
+  }) : _ntlmHttpClient = ntlmHttpClient ?? NtlmHttpClient(),
+       _digestHttpClient =
+           digestHttpClient ?? DigestHttpClient(dioClient: _dioClient);
   }) : _httpCookieRepository = httpCookieRepository,
        _ntlmHttpClient = ntlmHttpClient ?? NtlmHttpClient();
 
   final DioClient _dioClient;
   final HttpCookieRepository _httpCookieRepository;
   final NtlmHttpClient _ntlmHttpClient;
+  final DigestHttpClient _digestHttpClient;
 
   /// Sends the prepared request with Dio and maps raw transport data into a domain execution result.
   @override
@@ -45,6 +51,21 @@ class RequestExecutionRepositoryImpl implements RequestExecutionRepository {
       }
 
       return _ntlmHttpClient.execute(request);
+    }
+
+    if (request.appliedAuthType == AuthType.digest) {
+      final authValidation = validateAuthBeforeSend(request.request.auth);
+      if (!authValidation.isValid) {
+        return RequestExecutionResult(
+          request: request.request,
+          errorType: RequestExecutionErrorType.blocked,
+          errorMessage: authValidation.errorMessage ?? '',
+          resolutionIssues: request.resolutionIssues,
+          authIssues: request.authIssues,
+        );
+      }
+
+      return _digestHttpClient.execute(request);
     }
 
     final stopwatch = Stopwatch()..start();
