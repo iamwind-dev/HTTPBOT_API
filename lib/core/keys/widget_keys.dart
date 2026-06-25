@@ -33,6 +33,9 @@ abstract final class AppWidgetKeys {
   static const requestsResponseCloseButton = 'requests_response_close_button';
   static const requestsResponseSendButton = 'requests_response_send_button';
   static const requestsResponseSummaryBadge = 'requests_response_summary_badge';
+  static const viewCurlSheet = 'view_curl_sheet';
+  static const viewCurlCloseButton = 'view_curl_close_button';
+  static const viewCurlShareButton = 'view_curl_share_button';
   static const settingsList = 'settings_list';
   static const settingsBackButton = 'settings_back_button';
   static const settingsThemeModeSwitch = 'settings_theme_mode_switch';
@@ -114,4 +117,47 @@ abstract final class AppWidgetKeys {
   /// Builds a stable key for a saved credential list item by index.
   static String savedCredentialsItemAt(int index) =>
       'saved_credentials_item_$index';
+
+  static const requestsEnvironmentMenuSheet = 'requests_environment_menu_sheet';
+  static const requestsEnvironmentMenuGlobalVariables =
+      'requests_environment_menu_global_variables';
+  static const requestsEnvironmentMenuManage =
+      'requests_environment_menu_manage';
+  static const requestsEnvironmentMenuDeactivate =
+      'requests_environment_menu_deactivate';
+  static const requestsEnvironmentMenuEdit = 'requests_environment_menu_edit';
+  static const globalVariablesSheet = 'global_variables_sheet';
+  static const globalVariablesCloseButton = 'global_variables_close_button';
+  static const globalVariablesSaveButton = 'global_variables_save_button';
+  static const globalVariablesAddRow = 'global_variables_add_row';
+  static const globalVariablesKeyField = 'global_variables_key_field';
+  static const globalVariablesValueField = 'global_variables_value_field';
+  static const manageEnvironmentsSheet = 'manage_environments_sheet';
+  static const manageEnvironmentsAddButton = 'manage_environments_add_button';
+  static const manageEnvironmentsCloseButton =
+      'manage_environments_close_button';
+  static const manageEnvironmentsMoreButton = 'manage_environments_more_button';
+  static const manageEnvironmentsSourcePill = 'manage_environments_source_pill';
+  static const manageEnvironmentsEmptyState = 'manage_environments_empty_state';
+  static const environmentEditorSheet = 'environment_editor_sheet';
+  static const environmentEditorNameField = 'environment_editor_name_field';
+  static const environmentEditorSaveButton = 'environment_editor_save_button';
+  static const environmentEditorDeleteButton =
+      'environment_editor_delete_button';
+
+  /// Builds a stable key for a variable key input inside reusable variable rows.
+  static String variableRowsEditorKeyField(int index) =>
+      'variable_rows_editor_${index}_key';
+
+  /// Builds a stable key for a variable value input inside reusable variable rows.
+  static String variableRowsEditorValueField(int index) =>
+      'variable_rows_editor_${index}_value';
+
+  /// Builds a stable key for the variable row remove affordance.
+  static String variableRowsEditorRemoveButton(int index) =>
+      'variable_rows_editor_${index}_remove';
+
+  /// Builds a stable key for an environment row inside the Environment menu.
+  static String requestsEnvironmentMenuItem(String environmentId) =>
+      'requests_environment_menu_item_$environmentId';
 }

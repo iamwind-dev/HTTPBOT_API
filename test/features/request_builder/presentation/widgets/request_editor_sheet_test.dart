@@ -677,6 +677,170 @@ void main() {
         'NTLM authenticates the connection during send; no Authorization header is added here.',
       );
     });
+
+    testWidgets('should show every Digest credential and challenge field', (
+      tester,
+    ) async {
+      final robot = RequestEditorSheetRobot(tester);
+
+      await robot.pumpScreen(
+        initialDraft: const RequestDraft(
+          auth: RequestAuthDraft(type: AuthType.digest),
+        ),
+      );
+      await robot.openEditor();
+      await robot.enterAuthField('digest_username', 'alice');
+      await robot.enterAuthField('digest_password', 'secret');
+      await robot.enterAuthField('digest_realm', 'Protected Area');
+      await robot.enterAuthField('digest_nonce', 'abc123');
+      await robot.enterAuthField('digest_qop', 'auth');
+      await robot.enterAuthField('digest_nonce_count', '00000002');
+      await robot.enterAuthField('digest_client_nonce', 'xyz789');
+      await robot.enterAuthField('digest_opaque', 'def456');
+
+      robot.expectAuthFieldValue('digest_username', 'alice');
+      robot.expectAuthFieldValue('digest_password', 'secret');
+      robot.expectAuthFieldValue('digest_realm', 'Protected Area');
+      robot.expectAuthFieldValue('digest_nonce', 'abc123');
+      robot.expectAuthFieldValue('digest_qop', 'auth');
+      robot.expectAuthFieldValue('digest_nonce_count', '00000002');
+      robot.expectAuthFieldValue('digest_client_nonce', 'xyz789');
+      robot.expectAuthFieldValue('digest_opaque', 'def456');
+      expect(
+        find.byKey(
+          ValueKey<String>(
+            AppWidgetKeys.requestsEditorAuthField('digest_algorithm'),
+          ),
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('should auto-fill AWS system headers after typing the AWS '
+        'credentials', (tester) async {
+      final robot = RequestEditorSheetRobot(tester);
+
+      await robot.pumpScreen(
+        initialDraft: const RequestDraft(
+          url: 'https://example.amazonaws.com/test',
+        ),
+      );
+      await robot.openEditor();
+      await robot.selectAuthType(AuthType.awsSignature);
+      await robot.enterAuthField('aws_access_key', 'AKIA_TEST');
+      await robot.enterAuthField('aws_secret_key', 'SECRET_TEST');
+      await robot.enterAuthField('aws_region', 'ap-southeast-1');
+      await robot.enterAuthField('aws_service', 'execute-api');
+
+      final headerKeys = <String>[];
+      for (var index = 0; index < 4; index++) {
+        final keyField = tester.widget<TextFormField>(
+          find.byKey(
+            ValueKey<String>(
+              AppWidgetKeys.requestsEditorKeyValueKeyField('headers', index),
+            ),
+          ),
+        );
+        headerKeys.add(keyField.controller?.text.toLowerCase() ?? '');
+      }
+
+      expect(headerKeys, contains('host'));
+      expect(headerKeys, contains('x-amz-date'));
+      expect(headerKeys, contains('x-amz-content-sha256'));
+      expect(headerKeys, contains('authorization'));
+    });
+
+    testWidgets('should show every Hawk field and sync the Authorization '
+        'header', (tester) async {
+      final robot = RequestEditorSheetRobot(tester);
+
+      await robot.pumpScreen(
+        initialDraft: const RequestDraft(
+          url: 'https://example.com/resource?a=1',
+          auth: RequestAuthDraft(type: AuthType.hawk),
+        ),
+      );
+      await robot.openEditor();
+      await robot.enterAuthField('hawk_auth_id', 'dh37fgj492je');
+      await robot.enterAuthField('hawk_auth_key', 'hawk-key');
+      await robot.enterAuthField('hawk_user', 'alice');
+      await robot.enterAuthField('hawk_nonce', 'j4h3g2');
+      await robot.enterAuthField('hawk_ext', 'some-app-ext-data');
+      await robot.enterAuthField('hawk_app', 'app123');
+      await robot.enterAuthField('hawk_dlg', 'dlg456');
+      await robot.enterAuthField('hawk_timestamp', '1353832234');
+
+      robot.expectAuthFieldValue('hawk_auth_id', 'dh37fgj492je');
+      robot.expectAuthFieldValue('hawk_auth_key', 'hawk-key');
+      robot.expectAuthFieldValue('hawk_user', 'alice');
+      robot.expectAuthFieldValue('hawk_nonce', 'j4h3g2');
+      robot.expectAuthFieldValue('hawk_ext', 'some-app-ext-data');
+      robot.expectAuthFieldValue('hawk_app', 'app123');
+      robot.expectAuthFieldValue('hawk_dlg', 'dlg456');
+      robot.expectAuthFieldValue('hawk_timestamp', '1353832234');
+      expect(
+        find.byKey(
+          ValueKey<String>(
+            AppWidgetKeys.requestsEditorAuthField('hawk_algorithm'),
+          ),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(
+          const ValueKey<String>(
+            'requests_editor_auth_hawk_include_payload_hash_switch',
+          ),
+        ),
+        findsOneWidget,
+      );
+
+      robot.expectHeaderValue(
+        section: 'headers',
+        index: 0,
+        field: 'key',
+        value: 'Authorization',
+      );
+      final headerField = tester.widget<TextFormField>(
+        find.byKey(
+          ValueKey<String>(
+            AppWidgetKeys.requestsEditorKeyValueValueField('headers', 0),
+          ),
+        ),
+      );
+      expect(headerField.controller?.text, startsWith('Hawk id="dh37fgj492je"'));
+      expect(headerField.controller?.text, isNot(contains('hawk-key')));
+    });
+
+    testWidgets('should offer exactly the two Hawk algorithm options', (
+      tester,
+    ) async {
+      final robot = RequestEditorSheetRobot(tester);
+
+      await robot.pumpScreen(
+        initialDraft: const RequestDraft(
+          auth: RequestAuthDraft(type: AuthType.hawk),
+        ),
+      );
+      await robot.openEditor();
+      await robot.selectAuthFieldOption('hawk_algorithm', 'SHA-1');
+
+      robot.expectTextVisible('SHA-1');
+    });
+
+    testWidgets('should offer every Digest algorithm option', (tester) async {
+      final robot = RequestEditorSheetRobot(tester);
+
+      await robot.pumpScreen(
+        initialDraft: const RequestDraft(
+          auth: RequestAuthDraft(type: AuthType.digest),
+        ),
+      );
+      await robot.openEditor();
+      await robot.selectAuthFieldOption('digest_algorithm', 'SHA-256');
+
+      robot.expectTextVisible('SHA-256');
+    });
   });
 }
 

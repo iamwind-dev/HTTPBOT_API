@@ -14,6 +14,11 @@ class AwsAuthHeadersBuilder {
   final DateTime Function() _now;
 
   /// Builds AWS SigV4 headers using user-owned overrides where present.
+  ///
+  /// With a valid URL but incomplete credentials, the derivable headers
+  /// (Host, X-Amz-Date, X-Amz-Content-Sha256, X-Amz-Security-Token) are still
+  /// returned so the editor fills immediately; Authorization is only added
+  /// once every signing field is present, never with a stale signature.
   List<KeyValueItem>? build({
     required List<KeyValueItem> headers,
     required RequestAuthDraft auth,
@@ -30,16 +35,15 @@ class AwsAuthHeadersBuilder {
     final region = auth.aws.region.trim();
     final service = auth.aws.service.trim();
     final uri = Uri.tryParse(url);
-    if (accessKey.isEmpty ||
-        secretKey.isEmpty ||
-        region.isEmpty ||
-        service.isEmpty ||
-        uri == null ||
-        uri.scheme.isEmpty ||
-        uri.host.isEmpty) {
+    if (uri == null || uri.scheme.isEmpty || uri.host.isEmpty) {
       return null;
     }
 
+    final hasCompleteCredentials =
+        accessKey.isNotEmpty &&
+        secretKey.isNotEmpty &&
+        region.isNotEmpty &&
+        service.isNotEmpty;
     final currentTime = _now().toUtc();
     final host =
         _userDefinedHeaderValue(headers, 'host') ?? _hostHeaderValue(uri);
@@ -52,78 +56,82 @@ class AwsAuthHeadersBuilder {
     final sessionToken =
         _userDefinedHeaderValue(headers, 'x-amz-security-token') ??
         auth.aws.sessionToken.trim();
-    final canonicalHeaders = <String, String>{
-      'host': host.trim(),
-      'x-amz-content-sha256': payloadHash.trim(),
-      'x-amz-date': amzDate.trim(),
-      if (sessionToken.trim().isNotEmpty)
-        'x-amz-security-token': sessionToken.trim(),
-    };
-    final signedHeaderNames = canonicalHeaders.keys.toList(growable: false)
-      ..sort();
-    final canonicalHeadersText = signedHeaderNames
-        .map((key) => '$key:${canonicalHeaders[key]!.trim()}\n')
-        .join();
-    final canonicalRequest = [
-      method.wireName,
-      _canonicalUri(uri),
-      _canonicalQueryString(uri),
-      canonicalHeadersText,
-      signedHeaderNames.join(';'),
-      payloadHash,
-    ].join('\n');
-    final dateStamp = _dateStampFromAmzDate(
-      amzDate,
-      fallback: _formatDateStamp(currentTime),
-    );
-    final credentialScope = '$dateStamp/$region/$service/aws4_request';
-    final stringToSign = [
-      'AWS4-HMAC-SHA256',
-      amzDate,
-      credentialScope,
-      _sha256Hex(canonicalRequest),
-    ].join('\n');
-    final signingKey = _deriveSigningKey(
-      secretKey: secretKey,
-      dateStamp: dateStamp,
-      region: region,
-      service: service,
-    );
-    final signature = Hmac(
-      sha256,
-      signingKey,
-    ).convert(utf8.encode(stringToSign)).toString();
-    final authorizationValue =
-        'AWS4-HMAC-SHA256 Credential=$accessKey/$credentialScope, '
-        'SignedHeaders=${signedHeaderNames.join(';')}, Signature=$signature';
+    String? authorizationValue;
+    if (hasCompleteCredentials) {
+      final canonicalHeaders = <String, String>{
+        'host': host.trim(),
+        'x-amz-content-sha256': payloadHash.trim(),
+        'x-amz-date': amzDate.trim(),
+        if (sessionToken.trim().isNotEmpty)
+          'x-amz-security-token': sessionToken.trim(),
+      };
+      final signedHeaderNames = canonicalHeaders.keys.toList(growable: false)
+        ..sort();
+      final canonicalHeadersText = signedHeaderNames
+          .map((key) => '$key:${canonicalHeaders[key]!.trim()}\n')
+          .join();
+      final canonicalRequest = [
+        method.wireName,
+        _canonicalUri(uri),
+        _canonicalQueryString(uri),
+        canonicalHeadersText,
+        signedHeaderNames.join(';'),
+        payloadHash,
+      ].join('\n');
+      final dateStamp = _dateStampFromAmzDate(
+        amzDate,
+        fallback: _formatDateStamp(currentTime),
+      );
+      final credentialScope = '$dateStamp/$region/$service/aws4_request';
+      final stringToSign = [
+        'AWS4-HMAC-SHA256',
+        amzDate,
+        credentialScope,
+        _sha256Hex(canonicalRequest),
+      ].join('\n');
+      final signingKey = _deriveSigningKey(
+        secretKey: secretKey,
+        dateStamp: dateStamp,
+        region: region,
+        service: service,
+      );
+      final signature = Hmac(
+        sha256,
+        signingKey,
+      ).convert(utf8.encode(stringToSign)).toString();
+      authorizationValue =
+          'AWS4-HMAC-SHA256 Credential=$accessKey/$credentialScope, '
+          'SignedHeaders=${signedHeaderNames.join(';')}, Signature=$signature';
+    }
 
     return List<KeyValueItem>.unmodifiable(<KeyValueItem>[
       KeyValueItem(
-        key: 'host',
+        key: 'Host',
         value: host,
         description: awsSystemGeneratedHeaderDescription,
       ),
       KeyValueItem(
-        key: 'x-amz-date',
+        key: 'X-Amz-Date',
         value: amzDate,
         description: awsSystemGeneratedHeaderDescription,
       ),
       KeyValueItem(
-        key: 'x-amz-content-sha256',
+        key: 'X-Amz-Content-Sha256',
         value: payloadHash,
         description: awsSystemGeneratedHeaderDescription,
       ),
       if (sessionToken.trim().isNotEmpty)
         KeyValueItem(
-          key: 'x-amz-security-token',
+          key: 'X-Amz-Security-Token',
           value: sessionToken.trim(),
           description: awsSystemGeneratedHeaderDescription,
         ),
-      KeyValueItem(
-        key: 'Authorization',
-        value: authorizationValue,
-        description: awsSystemGeneratedHeaderDescription,
-      ),
+      if (authorizationValue != null)
+        KeyValueItem(
+          key: 'Authorization',
+          value: authorizationValue,
+          description: awsSystemGeneratedHeaderDescription,
+        ),
     ]);
   }
 

@@ -26,6 +26,7 @@ import '../../features/request_builder/domain/usecases/save_current_request_draf
 import '../../features/request_builder/domain/usecases/save_saved_request_drafts_use_case.dart';
 import '../../features/request_builder/presentation/cubit/request_builder_cubit.dart';
 import '../../features/request_builder/presentation/pages/request_builder_page.dart';
+import '../../features/request_builder/presentation/widgets/manage_environments_sheet.dart';
 import '../../features/request_builder/presentation/widgets/request_editor_sheet.dart';
 import '../../features/request_builder/presentation/widgets/request_search_field.dart';
 import '../../features/request_builder/presentation/widgets/request_shell_action_button.dart';
@@ -297,6 +298,10 @@ abstract final class AppRouter {
     required ClearCachedPostmanCollectionsUseCase
         clearCachedPostmanCollectionsUseCase,
   }) {
+    if (itemId == 'environments') {
+      return const ManageEnvironmentsView();
+    }
+
     if (itemId == 'postman-account') {
       return BlocProvider(
         create: (_) => PostmanAccountCubit(

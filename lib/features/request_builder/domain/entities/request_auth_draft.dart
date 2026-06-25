@@ -9,8 +9,8 @@ enum AuthType {
   basic('Basic', plannedForInitialImplementation: true),
   apiKey('API Key', plannedForInitialImplementation: true),
   bearerToken('Bearer Token', plannedForInitialImplementation: true),
-  digest('Digest', plannedForInitialImplementation: false),
-  hawk('Hawk', plannedForInitialImplementation: false),
+  digest('Digest', plannedForInitialImplementation: true),
+  hawk('Hawk', plannedForInitialImplementation: true),
   jwt('JWT', plannedForInitialImplementation: false),
   ntlm('NTLM', plannedForInitialImplementation: true),
   awsSignature('AWS Signature', plannedForInitialImplementation: false),
@@ -98,6 +98,27 @@ class BearerTokenAuthDraft extends Equatable {
   List<Object> get props => [token, prefix];
 }
 
+enum DigestAlgorithm {
+  md5('MD5'),
+  md5Sess('MD5-sess'),
+  sha256('SHA-256'),
+  sha256Sess('SHA-256-sess'),
+  sha512256('SHA-512-256'),
+  sha512256Sess('SHA-512-256-sess');
+
+  const DigestAlgorithm(this.label);
+
+  final String label;
+
+  /// Returns true when this algorithm derives a session key from nonce and cnonce.
+  bool get isSessionVariant => switch (this) {
+    DigestAlgorithm.md5Sess ||
+    DigestAlgorithm.sha256Sess ||
+    DigestAlgorithm.sha512256Sess => true,
+    _ => false,
+  };
+}
+
 class DigestAuthDraft extends Equatable {
   const DigestAuthDraft({
     this.username = '',
@@ -106,6 +127,8 @@ class DigestAuthDraft extends Equatable {
     this.nonce = '',
     this.algorithm = 'MD5',
     this.qop = '',
+    this.nonceCount = '',
+    this.clientNonce = '',
     this.opaque = '',
   });
 
@@ -115,7 +138,47 @@ class DigestAuthDraft extends Equatable {
   final String nonce;
   final String algorithm;
   final String qop;
+  final String nonceCount;
+  final String clientNonce;
   final String opaque;
+
+  /// Returns the selected algorithm enum, defaulting to MD5 for unknown persisted values.
+  DigestAlgorithm get selectedAlgorithm {
+    for (final candidate in DigestAlgorithm.values) {
+      if (candidate.label == algorithm) {
+        return candidate;
+      }
+    }
+
+    return DigestAlgorithm.md5;
+  }
+
+  /// Returns true when realm and nonce allow building the header before send.
+  bool get hasManualChallenge =>
+      realm.trim().isNotEmpty && nonce.trim().isNotEmpty;
+
+  /// Creates a new digest draft with any updated credential or challenge fields applied.
+  DigestAuthDraft copyWith({
+    String? username,
+    String? password,
+    String? realm,
+    String? nonce,
+    String? algorithm,
+    String? qop,
+    String? nonceCount,
+    String? clientNonce,
+    String? opaque,
+  }) => DigestAuthDraft(
+    username: username ?? this.username,
+    password: password ?? this.password,
+    realm: realm ?? this.realm,
+    nonce: nonce ?? this.nonce,
+    algorithm: algorithm ?? this.algorithm,
+    qop: qop ?? this.qop,
+    nonceCount: nonceCount ?? this.nonceCount,
+    clientNonce: clientNonce ?? this.clientNonce,
+    opaque: opaque ?? this.opaque,
+  );
 
   @override
   List<Object> get props => [
@@ -125,8 +188,19 @@ class DigestAuthDraft extends Equatable {
     nonce,
     algorithm,
     qop,
+    nonceCount,
+    clientNonce,
     opaque,
   ];
+}
+
+enum HawkAlgorithm {
+  sha256('SHA-256'),
+  sha1('SHA-1');
+
+  const HawkAlgorithm(this.label);
+
+  final String label;
 }
 
 class HawkAuthDraft extends Equatable {
@@ -134,18 +208,77 @@ class HawkAuthDraft extends Equatable {
     this.identifier = '',
     this.key = '',
     this.algorithm = 'sha256',
+    this.user = '',
+    this.nonce = '',
+    this.ext = '',
     this.app = '',
     this.delegation = '',
+    this.timestamp = '',
+    this.includePayloadHash = false,
   });
 
   final String identifier;
   final String key;
   final String algorithm;
+  final String user;
+  final String nonce;
+  final String ext;
   final String app;
   final String delegation;
+  final String timestamp;
+  final bool includePayloadHash;
+
+  /// Returns the selected algorithm enum, accepting both UI labels and
+  /// persisted lowercase names, defaulting to SHA-256 for unknown values.
+  HawkAlgorithm get selectedAlgorithm {
+    final normalized = algorithm.trim().toLowerCase().replaceAll('-', '');
+    for (final candidate in HawkAlgorithm.values) {
+      if (candidate.label.toLowerCase().replaceAll('-', '') == normalized) {
+        return candidate;
+      }
+    }
+
+    return HawkAlgorithm.sha256;
+  }
+
+  /// Creates a new Hawk draft with any updated credential or signing fields applied.
+  HawkAuthDraft copyWith({
+    String? identifier,
+    String? key,
+    String? algorithm,
+    String? user,
+    String? nonce,
+    String? ext,
+    String? app,
+    String? delegation,
+    String? timestamp,
+    bool? includePayloadHash,
+  }) => HawkAuthDraft(
+    identifier: identifier ?? this.identifier,
+    key: key ?? this.key,
+    algorithm: algorithm ?? this.algorithm,
+    user: user ?? this.user,
+    nonce: nonce ?? this.nonce,
+    ext: ext ?? this.ext,
+    app: app ?? this.app,
+    delegation: delegation ?? this.delegation,
+    timestamp: timestamp ?? this.timestamp,
+    includePayloadHash: includePayloadHash ?? this.includePayloadHash,
+  );
 
   @override
-  List<Object> get props => [identifier, key, algorithm, app, delegation];
+  List<Object> get props => [
+    identifier,
+    key,
+    algorithm,
+    user,
+    nonce,
+    ext,
+    app,
+    delegation,
+    timestamp,
+    includePayloadHash,
+  ];
 }
 
 enum JwtAlgorithm {

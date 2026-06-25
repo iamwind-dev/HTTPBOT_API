@@ -411,14 +411,21 @@ class RequestBuilderRepositoryImpl implements RequestBuilderRepository {
       'nonce': auth.digest.nonce,
       'algorithm': auth.digest.algorithm,
       'qop': auth.digest.qop,
+      'nonceCount': auth.digest.nonceCount,
+      'clientNonce': auth.digest.clientNonce,
       'opaque': auth.digest.opaque,
     },
     'hawk': {
       'identifier': auth.hawk.identifier,
       'key': auth.hawk.key,
       'algorithm': auth.hawk.algorithm,
+      'user': auth.hawk.user,
+      'nonce': auth.hawk.nonce,
+      'ext': auth.hawk.ext,
       'app': auth.hawk.app,
       'delegation': auth.hawk.delegation,
+      'timestamp': auth.hawk.timestamp,
+      'includePayloadHash': auth.hawk.includePayloadHash,
     },
     'jwt': {
       'token': auth.jwt.token,
@@ -536,6 +543,8 @@ class RequestBuilderRepositoryImpl implements RequestBuilderRepository {
         nonce: json['nonce'] as String? ?? '',
         algorithm: json['algorithm'] as String? ?? 'MD5',
         qop: json['qop'] as String? ?? '',
+        nonceCount: json['nonceCount'] as String? ?? '',
+        clientNonce: json['clientNonce'] as String? ?? '',
         opaque: json['opaque'] as String? ?? '',
       );
 
@@ -544,8 +553,13 @@ class RequestBuilderRepositoryImpl implements RequestBuilderRepository {
         identifier: json['identifier'] as String? ?? '',
         key: json['key'] as String? ?? '',
         algorithm: json['algorithm'] as String? ?? 'sha256',
+        user: json['user'] as String? ?? '',
+        nonce: json['nonce'] as String? ?? '',
+        ext: json['ext'] as String? ?? '',
         app: json['app'] as String? ?? '',
         delegation: json['delegation'] as String? ?? '',
+        timestamp: json['timestamp'] as String? ?? '',
+        includePayloadHash: json['includePayloadHash'] as bool? ?? false,
       );
 
   JwtAuthDraft _jwtAuthDraftFromJson(Map<String, dynamic> json) => JwtAuthDraft(
@@ -639,6 +653,7 @@ class RequestBuilderRepositoryImpl implements RequestBuilderRepository {
         .map(_requestVariableToJson)
         .toList(growable: false),
     'isEnabled': environment.isEnabled,
+    'source': environment.source.name,
   };
 
   RequestEnvironment _requestEnvironmentFromJson(Map<String, dynamic> json) =>
@@ -650,6 +665,11 @@ class RequestBuilderRepositoryImpl implements RequestBuilderRepository {
           (value) => _requestVariableFromJson(value),
         ),
         isEnabled: json['isEnabled'] as bool? ?? true,
+        source: _enumValueOrFallback(
+          RequestEnvironmentSource.values,
+          json['source'] as String?,
+          RequestEnvironmentSource.local,
+        ),
       );
 
   Map<String, Object?> _requestVariableToJson(RequestVariable variable) => {

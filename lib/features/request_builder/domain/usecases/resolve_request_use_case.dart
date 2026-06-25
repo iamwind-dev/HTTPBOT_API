@@ -10,6 +10,8 @@ import '../entities/resolved_request.dart';
 class ResolveRequestUseCase {
   const ResolveRequestUseCase();
 
+  static const int _maxResolveDepth = 5;
+
   static final RegExp _placeholderPattern = RegExp(
     r'{{\s*([a-zA-Z0-9_.-]+)\s*}}',
   );
@@ -116,34 +118,57 @@ class _ResolutionContext {
       return input;
     }
 
-    return input.replaceAllMapped(ResolveRequestUseCase._placeholderPattern, (
-      match,
+    var resolvedInput = input;
+    final seenInputs = <String>{input};
+
+    for (
+      var depth = 0;
+      depth < ResolveRequestUseCase._maxResolveDepth;
+      depth++
     ) {
-      final variableKey = match.group(1)?.trim() ?? '';
-      final placeholder = match.group(0) ?? '';
-
-      if (variableKey.isEmpty) {
-        return placeholder;
+      final nextInput = _resolveOnePass(resolvedInput, source: source);
+      if (nextInput == resolvedInput) {
+        return resolvedInput;
       }
 
-      final lookupResult = _lookupVariable(variableKey);
-      if (lookupResult case _ResolvedVariableLookup(value: final value)) {
-        _resolvedVariables[variableKey] = value;
-        return value;
+      if (seenInputs.contains(nextInput)) {
+        return resolvedInput;
       }
 
-      if (lookupResult case _UnresolvedVariableLookup(:final issueType)) {
-        _recordIssue(
-          type: issueType,
-          variableKey: variableKey,
-          source: source,
-          placeholder: placeholder,
-        );
-      }
+      seenInputs.add(nextInput);
+      resolvedInput = nextInput;
+    }
 
-      return placeholder;
-    });
+    return resolvedInput;
   }
+
+  /// Resolves one placeholder pass so nested variables can be expanded safely.
+  String _resolveOnePass(String input, {required String source}) => input
+      .replaceAllMapped(ResolveRequestUseCase._placeholderPattern, (match) {
+        final variableKey = match.group(1)?.trim() ?? '';
+        final placeholder = match.group(0) ?? '';
+
+        if (variableKey.isEmpty) {
+          return placeholder;
+        }
+
+        final lookupResult = _lookupVariable(variableKey);
+        if (lookupResult case _ResolvedVariableLookup(value: final value)) {
+          _resolvedVariables[variableKey] = value;
+          return value;
+        }
+
+        if (lookupResult case _UnresolvedVariableLookup(:final issueType)) {
+          _recordIssue(
+            type: issueType,
+            variableKey: variableKey,
+            source: source,
+            placeholder: placeholder,
+          );
+        }
+
+        return placeholder;
+      });
 
   /// Resolves placeholders inside one key/value row and skips disabled rows entirely.
   KeyValueItem resolveKeyValueItem(
@@ -321,6 +346,14 @@ class _ResolutionContext {
               source: 'auth.digest.algorithm',
             ),
             qop: resolveText(auth.digest.qop, source: 'auth.digest.qop'),
+            nonceCount: resolveText(
+              auth.digest.nonceCount,
+              source: 'auth.digest.nonceCount',
+            ),
+            clientNonce: resolveText(
+              auth.digest.clientNonce,
+              source: 'auth.digest.clientNonce',
+            ),
             opaque: resolveText(
               auth.digest.opaque,
               source: 'auth.digest.opaque',
@@ -350,11 +383,19 @@ class _ResolutionContext {
               auth.hawk.algorithm,
               source: 'auth.hawk.algorithm',
             ),
+            user: resolveText(auth.hawk.user, source: 'auth.hawk.user'),
+            nonce: resolveText(auth.hawk.nonce, source: 'auth.hawk.nonce'),
+            ext: resolveText(auth.hawk.ext, source: 'auth.hawk.ext'),
             app: resolveText(auth.hawk.app, source: 'auth.hawk.app'),
             delegation: resolveText(
               auth.hawk.delegation,
               source: 'auth.hawk.delegation',
             ),
+            timestamp: resolveText(
+              auth.hawk.timestamp,
+              source: 'auth.hawk.timestamp',
+            ),
+            includePayloadHash: auth.hawk.includePayloadHash,
           ),
           jwt: auth.jwt,
           ntlm: auth.ntlm,
