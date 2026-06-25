@@ -54,6 +54,26 @@ class ImportedCollectionRequestEntity {
   final List<ImportedRequestFieldEntity> headers;
   final String bodyContent;
   final String bodyContentType;
+
+  ImportedCollectionRequestEntity copyWith({
+    String? method,
+    String? title,
+    String? url,
+    String? baseUrlValue,
+    List<ImportedRequestFieldEntity>? queryParameters,
+    List<ImportedRequestFieldEntity>? headers,
+    String? bodyContent,
+    String? bodyContentType,
+  }) => ImportedCollectionRequestEntity(
+    method: method ?? this.method,
+    title: title ?? this.title,
+    url: url ?? this.url,
+    baseUrlValue: baseUrlValue ?? this.baseUrlValue,
+    queryParameters: queryParameters ?? this.queryParameters,
+    headers: headers ?? this.headers,
+    bodyContent: bodyContent ?? this.bodyContent,
+    bodyContentType: bodyContentType ?? this.bodyContentType,
+  );
 }
 
 class ImportedCollectionFolderEntity {
@@ -66,6 +86,16 @@ class ImportedCollectionFolderEntity {
   final String name;
   final List<ImportedCollectionFolderEntity> folders;
   final List<ImportedCollectionRequestEntity> requests;
+
+  ImportedCollectionFolderEntity copyWith({
+    String? name,
+    List<ImportedCollectionFolderEntity>? folders,
+    List<ImportedCollectionRequestEntity>? requests,
+  }) => ImportedCollectionFolderEntity(
+    name: name ?? this.name,
+    folders: folders ?? this.folders,
+    requests: requests ?? this.requests,
+  );
 
   int get requestCount {
     final childFolderRequests = folders.fold<int>(
