@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:httpbot_api/features/collection/presentation/cubits/collection_cubit.dart';
+import 'package:httpbot_api/features/collection/presentation/cubits/collection_state.dart';
 import 'package:httpbot_api/features/collection/presentation/screens/collection_screens.dart';
 import 'package:httpbot_api/features/collection/presentation/widget/collections_search.dart';
 import 'package:httpbot_api/features/collection/presentation/widget/collections_shell_action_button.dart';
@@ -66,180 +68,175 @@ abstract final class AppRouter {
     required GetPostmanWorkspacesUseCase getPostmanWorkspacesUseCase,
     required GetPostmanWorkspaceDetailUseCase getPostmanWorkspaceDetailUseCase,
     required GetPostmanCollectionsUseCase getPostmanCollectionsUseCase,
-    required GetPostmanCollectionDetailUseCase getPostmanCollectionDetailUseCase,
+    required GetPostmanCollectionDetailUseCase
+    getPostmanCollectionDetailUseCase,
     required SavePostmanApiKeyUseCase savePostmanApiKeyUseCase,
     required SavePostmanAccountUseCase savePostmanAccountUseCase,
     required SaveCachedPostmanWorkspacesUseCase
-        saveCachedPostmanWorkspacesUseCase,
+    saveCachedPostmanWorkspacesUseCase,
     required SaveCachedPostmanCollectionsUseCase
-        saveCachedPostmanCollectionsUseCase,
+    saveCachedPostmanCollectionsUseCase,
     required LoadPostmanApiKeyUseCase loadPostmanApiKeyUseCase,
     required LoadPostmanAccountUseCase loadPostmanAccountUseCase,
     required LoadCachedPostmanWorkspacesUseCase
-        loadCachedPostmanWorkspacesUseCase,
+    loadCachedPostmanWorkspacesUseCase,
     required LoadCachedPostmanCollectionsUseCase
-        loadCachedPostmanCollectionsUseCase,
+    loadCachedPostmanCollectionsUseCase,
     required ClearPostmanApiKeyUseCase clearPostmanApiKeyUseCase,
     required ClearPostmanAccountUseCase clearPostmanAccountUseCase,
     required ClearCachedPostmanWorkspacesUseCase
-        clearCachedPostmanWorkspacesUseCase,
+    clearCachedPostmanWorkspacesUseCase,
     required ClearCachedPostmanCollectionsUseCase
-        clearCachedPostmanCollectionsUseCase,
+    clearCachedPostmanCollectionsUseCase,
     required GetPostmanAuthenticatedUserUseCase
-        getPostmanAuthenticatedUserUseCase,
+    getPostmanAuthenticatedUserUseCase,
     String? initialLocation,
-  }) =>
-      GoRouter(
-        initialLocation: initialLocation,
-        routes: <RouteBase>[
-          StatefulShellRoute.indexedStack(
-            builder: (context, state, navigationShell) => navigationShell,
-            branches: <StatefulShellBranch>[
-              StatefulShellBranch(
-                routes: <RouteBase>[
-                  GoRoute(
-                    path: '/',
-                    builder: (context, state) => BlocProvider(
-                      create: (_) => RequestBuilderCubit(
-                        getRequestDraftUseCase,
-                        getRequestVariableStoreUseCase,
-                        getCurrentRequestDraftSessionUseCase:
-                            getIt<GetCurrentRequestDraftSessionUseCase>(),
-                        saveCurrentRequestDraftSessionUseCase:
-                            getIt<SaveCurrentRequestDraftSessionUseCase>(),
-                        clearCurrentRequestDraftSessionUseCase:
-                            getIt<ClearCurrentRequestDraftSessionUseCase>(),
-                        getSavedRequestDraftsUseCase:
-                            getIt<GetSavedRequestDraftsUseCase>(),
-                        saveSavedRequestDraftsUseCase:
-                            getIt<SaveSavedRequestDraftsUseCase>(),
-                      )..load(),
-                      child: _RequestsShell(
-                        onTabSelected: (tab) =>
-                            _handleShellTabSelection(context, tab),
-                      ),
-                    ),
+  }) => GoRouter(
+    initialLocation: initialLocation,
+    routes: <RouteBase>[
+      StatefulShellRoute.indexedStack(
+        builder: (context, state, navigationShell) => navigationShell,
+        branches: <StatefulShellBranch>[
+          StatefulShellBranch(
+            routes: <RouteBase>[
+              GoRoute(
+                path: '/',
+                builder: (context, state) => BlocProvider(
+                  create: (_) => RequestBuilderCubit(
+                    getRequestDraftUseCase,
+                    getRequestVariableStoreUseCase,
+                    getCurrentRequestDraftSessionUseCase:
+                        getIt<GetCurrentRequestDraftSessionUseCase>(),
+                    saveCurrentRequestDraftSessionUseCase:
+                        getIt<SaveCurrentRequestDraftSessionUseCase>(),
+                    clearCurrentRequestDraftSessionUseCase:
+                        getIt<ClearCurrentRequestDraftSessionUseCase>(),
+                    getSavedRequestDraftsUseCase:
+                        getIt<GetSavedRequestDraftsUseCase>(),
+                    saveSavedRequestDraftsUseCase:
+                        getIt<SaveSavedRequestDraftsUseCase>(),
+                  )..load(),
+                  child: _RequestsShell(
+                    onTabSelected: (tab) =>
+                        _handleShellTabSelection(context, tab),
                   ),
-                ],
+                ),
               ),
-              StatefulShellBranch(
-                routes: <RouteBase>[
-                  GoRoute(
-                    path: '/websockets',
-                    builder: (context, state) => _WebSocketsShell(
-                      onTabSelected: (tab) =>
-                          _handleShellTabSelection(context, tab),
-                    ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: <RouteBase>[
+              GoRoute(
+                path: '/websockets',
+                builder: (context, state) => _WebSocketsShell(
+                  onTabSelected: (tab) =>
+                      _handleShellTabSelection(context, tab),
+                ),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: <RouteBase>[
+              GoRoute(
+                path: '/collections',
+                builder: (context, state) => BlocProvider(
+                  create: (_) => CollectionCubit()..load(),
+                  child: _CollectionsShell(
+                    onTabSelected: (tab) =>
+                        _handleShellTabSelection(context, tab),
                   ),
-                ],
+                ),
               ),
-              StatefulShellBranch(
-                routes: <RouteBase>[
-                  GoRoute(
-                    path: '/collections',
-                    builder: (context, state) => _CollectionsShell(
-                      onTabSelected: (tab) =>
-                          _handleShellTabSelection(context, tab),
-                    ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: <RouteBase>[
+              GoRoute(
+                path: '/postman',
+                builder: (context, state) => BlocProvider(
+                  create: (_) => PostmanCubit(
+                    getPostmanWorkspacesUseCase: getPostmanWorkspacesUseCase,
+                    getPostmanWorkspaceDetailUseCase:
+                        getPostmanWorkspaceDetailUseCase,
+                    getPostmanCollectionsUseCase: getPostmanCollectionsUseCase,
+                    getPostmanCollectionDetailUseCase:
+                        getPostmanCollectionDetailUseCase,
+                    getPostmanAuthenticatedUserUseCase:
+                        getPostmanAuthenticatedUserUseCase,
+                    loadPostmanApiKeyUseCase: loadPostmanApiKeyUseCase,
+                    loadCachedPostmanWorkspacesUseCase:
+                        loadCachedPostmanWorkspacesUseCase,
+                    loadCachedPostmanCollectionsUseCase:
+                        loadCachedPostmanCollectionsUseCase,
+                    savePostmanAccountUseCase: savePostmanAccountUseCase,
+                    savePostmanApiKeyUseCase: savePostmanApiKeyUseCase,
+                    saveCachedPostmanWorkspacesUseCase:
+                        saveCachedPostmanWorkspacesUseCase,
+                    saveCachedPostmanCollectionsUseCase:
+                        saveCachedPostmanCollectionsUseCase,
+                  )..load(),
+                  child: _PostmanShell(
+                    onTabSelected: (tab) =>
+                        _handleShellTabSelection(context, tab),
                   ),
-                ],
+                ),
               ),
-              StatefulShellBranch(
-                routes: <RouteBase>[
-                  GoRoute(
-                    path: '/postman',
-                    builder: (context, state) => BlocProvider(
-                      create: (_) => PostmanCubit(
-                        getPostmanWorkspacesUseCase:
-                            getPostmanWorkspacesUseCase,
-                        getPostmanWorkspaceDetailUseCase:
-                            getPostmanWorkspaceDetailUseCase,
-                        getPostmanCollectionsUseCase:
-                            getPostmanCollectionsUseCase,
-                        getPostmanCollectionDetailUseCase:
-                            getPostmanCollectionDetailUseCase,
-                        getPostmanAuthenticatedUserUseCase:
-                            getPostmanAuthenticatedUserUseCase,
-                        loadPostmanApiKeyUseCase: loadPostmanApiKeyUseCase,
-                        loadCachedPostmanWorkspacesUseCase:
-                            loadCachedPostmanWorkspacesUseCase,
-                        loadCachedPostmanCollectionsUseCase:
-                            loadCachedPostmanCollectionsUseCase,
-                        savePostmanAccountUseCase: savePostmanAccountUseCase,
-                        savePostmanApiKeyUseCase: savePostmanApiKeyUseCase,
-                        saveCachedPostmanWorkspacesUseCase:
-                            saveCachedPostmanWorkspacesUseCase,
-                        saveCachedPostmanCollectionsUseCase:
-                            saveCachedPostmanCollectionsUseCase,
-                      )..load(),
-                      child: _PostmanShell(
-                        onTabSelected: (tab) =>
-                            _handleShellTabSelection(context, tab),
-                      ),
-                    ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: <RouteBase>[
+              GoRoute(
+                path: '/settings',
+                builder: (context, state) => BlocProvider(
+                  create: (_) => SettingsCubit()..load(),
+                  child: _SettingsShell(
+                    onTabSelected: (tab) =>
+                        _handleShellTabSelection(context, tab),
+                    onItemSelected: (itemId) =>
+                        context.push('/settings/$itemId'),
                   ),
-                ],
-              ),
-              StatefulShellBranch(
+                ),
                 routes: <RouteBase>[
                   GoRoute(
-                    path: '/settings',
-                    builder: (context, state) => BlocProvider(
-                      create: (_) => SettingsCubit()..load(),
-                      child: _SettingsShell(
-                        onTabSelected: (tab) =>
-                            _handleShellTabSelection(context, tab),
-                        onItemSelected: (itemId) =>
-                            context.push('/settings/$itemId'),
-                      ),
-                    ),
-                    routes: <RouteBase>[
-                      GoRoute(
-                        path: ':itemId',
-                        builder: (context, state) {
-                          final itemId =
-                              state.pathParameters['itemId'] ?? '';
-                          final item = SettingsCatalog.findItemById(itemId);
+                    path: ':itemId',
+                    builder: (context, state) {
+                      final itemId = state.pathParameters['itemId'] ?? '';
+                      final item = SettingsCatalog.findItemById(itemId);
 
-                          return _SettingsDetailShell(
-                            itemTitle:
-                                item?.title ?? AppStrings.settingsTitle,
-                            onBack: () => _handleSettingsBack(context),
-                            body: _buildSettingsDetailBody(
-                              itemId: itemId,
-                              loadPostmanApiKeyUseCase:
-                                  loadPostmanApiKeyUseCase,
-                              loadPostmanAccountUseCase:
-                                  loadPostmanAccountUseCase,
-                              clearPostmanApiKeyUseCase:
-                                  clearPostmanApiKeyUseCase,
-                              clearPostmanAccountUseCase:
-                                  clearPostmanAccountUseCase,
-                              clearCachedPostmanWorkspacesUseCase:
-                                  clearCachedPostmanWorkspacesUseCase,
-                              clearCachedPostmanCollectionsUseCase:
-                                  clearCachedPostmanCollectionsUseCase,
-                            ),
-                            onTabSelected: (tab) =>
-                                _handleShellTabSelection(context, tab),
-                          );
-                        },
-                      ),
-                    ],
+                      return _SettingsDetailShell(
+                        itemTitle: item?.title ?? AppStrings.settingsTitle,
+                        onBack: () => _handleSettingsBack(context),
+                        body: _buildSettingsDetailBody(
+                          itemId: itemId,
+                          loadPostmanApiKeyUseCase: loadPostmanApiKeyUseCase,
+                          loadPostmanAccountUseCase: loadPostmanAccountUseCase,
+                          clearPostmanApiKeyUseCase: clearPostmanApiKeyUseCase,
+                          clearPostmanAccountUseCase:
+                              clearPostmanAccountUseCase,
+                          clearCachedPostmanWorkspacesUseCase:
+                              clearCachedPostmanWorkspacesUseCase,
+                          clearCachedPostmanCollectionsUseCase:
+                              clearCachedPostmanCollectionsUseCase,
+                        ),
+                        onTabSelected: (tab) =>
+                            _handleShellTabSelection(context, tab),
+                      );
+                    },
                   ),
                 ],
               ),
             ],
           ),
         ],
-      );
+      ),
+    ],
+  );
 
   static final GoRouter router = createRouter(
     getRequestDraftUseCase: getIt<GetRequestDraftUseCase>(),
     getRequestVariableStoreUseCase: getIt<GetRequestVariableStoreUseCase>(),
     getPostmanWorkspacesUseCase: getIt<GetPostmanWorkspacesUseCase>(),
-    getPostmanWorkspaceDetailUseCase:
-        getIt<GetPostmanWorkspaceDetailUseCase>(),
+    getPostmanWorkspaceDetailUseCase: getIt<GetPostmanWorkspaceDetailUseCase>(),
     getPostmanCollectionsUseCase: getIt<GetPostmanCollectionsUseCase>(),
     getPostmanCollectionDetailUseCase:
         getIt<GetPostmanCollectionDetailUseCase>(),
@@ -294,9 +291,9 @@ abstract final class AppRouter {
     required ClearPostmanApiKeyUseCase clearPostmanApiKeyUseCase,
     required ClearPostmanAccountUseCase clearPostmanAccountUseCase,
     required ClearCachedPostmanWorkspacesUseCase
-        clearCachedPostmanWorkspacesUseCase,
+    clearCachedPostmanWorkspacesUseCase,
     required ClearCachedPostmanCollectionsUseCase
-        clearCachedPostmanCollectionsUseCase,
+    clearCachedPostmanCollectionsUseCase,
   }) {
     if (itemId == 'environments') {
       return const ManageEnvironmentsView();
@@ -329,18 +326,18 @@ class _RequestsShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => AppShellScaffold(
-        currentTab: AppShellTab.requests,
-        title: AppStrings.requestsTitle,
-        trailing: const _RequestFavoriteButton(),
-        bottomSlot: const RequestSearchField(),
-        body: const RequestBuilderPage(),
-        floatingActionButton: RequestShellActionButton(
-          onImportHar: () => context.read<RequestBuilderCubit>().importHar(),
-          onImportCurl: () => context.read<RequestBuilderCubit>().importCurl(),
-          onNewRequest: () => _openNewRequestEditor(context),
-        ),
-        onTabSelected: onTabSelected,
-      );
+    currentTab: AppShellTab.requests,
+    title: AppStrings.requestsTitle,
+    trailing: const _RequestFavoriteButton(),
+    bottomSlot: const RequestSearchField(),
+    body: const RequestBuilderPage(),
+    floatingActionButton: RequestShellActionButton(
+      onImportHar: () => context.read<RequestBuilderCubit>().importHar(),
+      onImportCurl: () => context.read<RequestBuilderCubit>().importCurl(),
+      onNewRequest: () => _openNewRequestEditor(context),
+    ),
+    onTabSelected: onTabSelected,
+  );
 
   Future<void> _openNewRequestEditor(BuildContext context) async {
     final requestBuilderCubit = context.read<RequestBuilderCubit>();
@@ -376,14 +373,14 @@ class _WebSocketsShell extends StatelessWidget {
   // Keep the WebSockets tab on the shared shell while leaving header actions disabled.
   @override
   Widget build(BuildContext context) => AppShellScaffold(
-        currentTab: AppShellTab.websockets,
-        title: AppStrings.websocketsTabLabel,
-        trailing: const _RequestFavoriteButton(),
-        bottomSlot: const SearchWebsocket(),
-        body: WebsocketScreen(),
-        floatingActionButton: const WebSocketShellActionButton(),
-        onTabSelected: onTabSelected,
-      );
+    currentTab: AppShellTab.websockets,
+    title: AppStrings.websocketsTabLabel,
+    trailing: const _RequestFavoriteButton(),
+    bottomSlot: const SearchWebsocket(),
+    body: WebsocketScreen(),
+    floatingActionButton: const WebSocketShellActionButton(),
+    onTabSelected: onTabSelected,
+  );
 }
 
 class _CollectionsShell extends StatelessWidget {
@@ -391,15 +388,28 @@ class _CollectionsShell extends StatelessWidget {
 
   final ValueChanged<AppShellTab> onTabSelected;
 
-  // Keep the Collections tab on the shared shell while leaving header actions disabled.
   @override
-  Widget build(BuildContext context) => AppShellScaffold(
-        currentTab: AppShellTab.collections,
-        title: AppStrings.collectionsTabLabel,
-        bottomSlot: const CollectionSearch(),
-        body: CollectionScreen(),
-        floatingActionButton: const CollectionsShellActionButton(),
-        onTabSelected: onTabSelected,
+  Widget build(BuildContext context) =>
+      BlocBuilder<CollectionCubit, CollectionState>(
+        builder: (context, state) => AppShellScaffold(
+          currentTab: AppShellTab.collections,
+          title:
+              state.selectedCollection?.name ?? AppStrings.collectionsTabLabel,
+          leading: state.selectedCollection == null
+              ? null
+              : IconButton(
+                  onPressed: () =>
+                      context.read<CollectionCubit>().clearSelectedCollection(),
+                  icon: const Icon(Icons.arrow_back_ios_new_rounded),
+                ),
+          trailing: const _CollectionsMoreButton(),
+          bottomSlot: state.selectedCollection == null
+              ? const CollectionSearch()
+              : null,
+          body: const CollectionScreen(),
+          floatingActionButton: const CollectionsShellActionButton(),
+          onTabSelected: onTabSelected,
+        ),
       );
 }
 
@@ -411,22 +421,22 @@ class _PostmanShell extends StatelessWidget {
   // Keep the Postman tab on the shared shell while leaving header actions disabled.
   @override
   Widget build(BuildContext context) => BlocBuilder<PostmanCubit, PostmanState>(
-        builder: (context, state) => AppShellScaffold(
-          currentTab: AppShellTab.postman,
-          title: state.selectedCollection?.name ?? AppStrings.postmanTabLabel,
-          leading: state.selectedCollection == null
-              ? null
-              : IconButton(
-                  onPressed: () =>
-                      context.read<PostmanCubit>().clearSelectedCollection(),
-                  icon: const Icon(Icons.arrow_back_ios_new_rounded),
-                ),
-          bottomSlot: const PostmanSearch(),
-          body: const PostmanScreen(),
-          floatingActionButton: const PostmanShellActionButton(),
-          onTabSelected: onTabSelected,
-        ),
-      );
+    builder: (context, state) => AppShellScaffold(
+      currentTab: AppShellTab.postman,
+      title: state.selectedCollection?.name ?? AppStrings.postmanTabLabel,
+      leading: state.selectedCollection == null
+          ? null
+          : IconButton(
+              onPressed: () =>
+                  context.read<PostmanCubit>().clearSelectedCollection(),
+              icon: const Icon(Icons.arrow_back_ios_new_rounded),
+            ),
+      bottomSlot: const PostmanSearch(),
+      body: const PostmanScreen(),
+      floatingActionButton: const PostmanShellActionButton(),
+      onTabSelected: onTabSelected,
+    ),
+  );
 }
 
 class _SettingsShell extends StatelessWidget {
@@ -441,12 +451,12 @@ class _SettingsShell extends StatelessWidget {
   // Render the dedicated settings overview inside the shared application shell.
   @override
   Widget build(BuildContext context) => AppShellScaffold(
-        currentTab: AppShellTab.settings,
-        title: AppStrings.settingsTitle,
-        bodyHorizontalPadding: 0,
-        body: SettingsPage(onItemSelected: onItemSelected),
-        onTabSelected: onTabSelected,
-      );
+    currentTab: AppShellTab.settings,
+    title: AppStrings.settingsTitle,
+    bodyHorizontalPadding: 0,
+    body: SettingsPage(onItemSelected: onItemSelected),
+    onTabSelected: onTabSelected,
+  );
 }
 
 class _SettingsDetailShell extends StatelessWidget {
@@ -465,12 +475,12 @@ class _SettingsDetailShell extends StatelessWidget {
   // Keep placeholder settings destinations inside the shared shell and preserve back navigation.
   @override
   Widget build(BuildContext context) => AppShellScaffold(
-        currentTab: AppShellTab.settings,
-        title: itemTitle,
-        leading: _SettingsBackButton(onPressed: onBack),
-        body: body,
-        onTabSelected: onTabSelected,
-      );
+    currentTab: AppShellTab.settings,
+    title: itemTitle,
+    leading: _SettingsBackButton(onPressed: onBack),
+    body: body,
+    onTabSelected: onTabSelected,
+  );
 }
 
 class _RequestFavoriteButton extends StatelessWidget {
@@ -486,6 +496,29 @@ class _RequestFavoriteButton extends StatelessWidget {
       tooltip: AppStrings.requestsFavoriteTooltip,
       onPressed: () {},
       icon: Icon(Icons.favorite_border_rounded, color: colors.iconPrimary),
+    );
+  }
+}
+
+class _CollectionsMoreButton extends StatelessWidget {
+  const _CollectionsMoreButton();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+
+    return Material(
+      color: colors.headerActionSurface,
+      shape: const CircleBorder(),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: () {},
+        child: SizedBox(
+          width: 48,
+          height: 48,
+          child: Icon(Icons.more_horiz_rounded, color: colors.iconPrimary),
+        ),
+      ),
     );
   }
 }

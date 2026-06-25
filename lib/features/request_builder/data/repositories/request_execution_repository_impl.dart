@@ -6,23 +6,30 @@ import '../../../../core/network/digest_http_client.dart';
 import '../../../../core/network/dio_client.dart';
 import '../../../../core/network/ntlm_http_client.dart';
 import '../helpers/request_transport_inputs.dart';
+import '../../domain/helpers/http_cookie_utils.dart';
 import '../../domain/entities/auth_applied_request.dart';
+import '../../domain/entities/executed_request_snapshot.dart';
 import '../../domain/entities/request_auth_draft.dart';
 import '../../domain/entities/request_execution_result.dart';
 import '../../domain/entities/request_key_value.dart';
 import '../../domain/helpers/request_auth_validator.dart';
+import '../../domain/repositories/http_cookie_repository.dart';
 import '../../domain/repositories/request_execution_repository.dart';
 
 class RequestExecutionRepositoryImpl implements RequestExecutionRepository {
   RequestExecutionRepositoryImpl(
     this._dioClient, {
+    required HttpCookieRepository httpCookieRepository,
     NtlmHttpClient? ntlmHttpClient,
     DigestHttpClient? digestHttpClient,
   }) : _ntlmHttpClient = ntlmHttpClient ?? NtlmHttpClient(),
        _digestHttpClient =
            digestHttpClient ?? DigestHttpClient(dioClient: _dioClient);
+  }) : _httpCookieRepository = httpCookieRepository,
+       _ntlmHttpClient = ntlmHttpClient ?? NtlmHttpClient();
 
   final DioClient _dioClient;
+  final HttpCookieRepository _httpCookieRepository;
   final NtlmHttpClient _ntlmHttpClient;
   final DigestHttpClient _digestHttpClient;
 
@@ -63,11 +70,31 @@ class RequestExecutionRepositoryImpl implements RequestExecutionRepository {
 
     final stopwatch = Stopwatch()..start();
     final draft = request.request;
+    final settings = draft.settings;
     final dio = _dioClient.create(
-      timeout: draft.timeout,
-      verifySsl: draft.verifySsl,
+      timeout: Duration(seconds: settings.timeoutSeconds),
+      followRedirects: settings.followRedirects,
+      verifySsl: settings.verifySsl,
     );
     final inputs = await buildRequestTransportInputs(draft);
+    final headersWithUserAgent = _injectSettingsUserAgent(
+      headers: inputs.headers,
+      userAgent: settings.normalizedUserAgent,
+    );
+    final requestHeaders = settings.sendCookies
+        ? mergeCookieHeader(
+            headers: headersWithUserAgent,
+            cookies: await _httpCookieRepository.getCookiesForRequestUrl(
+              inputs.url,
+            ),
+          )
+        : headersWithUserAgent;
+    final executedRequestSnapshot = ExecutedRequestSnapshot(
+      method: draft.method.wireName,
+      url: inputs.url,
+      headers: requestHeaders,
+      body: _buildRequestBodyPreview(inputs),
+    );
 
     try {
       final response = await dio.request<List<int>>(
@@ -75,14 +102,24 @@ class RequestExecutionRepositoryImpl implements RequestExecutionRepository {
         data: inputs.canSendBody ? inputs.payload.data : null,
         options: Options(
           method: draft.method.wireName,
-          headers: inputs.headers,
+          headers: requestHeaders,
           responseType: ResponseType.bytes,
           validateStatus: (_) => true,
         ),
       );
       stopwatch.stop();
 
+      if (settings.storeCookies) {
+        await _ingestSetCookieHeaders(
+          requestUrl: inputs.url,
+          headers: response.headers.map,
+        );
+      }
+
       final bodyBytes = _extractBodyBytes(response.data);
+      final responseCookies = await _httpCookieRepository.getCookiesForRequestUrl(
+        inputs.url,
+      );
 
       return RequestExecutionResult(
         request: draft,
@@ -95,12 +132,23 @@ class RequestExecutionRepositoryImpl implements RequestExecutionRepository {
         bodyBytes: bodyBytes,
         bodyText: _decodeBodyBytes(bodyBytes),
         duration: stopwatch.elapsed,
+        executedRequestSnapshot: executedRequestSnapshot,
+        responseCookies: responseCookies,
         resolutionIssues: request.resolutionIssues,
         authIssues: request.authIssues,
       );
     } on DioException catch (error) {
       stopwatch.stop();
+      if (settings.storeCookies) {
+        await _ingestSetCookieHeaders(
+          requestUrl: inputs.url,
+          headers: error.response?.headers.map ?? const <String, List<String>>{},
+        );
+      }
       final bodyBytes = _extractBodyBytes(error.response?.data);
+      final responseCookies = await _httpCookieRepository.getCookiesForRequestUrl(
+        inputs.url,
+      );
 
       return RequestExecutionResult(
         request: draft,
@@ -113,8 +161,10 @@ class RequestExecutionRepositoryImpl implements RequestExecutionRepository {
         bodyBytes: bodyBytes,
         bodyText: _decodeBodyBytes(bodyBytes),
         duration: stopwatch.elapsed,
+        executedRequestSnapshot: executedRequestSnapshot,
         errorType: _mapErrorType(error),
         errorMessage: _buildErrorMessage(error),
+        responseCookies: responseCookies,
         resolutionIssues: request.resolutionIssues,
         authIssues: request.authIssues,
       );
@@ -124,6 +174,7 @@ class RequestExecutionRepositoryImpl implements RequestExecutionRepository {
       return RequestExecutionResult(
         request: draft,
         duration: stopwatch.elapsed,
+        executedRequestSnapshot: executedRequestSnapshot,
         errorType: RequestExecutionErrorType.unknown,
         errorMessage: error.toString(),
         resolutionIssues: request.resolutionIssues,
@@ -143,6 +194,31 @@ class RequestExecutionRepositoryImpl implements RequestExecutionRepository {
     });
 
     return List<KeyValueItem>.unmodifiable(items);
+  }
+
+  Future<void> _ingestSetCookieHeaders({
+    required String requestUrl,
+    required Map<String, List<String>> headers,
+  }) async {
+    final setCookieHeaders = <String>[];
+    headers.forEach((key, values) {
+      if (key.trim().toLowerCase() == 'set-cookie') {
+        setCookieHeaders.addAll(values);
+      }
+    });
+
+    if (setCookieHeaders.isEmpty) {
+      return;
+    }
+
+    try {
+      await _httpCookieRepository.upsertCookiesFromSetCookieHeaders(
+        requestUrl,
+        setCookieHeaders,
+      );
+    } catch (_) {
+      // Cookie persistence should never fail the main request flow.
+    }
   }
 
   /// Extracts response bytes regardless of whether Dio surfaced bytes, strings, or other payload types.
@@ -165,6 +241,48 @@ class RequestExecutionRepositoryImpl implements RequestExecutionRepository {
   /// Decodes bytes into text using UTF-8 with malformed input tolerated for raw inspector views.
   String _decodeBodyBytes(List<int> bodyBytes) =>
       utf8.decode(bodyBytes, allowMalformed: true);
+
+  Map<String, String> _injectSettingsUserAgent({
+    required Map<String, String> headers,
+    required String? userAgent,
+  }) {
+    if (userAgent == null) {
+      return headers;
+    }
+
+    // Manual User-Agent headers entered by the user always win; settings only
+    // inject a fallback header when the request does not already define one.
+    final hasManualUserAgent = headers.keys.any(
+      (key) => key.trim().toLowerCase() == 'user-agent',
+    );
+    if (hasManualUserAgent) {
+      return headers;
+    }
+
+    return <String, String>{...headers, 'User-Agent': userAgent};
+  }
+
+  String? _buildRequestBodyPreview(RequestTransportInputs inputs) {
+    if (!inputs.canSendBody) {
+      return null;
+    }
+
+    final data = inputs.payload.data;
+    if (data == null) {
+      return null;
+    }
+
+    if (data is String) {
+      return data;
+    }
+
+    if (data is Map) {
+      const encoder = JsonEncoder.withIndent('  ');
+      return encoder.convert(data);
+    }
+
+    return data.toString();
+  }
 
   /// Maps Dio transport failures into stable execution error categories.
   RequestExecutionErrorType _mapErrorType(DioException error) {

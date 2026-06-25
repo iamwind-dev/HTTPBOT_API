@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -22,6 +23,9 @@ import '../../domain/entities/request_key_value.dart';
 import '../../domain/entities/request_variable_store.dart';
 import '../../domain/entities/requests_method.dart';
 import '../../domain/helpers/curl_command_builder.dart';
+import '../../domain/entities/saved_graphql_query_entity.dart';
+import '../../domain/entities/saved_graphql_variable_entity.dart';
+import '../../domain/entities/graphql_schema_view_entity.dart';
 import '../../domain/helpers/oauth2_authorization_url_builder.dart';
 import '../../domain/helpers/oauth2_callback_parser.dart';
 import '../../domain/helpers/oauth2_implicit_authorize_url_builder.dart';
@@ -32,6 +36,13 @@ import '../../domain/usecases/get_request_variable_store_use_case.dart';
 import '../../domain/usecases/request_oauth2_client_credentials_token_use_case.dart';
 import '../../domain/usecases/request_oauth2_password_credentials_token_use_case.dart';
 import '../../domain/usecases/save_request_variable_store_use_case.dart';
+import '../../domain/usecases/fetch_graphql_schema_use_case.dart';
+import '../../domain/usecases/get_saved_graphql_queries_use_case.dart';
+import '../../domain/usecases/get_saved_graphql_variables_use_case.dart';
+import '../../domain/usecases/request_oauth2_client_credentials_token_use_case.dart';
+import '../../domain/usecases/request_oauth2_password_credentials_token_use_case.dart';
+import '../../domain/usecases/save_saved_graphql_queries_use_case.dart';
+import '../../domain/usecases/save_saved_graphql_variables_use_case.dart';
 import '../bloc/request_send_bloc.dart';
 import '../bloc/request_send_event.dart';
 import '../bloc/request_send_state.dart';
@@ -47,7 +58,10 @@ import 'method_notes/method_header_note.dart';
 import 'oauth2_token_details_sheet.dart';
 import 'request_environment_menu.dart';
 import 'request_modal_sheet.dart';
+import 'request_cookies_sheet.dart';
 import 'request_response_sheet.dart';
+import 'request_settings_sheet.dart';
+import 'request_tests_sheet.dart';
 import 'saved_credentials_sheet.dart';
 import 'view_curl_sheet.dart';
 
@@ -318,7 +332,7 @@ class _RequestEditorSheetState extends State<_RequestEditorSheet> {
   }
 
   void _useGraphQlMode() {
-    context.read<RequestEditorCubit>().updateBodyType(RequestBodyType.graphql);
+    context.read<RequestEditorCubit>().enableGraphQlMode();
   }
 
   Future<void> _viewCurl() async {
@@ -336,15 +350,24 @@ class _RequestEditorSheetState extends State<_RequestEditorSheet> {
   }
 
   Future<void> _openCookies() async {
-    // TODO: Open request cookie management for the current request.
+    await showRequestCookiesSheet(
+      context,
+      requestUrl: context.read<RequestEditorCubit>().state.draft.url,
+    );
   }
 
   Future<void> _openTests() async {
-    // TODO: Open request test scripts for the current request.
+    await showRequestTestsSheet(
+      context,
+      requestEditorCubit: context.read<RequestEditorCubit>(),
+    );
   }
 
   Future<void> _openRequestSettings() async {
-    // TODO: Open request-specific settings for the current request.
+    await showRequestSettingsSheet(
+      context,
+      requestEditorCubit: context.read<RequestEditorCubit>(),
+    );
   }
 
   Future<bool> _confirmCloseIfNeeded(RequestEditorState state) async {
@@ -495,7 +518,10 @@ class _RequestEditorSheetState extends State<_RequestEditorSheet> {
                         items: draft.headers,
                       ),
                       const SizedBox(height: AppSpacing.large),
-                      _BodySection(draft: draft),
+                      _BodySection(
+                        draft: draft,
+                        variableStore: widget.variableStore,
+                      ),
                       const SizedBox(height: AppSpacing.large),
                       _AuthSection(
                         auth: draft.auth,
@@ -1488,9 +1514,10 @@ class _KeyValueDivider extends StatelessWidget {
 }
 
 class _BodySection extends StatelessWidget {
-  const _BodySection({required this.draft});
+  const _BodySection({required this.draft, required this.variableStore});
 
   final RequestDraft draft;
+  final RequestVariableStore variableStore;
 
   /// Builds the body-mode selector and the inputs for the active body type.
   @override
@@ -1511,7 +1538,9 @@ class _BodySection extends StatelessWidget {
           const SizedBox(height: AppSpacing.small),
         ],
         _BodyModeCard(
+          draft: draft,
           body: body,
+          variableStore: variableStore,
           onTypeChanged: editorCubit.updateBodyType,
           onUrlEncodedChanged: editorCubit.updateUrlEncodedBodyItems,
           onFormDataChanged: editorCubit.updateFormDataBodyItems,
@@ -1525,7 +1554,9 @@ class _BodySection extends StatelessWidget {
 
 class _BodyModeCard extends StatelessWidget {
   const _BodyModeCard({
+    required this.draft,
     required this.body,
+    required this.variableStore,
     required this.onTypeChanged,
     required this.onUrlEncodedChanged,
     required this.onFormDataChanged,
@@ -1533,7 +1564,9 @@ class _BodyModeCard extends StatelessWidget {
     required this.onGraphQlChanged,
   });
 
+  final RequestDraft draft;
   final RequestBodyDraft body;
+  final RequestVariableStore variableStore;
   final ValueChanged<List<KeyValueItem>> onFormDataChanged;
   final ValueChanged<GraphQlBodyDraft> onGraphQlChanged;
   final ValueChanged<RawBodyDraft> onRawChanged;
@@ -1559,21 +1592,15 @@ class _BodyModeCard extends StatelessWidget {
   /// Opens the GraphQL text editor sheet for either the query or variables field.
   Future<void> _openGraphQlEditor(
     BuildContext context, {
-    required String label,
-    required String currentValue,
-    required ValueChanged<String> onSaved,
+    required _GraphQlEditorTab initialTab,
   }) async {
-    final result = await showRequestModalSheet<String?>(
+    final result = await showRequestModalSheet<_GraphQlEditorResult?>(
       context,
-      builder: (context) => _BodyTextEditorSheet(
-        title: label,
-        fieldKey: label == 'Query'
-            ? AppWidgetKeys.requestsEditorGraphQlQueryField
-            : AppWidgetKeys.requestsEditorGraphQlVariablesField,
-        initialValue: currentValue,
-        hintText: label == 'Query'
-            ? 'query GetUsers { users { id } }'
-            : '{\n  "id": "1"\n}',
+      builder: (context) => _GraphQlEditorSheet(
+        initialTab: initialTab,
+        initialValue: body.graphQl,
+        requestDraft: draft,
+        variableStore: variableStore,
       ),
     );
 
@@ -1581,7 +1608,15 @@ class _BodyModeCard extends StatelessWidget {
       return;
     }
 
-    onSaved(result);
+    onGraphQlChanged(
+      body.graphQl.copyWith(
+        query: result.query,
+        variables: result.variables,
+        operationName: result.operationName,
+        clearOperationName:
+            result.operationName == null || result.operationName!.isEmpty,
+      ),
+    );
   }
 
   String _rawBodySummary(RawBodyDraft raw) {
@@ -1652,10 +1687,7 @@ class _BodyModeCard extends StatelessWidget {
                 value: _graphQlSummary(body.graphQl.query),
                 onTap: () => _openGraphQlEditor(
                   context,
-                  label: 'Query',
-                  currentValue: body.graphQl.query,
-                  onSaved: (value) =>
-                      onGraphQlChanged(body.graphQl.copyWith(query: value)),
+                  initialTab: _GraphQlEditorTab.query,
                 ),
               ),
               const _KeyValueDivider(),
@@ -1665,10 +1697,7 @@ class _BodyModeCard extends StatelessWidget {
                 value: _graphQlSummary(body.graphQl.variables),
                 onTap: () => _openGraphQlEditor(
                   context,
-                  label: 'Variables',
-                  currentValue: body.graphQl.variables,
-                  onSaved: (value) =>
-                      onGraphQlChanged(body.graphQl.copyWith(variables: value)),
+                  initialTab: _GraphQlEditorTab.variables,
                 ),
               ),
             ],
@@ -2483,6 +2512,1241 @@ class _BodyTextEditorSheetState extends State<_BodyTextEditorSheet> {
       ),
     ),
   );
+}
+
+enum _GraphQlEditorTab { query, variables }
+
+enum _GraphQlEditorMenuAction { viewSchema, saveCurrent, loadCurrent }
+
+enum _SavedGraphQlContentType { query, variables }
+
+class _GraphQlEditorResult {
+  const _GraphQlEditorResult({
+    required this.query,
+    required this.variables,
+    this.operationName,
+  });
+
+  final String query;
+  final String variables;
+  final String? operationName;
+}
+
+class _SavedGraphQlContentFormResult {
+  const _SavedGraphQlContentFormResult({
+    required this.name,
+    required this.value,
+    this.filterType,
+  });
+
+  final String name;
+  final String value;
+  final String? filterType;
+}
+
+class _GraphQlEditorSheet extends StatefulWidget {
+  const _GraphQlEditorSheet({
+    required this.initialTab,
+    required this.initialValue,
+    required this.requestDraft,
+    required this.variableStore,
+  });
+
+  final _GraphQlEditorTab initialTab;
+  final GraphQlBodyDraft initialValue;
+  final RequestDraft requestDraft;
+  final RequestVariableStore variableStore;
+
+  @override
+  State<_GraphQlEditorSheet> createState() => _GraphQlEditorSheetState();
+}
+
+class _GraphQlEditorSheetState extends State<_GraphQlEditorSheet> {
+  late final TextEditingController _queryController;
+  late final TextEditingController _variablesController;
+  late _GraphQlEditorTab _currentTab;
+  bool _isLoadingSchema = false;
+
+  @override
+  void dispose() {
+    _queryController.dispose();
+    _variablesController.dispose();
+    super.dispose();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _queryController = TextEditingController(text: widget.initialValue.query);
+    _variablesController = TextEditingController(
+      text: widget.initialValue.variables,
+    );
+    _currentTab = widget.initialTab;
+  }
+
+  TextEditingController get _activeController => switch (_currentTab) {
+    _GraphQlEditorTab.query => _queryController,
+    _GraphQlEditorTab.variables => _variablesController,
+  };
+
+  String get _title => switch (_currentTab) {
+    _GraphQlEditorTab.query => 'GraphQL Query',
+    _GraphQlEditorTab.variables => 'GraphQL Variables',
+  };
+
+  String get _hintText => switch (_currentTab) {
+    _GraphQlEditorTab.query => 'query {\n  posts {\n    id\n    title\n  }\n}',
+    _GraphQlEditorTab.variables => '{\n  "code": "VN"\n}',
+  };
+
+  Future<void> _handleMenuAction(_GraphQlEditorMenuAction action) async {
+    switch (action) {
+      case _GraphQlEditorMenuAction.viewSchema:
+        await _viewSchema();
+      case _GraphQlEditorMenuAction.saveCurrent:
+        await _saveCurrent();
+      case _GraphQlEditorMenuAction.loadCurrent:
+        await _loadCurrent();
+    }
+  }
+
+  Future<void> _viewSchema() async {
+    if (widget.requestDraft.url.trim().isEmpty) {
+      _showMessage('Enter a request URL before viewing schema.');
+      return;
+    }
+
+    setState(() {
+      _isLoadingSchema = true;
+    });
+
+    try {
+      final result = await getIt<FetchGraphQlSchemaUseCase>()(
+        draft: widget.requestDraft.copyWith(
+          body: widget.requestDraft.body.copyWith(
+            type: RequestBodyType.graphql,
+            graphQl: GraphQlBodyDraft(
+              query: _queryController.text,
+              variables: _variablesController.text,
+              operationName: widget.initialValue.operationName,
+            ),
+          ),
+        ),
+        variableStore: widget.variableStore,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      await showRequestModalSheet<void>(
+        context,
+        builder: (context) => _GraphQlSchemaSheet(result: result),
+      );
+    } catch (error) {
+      if (mounted) {
+        _showMessage(error.toString().replaceFirst('Exception: ', ''));
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingSchema = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _saveCurrent() async {
+    final contentType = _currentContentType;
+    final currentValue = _activeController.text;
+
+    if (contentType == _SavedGraphQlContentType.query &&
+        currentValue.trim().isEmpty) {
+      _showMessage('GraphQL query is required before saving.');
+      return;
+    }
+
+    if (contentType == _SavedGraphQlContentType.variables) {
+      final variablesError = _validateGraphQlVariablesInput(currentValue);
+      if (variablesError != null) {
+        _showMessage(variablesError);
+        return;
+      }
+      if (currentValue.trim().isEmpty) {
+        _showMessage('Variables are empty. You can still save them if needed.');
+      }
+    }
+
+    final formResult =
+        await showRequestModalSheet<_SavedGraphQlContentFormResult?>(
+          context,
+          builder: (context) => _SavedGraphQlContentFormSheet(
+            type: contentType,
+            initialName: '',
+            initialFilterType: null,
+            initialValue: currentValue,
+          ),
+        );
+
+    if (formResult == null || !mounted) {
+      return;
+    }
+
+    if (contentType == _SavedGraphQlContentType.query) {
+      final existing = await getIt<GetSavedGraphQlQueriesUseCase>()();
+      final now = DateTime.now();
+      final entry = SavedGraphQlQueryEntity(
+        id: now.microsecondsSinceEpoch.toString(),
+        name: formResult.name.trim().isEmpty
+            ? 'Untitled Query'
+            : formResult.name.trim(),
+        query: formResult.value,
+        filterType: _normalizeOptionalText(formResult.filterType),
+        createdAt: now,
+        updatedAt: now,
+      );
+      await getIt<SaveSavedGraphQlQueriesUseCase>()([...existing, entry]);
+      _queryController.text = formResult.value;
+      if (_currentTab == _GraphQlEditorTab.query) {
+        setState(() {});
+      }
+      _showMessage('GraphQL query saved.');
+      return;
+    }
+
+    final existing = await getIt<GetSavedGraphQlVariablesUseCase>()();
+    final now = DateTime.now();
+    final entry = SavedGraphQlVariableEntity(
+      id: now.microsecondsSinceEpoch.toString(),
+      name: formResult.name.trim().isEmpty
+          ? 'Untitled Variables'
+          : formResult.name.trim(),
+      variables: formResult.value,
+      filterType: _normalizeOptionalText(formResult.filterType),
+      createdAt: now,
+      updatedAt: now,
+    );
+    await getIt<SaveSavedGraphQlVariablesUseCase>()([...existing, entry]);
+    _variablesController.text = formResult.value;
+    if (_currentTab == _GraphQlEditorTab.variables) {
+      setState(() {});
+    }
+    _showMessage('GraphQL variables saved.');
+  }
+
+  Future<void> _loadCurrent() async {
+    if (_currentContentType == _SavedGraphQlContentType.query) {
+      final selected = await showRequestModalSheet<String?>(
+        context,
+        builder: (context) => const _SavedGraphQlQueriesSheet(),
+      );
+      if (selected != null && mounted) {
+        _queryController.text = selected;
+        setState(() {});
+      }
+      return;
+    }
+
+    final selected = await showRequestModalSheet<String?>(
+      context,
+      builder: (context) => const _SavedGraphQlVariablesSheet(),
+    );
+    if (selected != null && mounted) {
+      _variablesController.text = selected;
+      setState(() {});
+    }
+  }
+
+  _SavedGraphQlContentType get _currentContentType => switch (_currentTab) {
+    _GraphQlEditorTab.query => _SavedGraphQlContentType.query,
+    _GraphQlEditorTab.variables => _SavedGraphQlContentType.variables,
+  };
+
+  void _saveAndClose() {
+    final variablesError = _validateGraphQlVariablesInput(
+      _variablesController.text,
+    );
+    if (variablesError != null) {
+      _showMessage(variablesError);
+      return;
+    }
+
+    Navigator.of(context).pop(
+      _GraphQlEditorResult(
+        query: _queryController.text,
+        variables: _variablesController.text,
+        operationName: widget.initialValue.operationName,
+      ),
+    );
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  @override
+  Widget build(BuildContext context) => RequestModalSheetCard(
+    child: SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.large),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(CupertinoIcons.xmark),
+                ),
+                const SizedBox(width: AppSpacing.small),
+                Expanded(
+                  child: Text(
+                    _title,
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+                PopupMenuButton<_GraphQlEditorMenuAction>(
+                  onSelected: _handleMenuAction,
+                  tooltip: 'GraphQL actions',
+                  icon: _isLoadingSchema
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(CupertinoIcons.ellipsis),
+                  itemBuilder: (context) => [
+                    const PopupMenuItem<_GraphQlEditorMenuAction>(
+                      value: _GraphQlEditorMenuAction.viewSchema,
+                      child: Text('View Schema'),
+                    ),
+                    PopupMenuItem<_GraphQlEditorMenuAction>(
+                      value: _GraphQlEditorMenuAction.saveCurrent,
+                      child: Text(
+                        _currentTab == _GraphQlEditorTab.query
+                            ? 'Save Query'
+                            : 'Save Variables',
+                      ),
+                    ),
+                    PopupMenuItem<_GraphQlEditorMenuAction>(
+                      value: _GraphQlEditorMenuAction.loadCurrent,
+                      child: Text(
+                        _currentTab == _GraphQlEditorTab.query
+                            ? 'Load Query'
+                            : 'Load Variables',
+                      ),
+                    ),
+                  ],
+                ),
+                IconButton(
+                  onPressed: _saveAndClose,
+                  icon: const Icon(CupertinoIcons.check_mark),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.medium),
+            Expanded(
+              child: TextFormField(
+                key: ValueKey<String>(
+                  _currentTab == _GraphQlEditorTab.query
+                      ? AppWidgetKeys.requestsEditorGraphQlQueryField
+                      : AppWidgetKeys.requestsEditorGraphQlVariablesField,
+                ),
+                controller: _activeController,
+                expands: true,
+                maxLines: null,
+                minLines: null,
+                textAlignVertical: TextAlignVertical.top,
+                decoration: _buildFieldDecoration(
+                  context,
+                  label: _currentTab == _GraphQlEditorTab.query
+                      ? 'Query'
+                      : 'Variables',
+                  hintText: _hintText,
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.medium),
+            DecoratedBox(
+              decoration: _buildCardDecoration(context),
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.xSmall),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _GraphQlTabButton(
+                        label: 'Query',
+                        isSelected: _currentTab == _GraphQlEditorTab.query,
+                        onPressed: () {
+                          setState(() {
+                            _currentTab = _GraphQlEditorTab.query;
+                          });
+                        },
+                      ),
+                    ),
+                    Expanded(
+                      child: _GraphQlTabButton(
+                        label: 'Variables',
+                        isSelected: _currentTab == _GraphQlEditorTab.variables,
+                        onPressed: () {
+                          setState(() {
+                            _currentTab = _GraphQlEditorTab.variables;
+                          });
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _GraphQlTabButton extends StatelessWidget {
+  const _GraphQlTabButton({
+    required this.label,
+    required this.isSelected,
+    required this.onPressed,
+  });
+
+  final bool isSelected;
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+    return TextButton(
+      onPressed: onPressed,
+      style: TextButton.styleFrom(
+        backgroundColor: isSelected ? colors.primary : Colors.transparent,
+        foregroundColor: isSelected ? colors.textOnPrimary : colors.textPrimary,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(AppRadius.xxLarge)),
+        ),
+      ),
+      child: Text(label),
+    );
+  }
+}
+
+class _SavedGraphQlContentFormSheet extends StatefulWidget {
+  const _SavedGraphQlContentFormSheet({
+    required this.type,
+    required this.initialName,
+    required this.initialFilterType,
+    required this.initialValue,
+  });
+
+  final String initialName;
+  final String? initialFilterType;
+  final String initialValue;
+  final _SavedGraphQlContentType type;
+
+  @override
+  State<_SavedGraphQlContentFormSheet> createState() =>
+      _SavedGraphQlContentFormSheetState();
+}
+
+class _SavedGraphQlContentFormSheetState
+    extends State<_SavedGraphQlContentFormSheet> {
+  static const _filterTypes = <String>['jq', 'JSONPath', 'XPath'];
+
+  late final TextEditingController _nameController;
+  late final TextEditingController _valueController;
+  String? _selectedFilterType;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _valueController.dispose();
+    super.dispose();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.initialName);
+    _valueController = TextEditingController(text: widget.initialValue);
+    _selectedFilterType = widget.initialFilterType;
+  }
+
+  void _submit() {
+    final value = _valueController.text;
+    if (widget.type == _SavedGraphQlContentType.query && value.trim().isEmpty) {
+      _showMessage('GraphQL query is required before saving.');
+      return;
+    }
+
+    if (widget.type == _SavedGraphQlContentType.variables) {
+      final error = _validateGraphQlVariablesInput(value);
+      if (error != null) {
+        _showMessage(error);
+        return;
+      }
+    }
+
+    Navigator.of(context).pop(
+      _SavedGraphQlContentFormResult(
+        name: _nameController.text,
+        value: value,
+        filterType: _selectedFilterType,
+      ),
+    );
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  @override
+  Widget build(BuildContext context) => RequestModalSheetCard(
+    child: SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.large),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    widget.type == _SavedGraphQlContentType.query
+                        ? 'Save Query'
+                        : 'Save Variables',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
+                TextButton(onPressed: _submit, child: const Text('Save')),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.medium),
+            _EditorTextField(
+              fieldKey:
+                  'saved_graphql_${widget.type.name}_name_${widget.initialName}',
+              value: _nameController.text,
+              label: 'Name',
+              hintText: widget.type == _SavedGraphQlContentType.query
+                  ? 'Untitled Query'
+                  : 'Untitled Variables',
+              onChanged: (value) {
+                _nameController.value = TextEditingValue(
+                  text: value,
+                  selection: TextSelection.collapsed(offset: value.length),
+                );
+              },
+            ),
+            const SizedBox(height: AppSpacing.medium),
+            DropdownButtonFormField<String?>(
+              initialValue: _selectedFilterType,
+              decoration: _buildFieldDecoration(context, label: 'Filter Type'),
+              items: <DropdownMenuItem<String?>>[
+                const DropdownMenuItem<String?>(
+                  value: null,
+                  child: Text('None'),
+                ),
+                ..._filterTypes.map(
+                  (value) => DropdownMenuItem<String?>(
+                    value: value,
+                    child: Text(value),
+                  ),
+                ),
+              ],
+              onChanged: (value) {
+                setState(() {
+                  _selectedFilterType = value;
+                });
+              },
+            ),
+            const SizedBox(height: AppSpacing.medium),
+            Expanded(
+              child: TextFormField(
+                controller: _valueController,
+                expands: true,
+                minLines: null,
+                maxLines: null,
+                textAlignVertical: TextAlignVertical.top,
+                decoration: _buildFieldDecoration(context, label: 'Value'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _SavedGraphQlQueriesSheet extends StatefulWidget {
+  const _SavedGraphQlQueriesSheet();
+
+  @override
+  State<_SavedGraphQlQueriesSheet> createState() =>
+      _SavedGraphQlQueriesSheetState();
+}
+
+class _SavedGraphQlQueriesSheetState extends State<_SavedGraphQlQueriesSheet> {
+  List<SavedGraphQlQueryEntity>? _items;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_load());
+  }
+
+  Future<void> _load() async {
+    try {
+      final items = await getIt<GetSavedGraphQlQueriesUseCase>()();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _items = items.reversed.toList(growable: false);
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _errorMessage = error.toString();
+      });
+    }
+  }
+
+  Future<void> _edit(SavedGraphQlQueryEntity item) async {
+    final result = await showRequestModalSheet<_SavedGraphQlContentFormResult?>(
+      context,
+      builder: (context) => _SavedGraphQlContentFormSheet(
+        type: _SavedGraphQlContentType.query,
+        initialName: item.name,
+        initialFilterType: item.filterType,
+        initialValue: item.query,
+      ),
+    );
+    if (result == null) {
+      return;
+    }
+
+    final current = List<SavedGraphQlQueryEntity>.from(_items ?? const []);
+    final updated = current
+        .map((entry) {
+          if (entry.id != item.id) {
+            return entry;
+          }
+          return entry.copyWith(
+            name: result.name.trim().isEmpty
+                ? 'Untitled Query'
+                : result.name.trim(),
+            query: result.value,
+            filterType: _normalizeOptionalText(result.filterType),
+            clearFilterType: _normalizeOptionalText(result.filterType) == null,
+            updatedAt: DateTime.now(),
+          );
+        })
+        .toList(growable: false);
+    await getIt<SaveSavedGraphQlQueriesUseCase>()(
+      updated.reversed.toList(growable: false),
+    );
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _items = updated;
+    });
+  }
+
+  Future<void> _delete(SavedGraphQlQueryEntity item) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Item?'),
+        content: const Text('Are you sure you would like to delete this item?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) {
+      return;
+    }
+
+    final updated = (_items ?? const <SavedGraphQlQueryEntity>[])
+        .where((entry) => entry.id != item.id)
+        .toList(growable: false);
+    await getIt<SaveSavedGraphQlQueriesUseCase>()(
+      updated.reversed.toList(growable: false),
+    );
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _items = updated;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => _SavedGraphQlItemsScaffold(
+    title: 'Saved Queries',
+    errorMessage: _errorMessage,
+    isLoading: _items == null && _errorMessage == null,
+    child: _SavedGraphQlQueryList(
+      items: _items ?? const [],
+      onSelected: (item) => Navigator.of(context).pop(item.query),
+      onEdit: _edit,
+      onDelete: _delete,
+    ),
+  );
+}
+
+class _SavedGraphQlVariablesSheet extends StatefulWidget {
+  const _SavedGraphQlVariablesSheet();
+
+  @override
+  State<_SavedGraphQlVariablesSheet> createState() =>
+      _SavedGraphQlVariablesSheetState();
+}
+
+class _SavedGraphQlVariablesSheetState
+    extends State<_SavedGraphQlVariablesSheet> {
+  List<SavedGraphQlVariableEntity>? _items;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_load());
+  }
+
+  Future<void> _load() async {
+    try {
+      final items = await getIt<GetSavedGraphQlVariablesUseCase>()();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _items = items.reversed.toList(growable: false);
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _errorMessage = error.toString();
+      });
+    }
+  }
+
+  Future<void> _edit(SavedGraphQlVariableEntity item) async {
+    final result = await showRequestModalSheet<_SavedGraphQlContentFormResult?>(
+      context,
+      builder: (context) => _SavedGraphQlContentFormSheet(
+        type: _SavedGraphQlContentType.variables,
+        initialName: item.name,
+        initialFilterType: item.filterType,
+        initialValue: item.variables,
+      ),
+    );
+    if (result == null) {
+      return;
+    }
+
+    final current = List<SavedGraphQlVariableEntity>.from(_items ?? const []);
+    final updated = current
+        .map((entry) {
+          if (entry.id != item.id) {
+            return entry;
+          }
+          return entry.copyWith(
+            name: result.name.trim().isEmpty
+                ? 'Untitled Variables'
+                : result.name.trim(),
+            variables: result.value,
+            filterType: _normalizeOptionalText(result.filterType),
+            clearFilterType: _normalizeOptionalText(result.filterType) == null,
+            updatedAt: DateTime.now(),
+          );
+        })
+        .toList(growable: false);
+    await getIt<SaveSavedGraphQlVariablesUseCase>()(
+      updated.reversed.toList(growable: false),
+    );
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _items = updated;
+    });
+  }
+
+  Future<void> _delete(SavedGraphQlVariableEntity item) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Item?'),
+        content: const Text('Are you sure you would like to delete this item?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) {
+      return;
+    }
+
+    final updated = (_items ?? const <SavedGraphQlVariableEntity>[])
+        .where((entry) => entry.id != item.id)
+        .toList(growable: false);
+    await getIt<SaveSavedGraphQlVariablesUseCase>()(
+      updated.reversed.toList(growable: false),
+    );
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _items = updated;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => _SavedGraphQlItemsScaffold(
+    title: 'Saved Variables',
+    errorMessage: _errorMessage,
+    isLoading: _items == null && _errorMessage == null,
+    child: _SavedGraphQlVariableList(
+      items: _items ?? const [],
+      onSelected: (item) => Navigator.of(context).pop(item.variables),
+      onEdit: _edit,
+      onDelete: _delete,
+    ),
+  );
+}
+
+class _SavedGraphQlItemsScaffold extends StatelessWidget {
+  const _SavedGraphQlItemsScaffold({
+    required this.title,
+    required this.isLoading,
+    required this.child,
+    this.errorMessage,
+  });
+
+  final Widget child;
+  final String? errorMessage;
+  final bool isLoading;
+  final String title;
+
+  @override
+  Widget build(BuildContext context) => RequestModalSheetCard(
+    child: SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.large),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Done'),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.medium),
+            Expanded(
+              child: Builder(
+                builder: (context) {
+                  if (isLoading) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  if (errorMessage != null) {
+                    return Center(child: Text(errorMessage!));
+                  }
+                  return child;
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _SavedGraphQlQueryList extends StatelessWidget {
+  const _SavedGraphQlQueryList({
+    required this.items,
+    required this.onSelected,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  final List<SavedGraphQlQueryEntity> items;
+  final Future<void> Function(SavedGraphQlQueryEntity item) onDelete;
+  final Future<void> Function(SavedGraphQlQueryEntity item) onEdit;
+  final ValueChanged<SavedGraphQlQueryEntity> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    if (items.isEmpty) {
+      return const _SavedGraphQlEmptyPlaceholder(
+        message: 'No Saved GraphQL Queries',
+      );
+    }
+
+    return ListView.separated(
+      itemCount: items.length,
+      separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.small),
+      itemBuilder: (context, index) => _SavedGraphQlQueryTile(
+        item: items[index],
+        onSelected: () => onSelected(items[index]),
+        onEdit: () => onEdit(items[index]),
+        onDelete: () => onDelete(items[index]),
+      ),
+    );
+  }
+}
+
+class _SavedGraphQlVariableList extends StatelessWidget {
+  const _SavedGraphQlVariableList({
+    required this.items,
+    required this.onSelected,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  final List<SavedGraphQlVariableEntity> items;
+  final Future<void> Function(SavedGraphQlVariableEntity item) onDelete;
+  final Future<void> Function(SavedGraphQlVariableEntity item) onEdit;
+  final ValueChanged<SavedGraphQlVariableEntity> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    if (items.isEmpty) {
+      return const _SavedGraphQlEmptyPlaceholder(
+        message: 'No Saved GraphQL Variables',
+      );
+    }
+
+    return ListView.separated(
+      itemCount: items.length,
+      separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.small),
+      itemBuilder: (context, index) => _SavedGraphQlVariableTile(
+        item: items[index],
+        onSelected: () => onSelected(items[index]),
+        onEdit: () => onEdit(items[index]),
+        onDelete: () => onDelete(items[index]),
+      ),
+    );
+  }
+}
+
+class _SavedGraphQlQueryTile extends StatelessWidget {
+  const _SavedGraphQlQueryTile({
+    required this.item,
+    required this.onSelected,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  final SavedGraphQlQueryEntity item;
+  final VoidCallback onDelete;
+  final VoidCallback onEdit;
+  final VoidCallback onSelected;
+
+  @override
+  Widget build(BuildContext context) => _SavedGraphQlTile(
+    title: item.name,
+    preview: item.query,
+    onTap: onSelected,
+    onLongPress: () => _showActions(context),
+  );
+
+  Future<void> _showActions(BuildContext context) async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _SavedGraphQlActionSheet(),
+    );
+    if (action == 'edit') {
+      onEdit();
+    } else if (action == 'delete') {
+      onDelete();
+    }
+  }
+}
+
+class _SavedGraphQlVariableTile extends StatelessWidget {
+  const _SavedGraphQlVariableTile({
+    required this.item,
+    required this.onSelected,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  final SavedGraphQlVariableEntity item;
+  final VoidCallback onDelete;
+  final VoidCallback onEdit;
+  final VoidCallback onSelected;
+
+  @override
+  Widget build(BuildContext context) => _SavedGraphQlTile(
+    title: item.name,
+    preview: item.variables,
+    onTap: onSelected,
+    onLongPress: () => _showActions(context),
+  );
+
+  Future<void> _showActions(BuildContext context) async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _SavedGraphQlActionSheet(),
+    );
+    if (action == 'edit') {
+      onEdit();
+    } else if (action == 'delete') {
+      onDelete();
+    }
+  }
+}
+
+class _SavedGraphQlTile extends StatelessWidget {
+  const _SavedGraphQlTile({
+    required this.title,
+    required this.preview,
+    required this.onTap,
+    required this.onLongPress,
+  });
+
+  final VoidCallback onLongPress;
+  final VoidCallback onTap;
+  final String preview;
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        onLongPress: onLongPress,
+        borderRadius: const BorderRadius.all(
+          Radius.circular(AppRadius.xxLarge),
+        ),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: context.appColors.surface,
+            borderRadius: const BorderRadius.all(
+              Radius.circular(AppRadius.xxLarge),
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.large),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xSmall),
+                Text(
+                  _truncateGraphQlPreview(preview),
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: context.appColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SavedGraphQlActionSheet extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) => SafeArea(
+    child: Padding(
+      padding: const EdgeInsets.all(AppSpacing.large),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: context.appColors.surface,
+          borderRadius: const BorderRadius.all(
+            Radius.circular(AppRadius.xxLarge),
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: const Text('Edit'),
+              onTap: () => Navigator.of(context).pop('edit'),
+            ),
+            const Divider(height: 1),
+            ListTile(
+              title: const Text('Delete'),
+              onTap: () => Navigator.of(context).pop('delete'),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _SavedGraphQlEmptyPlaceholder extends StatelessWidget {
+  const _SavedGraphQlEmptyPlaceholder({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) => Center(
+    child: Text(
+      message,
+      style: Theme.of(
+        context,
+      ).textTheme.bodyLarge?.copyWith(color: context.appColors.textSecondary),
+    ),
+  );
+}
+
+class _GraphQlSchemaSheet extends StatelessWidget {
+  const _GraphQlSchemaSheet({required this.result});
+
+  final GraphQlSchemaViewEntity result;
+
+  @override
+  Widget build(BuildContext context) => RequestModalSheetCard(
+    child: SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.large),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'GraphQL Schema',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Done'),
+                ),
+              ],
+            ),
+            if (result.hasError) ...[
+              const SizedBox(height: AppSpacing.small),
+              Text(
+                result.errorMessage!,
+                style: TextStyle(color: context.appColors.methodDelete),
+              ),
+            ],
+            const SizedBox(height: AppSpacing.medium),
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Formatted',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: AppSpacing.small),
+                    SelectableText(result.formattedSchema),
+                    const SizedBox(height: AppSpacing.large),
+                    Text(
+                      'Raw JSON',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: AppSpacing.small),
+                    SelectableText(result.rawJson),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+String? _validateGraphQlVariablesInput(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) {
+    return null;
+  }
+
+  try {
+    final decoded = jsonDecode(trimmed);
+    if (decoded is Map<String, dynamic>) {
+      return null;
+    }
+    if (decoded is Map) {
+      return null;
+    }
+  } on FormatException {
+    return 'GraphQL variables must be a valid JSON object.';
+  }
+
+  return 'GraphQL variables must be a valid JSON object.';
+}
+
+String? _normalizeOptionalText(String? value) {
+  final trimmed = value?.trim() ?? '';
+  return trimmed.isEmpty ? null : trimmed;
+}
+
+String _truncateGraphQlPreview(String value) {
+  final compact = value.replaceAll(RegExp(r'\s+'), ' ').trim();
+  if (compact.isEmpty) {
+    return 'Empty';
+  }
+  if (compact.length <= 120) {
+    return compact;
+  }
+  return '${compact.substring(0, 117)}...';
 }
 
 class _AuthSection extends StatelessWidget {

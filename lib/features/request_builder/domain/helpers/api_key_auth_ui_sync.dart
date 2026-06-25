@@ -26,7 +26,9 @@ ApiKeyAuthSyncResult syncApiKeyAuthToRequestFields({
 
   if (auth.type != AuthType.apiKey) {
     return ApiKeyAuthSyncResult(
-      queryParameters: List<KeyValueItem>.unmodifiable(sanitizedQueryParameters),
+      queryParameters: List<KeyValueItem>.unmodifiable(
+        sanitizedQueryParameters,
+      ),
       headers: List<KeyValueItem>.unmodifiable(sanitizedHeaders),
     );
   }
@@ -36,19 +38,19 @@ ApiKeyAuthSyncResult syncApiKeyAuthToRequestFields({
 
   if (key.isEmpty || value.isEmpty) {
     return ApiKeyAuthSyncResult(
-      queryParameters: List<KeyValueItem>.unmodifiable(sanitizedQueryParameters),
+      queryParameters: List<KeyValueItem>.unmodifiable(
+        sanitizedQueryParameters,
+      ),
       headers: List<KeyValueItem>.unmodifiable(sanitizedHeaders),
     );
   }
 
   return switch (auth.apiKey.location) {
     ApiKeyLocation.header => ApiKeyAuthSyncResult(
-      queryParameters: List<KeyValueItem>.unmodifiable(sanitizedQueryParameters),
-      headers: _withApiKeyHeader(
-        sanitizedHeaders,
-        key: key,
-        value: value,
+      queryParameters: List<KeyValueItem>.unmodifiable(
+        sanitizedQueryParameters,
       ),
+      headers: _withApiKeyHeader(sanitizedHeaders, key: key, value: value),
     ),
     ApiKeyLocation.query => ApiKeyAuthSyncResult(
       queryParameters: _withApiKeyQueryParameter(
@@ -59,7 +61,9 @@ ApiKeyAuthSyncResult syncApiKeyAuthToRequestFields({
       headers: List<KeyValueItem>.unmodifiable(sanitizedHeaders),
     ),
     ApiKeyLocation.cookie => ApiKeyAuthSyncResult(
-      queryParameters: List<KeyValueItem>.unmodifiable(sanitizedQueryParameters),
+      queryParameters: List<KeyValueItem>.unmodifiable(
+        sanitizedQueryParameters,
+      ),
       headers: List<KeyValueItem>.unmodifiable(sanitizedHeaders),
     ),
   };

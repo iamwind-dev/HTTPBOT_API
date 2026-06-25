@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:httpbot_api/core/constants/app_strings.dart';
@@ -7,6 +8,8 @@ import 'package:httpbot_api/core/keys/widget_keys.dart';
 import 'package:httpbot_api/core/services/external_uri_launcher.dart';
 import 'package:httpbot_api/core/services/oauth2_callback_service.dart';
 import 'package:httpbot_api/core/theme/app_theme.dart';
+import 'package:httpbot_api/features/request_builder/data/repositories/http_cookie_repository_impl.dart';
+import 'package:httpbot_api/features/request_builder/domain/repositories/http_cookie_repository.dart';
 import 'package:httpbot_api/features/request_builder/domain/entities/oauth2_token_details_entity.dart';
 import 'package:httpbot_api/features/request_builder/domain/entities/request_auth_draft.dart';
 import 'package:httpbot_api/features/request_builder/domain/entities/request_draft.dart';
@@ -16,11 +19,182 @@ import 'package:httpbot_api/features/request_builder/domain/usecases/request_oau
 import 'package:httpbot_api/features/request_builder/domain/usecases/request_oauth2_password_credentials_token_use_case.dart';
 import 'package:httpbot_api/features/request_builder/presentation/widgets/request_editor_sheet.dart';
 import 'package:httpbot_api/injection/injection.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   setUpAll(configureDependencies);
+  setUp(() async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    if (getIt.isRegistered<HttpCookieRepository>()) {
+      getIt.unregister<HttpCookieRepository>();
+    }
+    getIt.registerSingleton<HttpCookieRepository>(HttpCookieRepositoryImpl());
+  });
 
   group('request editor auth header UI sync', () {
+    testWidgets('should open cookies sheet from more menu', (tester) async {
+      final robot = RequestEditorSheetRobot(tester);
+
+      await robot.pumpScreen();
+      await robot.openEditor();
+      await robot.selectMoreAction('Cookies');
+
+      expect(
+        find.byKey(const ValueKey<String>(AppWidgetKeys.requestsCookiesSheet)),
+        findsOneWidget,
+      );
+      robot.expectTextVisible(AppStrings.cookiesNoCookiesTitle);
+    });
+
+    testWidgets('should open tests sheet from more menu', (tester) async {
+      final robot = RequestEditorSheetRobot(tester);
+
+      await robot.pumpScreen();
+      await robot.openEditor();
+      await robot.selectMoreAction('Tests');
+
+      expect(
+        find.byKey(const ValueKey<String>(AppWidgetKeys.requestsTestsSheet)),
+        findsOneWidget,
+      );
+      robot.expectTextVisible(AppStrings.testsNoTestsTitle);
+    });
+
+    testWidgets('should open settings sheet from more menu', (tester) async {
+      final robot = RequestEditorSheetRobot(tester);
+
+      await robot.pumpScreen();
+      await robot.openEditor();
+      await robot.selectMoreAction('Settings');
+
+      expect(
+        find.byKey(const ValueKey<String>(AppWidgetKeys.requestsSettingsSheet)),
+        findsOneWidget,
+      );
+      robot.expectTextVisible(AppStrings.requestSettingsTitle);
+      robot.expectTextVisible(
+        AppStrings.requestSettingsSavedResponsesInHistory,
+      );
+      robot.expectTextVisible(
+        AppStrings.requestSettingsTimeoutIntervalInSeconds,
+      );
+      robot.expectTextVisible(AppStrings.requestSettingsUserAgent);
+    });
+
+    testWidgets('should show default request settings values', (tester) async {
+      final robot = RequestEditorSheetRobot(tester);
+
+      await robot.pumpScreen();
+      await robot.openEditor();
+      await robot.selectMoreAction('Settings');
+
+      robot.expectTextVisible('10');
+      robot.expectTextVisible('30');
+      robot.expectTextVisible('HTTPBot/2026.1.1');
+      robot.expectSwitchValue('follow_redirects', true);
+      robot.expectSwitchValue('send_cookies', true);
+      robot.expectSwitchValue('store_cookies', true);
+      robot.expectSwitchValue('verify_ssl', true);
+    });
+
+    testWidgets('should edit timeout setting', (tester) async {
+      final robot = RequestEditorSheetRobot(tester);
+
+      await robot.pumpScreen();
+      await robot.openEditor();
+      await robot.selectMoreAction('Settings');
+      await robot.openSettingsValueEditor('timeout_seconds');
+      await robot.enterTopEditorText('5');
+      await robot.saveTopEditor();
+
+      robot.expectTextVisible('5');
+    });
+
+    testWidgets('should toggle send cookies setting', (tester) async {
+      final robot = RequestEditorSheetRobot(tester);
+
+      await robot.pumpScreen();
+      await robot.openEditor();
+      await robot.selectMoreAction('Settings');
+      await robot.toggleSettingsSwitch('send_cookies');
+
+      robot.expectSwitchValue('send_cookies', false);
+    });
+
+    testWidgets(
+      'should auto fill cookie domain from current request url',
+      (tester) async {
+        final robot = RequestEditorSheetRobot(tester);
+
+        await robot.pumpScreen(
+          initialDraft: const RequestDraft(
+            url: 'https://jsonplaceholder.typicode.com/posts/1',
+          ),
+        );
+        await robot.openEditor();
+        await robot.selectMoreAction('Cookies');
+        await tester.tap(
+          find.byKey(
+            const ValueKey<String>(AppWidgetKeys.requestsCookiesAddButton),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final domainField = tester.widget<TextFormField>(
+          find.byKey(
+            ValueKey<String>(AppWidgetKeys.requestsCookieField('domain')),
+          ),
+        );
+        expect(domainField.controller?.text, 'jsonplaceholder.typicode.com');
+      },
+    );
+
+    testWidgets(
+      'should switch current request into GraphQL mode from more menu',
+      (tester) async {
+        final robot = RequestEditorSheetRobot(tester);
+
+        await robot.pumpScreen();
+        await robot.openEditor();
+        await robot.selectMoreAction('Use GraphQL');
+
+        robot.expectTextVisible('Query');
+        robot.expectTextVisible('Variables');
+        robot.expectHeaderValue(
+          section: 'headers',
+          index: 0,
+          field: 'key',
+          value: 'Content-Type',
+        );
+        robot.expectHeaderValue(
+          section: 'headers',
+          index: 0,
+          field: 'value',
+          value: 'application/json',
+        );
+        robot.expectTextVisible('POST');
+      },
+    );
+
+    testWidgets(
+      'should keep GraphQL variables editor open when json is invalid',
+      (tester) async {
+        final robot = RequestEditorSheetRobot(tester);
+
+        await robot.pumpScreen();
+        await robot.openEditor();
+        await robot.selectMoreAction('Use GraphQL');
+        await robot.openGraphQlVariablesEditor();
+        await robot.enterGraphQlEditorText('{id: 1}');
+        await robot.saveGraphQlEditor();
+
+        robot.expectTextVisible(
+          'GraphQL variables must be a valid JSON object.',
+        );
+        expect(find.byType(TextFormField).last, findsOneWidget);
+      },
+    );
+
     testWidgets(
       'should show authorization header row when bearer token auth is entered',
       (tester) async {
@@ -902,6 +1076,70 @@ class RequestEditorSheetRobot {
     await tester.pumpAndSettle();
   }
 
+  /// Opens the request more menu and selects one visible action label.
+  Future<void> selectMoreAction(String label) async {
+    final moreButton = find.byKey(
+      const ValueKey<String>(AppWidgetKeys.requestsEditorMoreButton),
+    );
+    await tester.ensureVisible(moreButton);
+    await tester.tap(moreButton);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(label).last);
+    await tester.pumpAndSettle();
+  }
+
+  /// Opens the GraphQL variables editor row from the request body card.
+  Future<void> openGraphQlVariablesEditor() async {
+    final rowFinder = find.byKey(
+      const ValueKey<String>(AppWidgetKeys.requestsEditorGraphQlVariablesField),
+    );
+    await tester.ensureVisible(rowFinder.first);
+    await tester.tap(rowFinder.first);
+    await tester.pumpAndSettle();
+  }
+
+  /// Enters text into the visible GraphQL query/variables editor field.
+  Future<void> enterGraphQlEditorText(String value) async {
+    final fieldFinder = find.byType(TextFormField).last;
+    await tester.enterText(fieldFinder, value);
+    await tester.pumpAndSettle();
+  }
+
+  /// Saves the active GraphQL editor sheet using the top-right check button.
+  Future<void> saveGraphQlEditor() async {
+    await tester.tap(find.byIcon(CupertinoIcons.check_mark).last);
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> openSettingsValueEditor(String fieldName) async {
+    final fieldFinder = find.byKey(
+      ValueKey<String>(AppWidgetKeys.requestsSettingsField(fieldName)),
+    );
+    await tester.ensureVisible(fieldFinder);
+    await tester.tap(fieldFinder);
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> enterTopEditorText(String value) async {
+    final fieldFinder = find.byType(TextFormField).last;
+    await tester.enterText(fieldFinder, value);
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> saveTopEditor() async {
+    await tester.tap(find.byIcon(CupertinoIcons.check_mark).last);
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> toggleSettingsSwitch(String fieldName) async {
+    final switchFinder = find.byKey(
+      ValueKey<String>(AppWidgetKeys.requestsSettingsField(fieldName)),
+    );
+    await tester.ensureVisible(switchFinder);
+    await tester.tap(switchFinder);
+    await tester.pumpAndSettle();
+  }
+
   /// Enters one auth credential field by semantic field key.
   Future<void> enterAuthField(String fieldName, String value) async {
     final fieldFinder = find.byKey(
@@ -1015,6 +1253,14 @@ class RequestEditorSheetRobot {
     );
     final textField = tester.widget<TextFormField>(fieldFinder.last);
     expect(textField.controller?.text, value);
+  }
+
+  void expectSwitchValue(String fieldName, bool value) {
+    final switchFinder = find.byKey(
+      ValueKey<String>(AppWidgetKeys.requestsSettingsField(fieldName)),
+    );
+    final adaptiveSwitch = tester.widget<Switch>(switchFinder);
+    expect(adaptiveSwitch.value, value);
   }
 }
 

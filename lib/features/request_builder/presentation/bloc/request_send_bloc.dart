@@ -6,6 +6,7 @@ import '../../domain/entities/request_body_draft.dart';
 import '../../domain/entities/request_draft.dart';
 import '../../domain/helpers/request_auth_validator.dart';
 import '../../domain/usecases/apply_request_auth_use_case.dart';
+import '../../domain/usecases/evaluate_request_tests_use_case.dart';
 import '../../domain/usecases/execute_request_use_case.dart';
 import '../../domain/usecases/parse_response_use_case.dart';
 import '../../domain/usecases/resolve_request_use_case.dart';
@@ -19,11 +20,13 @@ class RequestSendBloc extends Bloc<RequestSendEvent, RequestSendState> {
     required ResolveRequestUseCase resolveRequestUseCase,
     required ApplyRequestAuthUseCase applyRequestAuthUseCase,
     required ExecuteRequestUseCase executeRequestUseCase,
+    required EvaluateRequestTestsUseCase evaluateRequestTestsUseCase,
     required ParseResponseUseCase parseResponseUseCase,
     required SaveRequestHistoryEntryUseCase saveRequestHistoryEntryUseCase,
   }) : _resolveRequestUseCase = resolveRequestUseCase,
        _applyRequestAuthUseCase = applyRequestAuthUseCase,
        _executeRequestUseCase = executeRequestUseCase,
+       _evaluateRequestTestsUseCase = evaluateRequestTestsUseCase,
        _parseResponseUseCase = parseResponseUseCase,
        _saveRequestHistoryEntryUseCase = saveRequestHistoryEntryUseCase,
        super(const RequestSendState.initial()) {
@@ -34,6 +37,7 @@ class RequestSendBloc extends Bloc<RequestSendEvent, RequestSendState> {
   final ResolveRequestUseCase _resolveRequestUseCase;
   final ApplyRequestAuthUseCase _applyRequestAuthUseCase;
   final ExecuteRequestUseCase _executeRequestUseCase;
+  final EvaluateRequestTestsUseCase _evaluateRequestTestsUseCase;
   final ParseResponseUseCase _parseResponseUseCase;
   final SaveRequestHistoryEntryUseCase _saveRequestHistoryEntryUseCase;
 
@@ -63,7 +67,9 @@ class RequestSendBloc extends Bloc<RequestSendEvent, RequestSendState> {
     final authAppliedRequest = _applyRequestAuthUseCase(
       resolvedRequest: resolvedRequest,
     );
-    final executionResult = await _executeRequestUseCase(authAppliedRequest);
+    final rawExecutionResult = await _executeRequestUseCase(authAppliedRequest);
+    final testResults = _evaluateRequestTestsUseCase(rawExecutionResult);
+    final executionResult = rawExecutionResult.copyWith(testResults: testResults);
     final parsedResponse = _parseResponseUseCase(executionResult);
 
     if (executionResult.wasBlocked) {
@@ -121,6 +127,10 @@ class RequestSendBloc extends Bloc<RequestSendEvent, RequestSendState> {
     }
 
     if (draft.body.type == RequestBodyType.graphql) {
+      if (draft.body.graphQl.query.trim().isEmpty) {
+        return 'GraphQL query is required before sending.';
+      }
+
       final validationError = _validateGraphQlVariables(
         draft.body.graphQl.variables,
       );

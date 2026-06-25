@@ -236,7 +236,10 @@ class AwsAuthHeadersBuilder {
       RequestBodyType.raw => body.raw.content,
       RequestBodyType.graphql => jsonEncode(<String, Object?>{
         'query': body.graphQl.query,
-        'variables': _graphQlVariablesForSigning(body.graphQl.variables),
+        if (body.graphQl.variables.trim().isNotEmpty)
+          'variables': _graphQlVariablesForSigning(body.graphQl.variables),
+        if (body.graphQl.operationName?.trim().isNotEmpty ?? false)
+          'operationName': body.graphQl.operationName!.trim(),
       }),
       RequestBodyType.xWwwFormUrlEncoded =>
         body.urlEncoded

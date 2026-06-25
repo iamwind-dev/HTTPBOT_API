@@ -63,8 +63,7 @@ String buildExecutionUrl(String baseUrl, List<KeyValueItem> queryParameters) {
 
   final suffix = enabledQueryParameters.join('&');
   if (baseUrl.contains('?')) {
-    final separator =
-        baseUrl.endsWith('?') || baseUrl.endsWith('&') ? '' : '&';
+    final separator = baseUrl.endsWith('?') || baseUrl.endsWith('&') ? '' : '&';
     return '$baseUrl$separator$suffix';
   }
 

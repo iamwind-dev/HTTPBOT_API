@@ -40,22 +40,32 @@ import '../features/request_history/domain/usecases/get_request_history_entries_
 import '../features/request_history/domain/usecases/save_request_history_entry_use_case.dart';
 import '../features/request_history/presentation/cubit/request_history_cubit.dart';
 import '../features/request_builder/data/repositories/request_execution_repository_impl.dart';
+import '../features/request_builder/data/repositories/http_cookie_repository_impl.dart';
 import '../features/request_builder/data/repositories/request_builder_repository_impl.dart';
 import '../features/request_builder/data/datasources/oauth2_remote_datasource.dart';
 import '../features/request_builder/data/repositories/oauth2_repository_impl.dart';
+import '../features/request_builder/data/repositories/graphql_repository_impl.dart';
 import '../features/request_builder/data/repositories/saved_credentials_repository_impl.dart';
+import '../features/request_builder/domain/repositories/graphql_repository.dart';
+import '../features/request_builder/domain/repositories/http_cookie_repository.dart';
 import '../features/request_builder/domain/repositories/oauth2_repository.dart';
 import '../features/request_builder/domain/repositories/request_execution_repository.dart';
 import '../features/request_builder/domain/repositories/request_builder_repository.dart';
 import '../features/request_builder/domain/repositories/saved_credentials_repository.dart';
 import '../features/request_builder/domain/usecases/exchange_oauth2_authorization_code_use_case.dart';
+import '../features/request_builder/domain/usecases/fetch_graphql_schema_use_case.dart';
 import '../features/request_builder/domain/usecases/request_oauth2_client_credentials_token_use_case.dart';
 import '../features/request_builder/domain/usecases/request_oauth2_password_credentials_token_use_case.dart';
+import '../features/request_builder/domain/usecases/get_saved_graphql_queries_use_case.dart';
+import '../features/request_builder/domain/usecases/get_saved_graphql_variables_use_case.dart';
 import '../features/request_builder/domain/usecases/get_saved_credentials_use_case.dart';
+import '../features/request_builder/domain/usecases/save_saved_graphql_queries_use_case.dart';
+import '../features/request_builder/domain/usecases/save_saved_graphql_variables_use_case.dart';
 import '../features/request_builder/domain/usecases/save_saved_credentials_use_case.dart';
 import '../features/request_builder/presentation/cubit/manage_credentials_cubit.dart';
 import '../features/request_builder/domain/usecases/clear_current_request_draft_session_use_case.dart';
 import '../features/request_builder/domain/usecases/execute_request_use_case.dart';
+import '../features/request_builder/domain/usecases/evaluate_request_tests_use_case.dart';
 import '../features/request_builder/domain/usecases/get_current_request_draft_session_use_case.dart';
 import '../features/request_builder/domain/usecases/get_request_draft_use_case.dart';
 import '../features/request_builder/domain/usecases/get_request_variable_store_use_case.dart';
@@ -158,9 +168,11 @@ void configureDependencies() {
     ..registerLazySingleton<RequestBuilderRepository>(
       RequestBuilderRepositoryImpl.new,
     )
+    ..registerLazySingleton<HttpCookieRepository>(HttpCookieRepositoryImpl.new)
     ..registerLazySingleton<RequestExecutionRepository>(
       () => RequestExecutionRepositoryImpl(
         getIt<DioClient>(),
+        httpCookieRepository: getIt<HttpCookieRepository>(),
         ntlmHttpClient: getIt<NtlmHttpClient>(),
       ),
     )
@@ -209,6 +221,7 @@ void configureDependencies() {
   getIt.registerLazySingleton(
     () => ExecuteRequestUseCase(getIt<RequestExecutionRepository>()),
   );
+  getIt.registerLazySingleton(EvaluateRequestTestsUseCase.new);
   getIt.registerLazySingleton(
     () => GetRequestHistoryEntriesUseCase(getIt<RequestHistoryRepository>()),
   );
@@ -221,6 +234,28 @@ void configureDependencies() {
   getIt.registerLazySingleton(ResolveRequestUseCase.new);
   getIt.registerLazySingleton(ApplyRequestAuthUseCase.new);
   getIt.registerLazySingleton(ParseResponseUseCase.new);
+  getIt.registerLazySingleton<GraphQlRepository>(
+    () => GraphQlRepositoryImpl(
+      getIt<DioClient>(),
+      getIt<ResolveRequestUseCase>(),
+      getIt<ApplyRequestAuthUseCase>(),
+    ),
+  );
+  getIt.registerLazySingleton(
+    () => FetchGraphQlSchemaUseCase(getIt<GraphQlRepository>()),
+  );
+  getIt.registerLazySingleton(
+    () => GetSavedGraphQlQueriesUseCase(getIt<GraphQlRepository>()),
+  );
+  getIt.registerLazySingleton(
+    () => SaveSavedGraphQlQueriesUseCase(getIt<GraphQlRepository>()),
+  );
+  getIt.registerLazySingleton(
+    () => GetSavedGraphQlVariablesUseCase(getIt<GraphQlRepository>()),
+  );
+  getIt.registerLazySingleton(
+    () => SaveSavedGraphQlVariablesUseCase(getIt<GraphQlRepository>()),
+  );
   getIt.registerLazySingleton(
     () => ExchangeOAuth2AuthorizationCodeUseCase(getIt<OAuth2Repository>()),
   );
@@ -235,6 +270,7 @@ void configureDependencies() {
       resolveRequestUseCase: getIt<ResolveRequestUseCase>(),
       applyRequestAuthUseCase: getIt<ApplyRequestAuthUseCase>(),
       executeRequestUseCase: getIt<ExecuteRequestUseCase>(),
+      evaluateRequestTestsUseCase: getIt<EvaluateRequestTestsUseCase>(),
       parseResponseUseCase: getIt<ParseResponseUseCase>(),
       saveRequestHistoryEntryUseCase: getIt<SaveRequestHistoryEntryUseCase>(),
     ),
