@@ -22,11 +22,10 @@ class RequestExecutionRepositoryImpl implements RequestExecutionRepository {
     required HttpCookieRepository httpCookieRepository,
     NtlmHttpClient? ntlmHttpClient,
     DigestHttpClient? digestHttpClient,
-  }) : _ntlmHttpClient = ntlmHttpClient ?? NtlmHttpClient(),
+  }) : _httpCookieRepository = httpCookieRepository,
+       _ntlmHttpClient = ntlmHttpClient ?? NtlmHttpClient(),
        _digestHttpClient =
            digestHttpClient ?? DigestHttpClient(dioClient: _dioClient);
-  }) : _httpCookieRepository = httpCookieRepository,
-       _ntlmHttpClient = ntlmHttpClient ?? NtlmHttpClient();
 
   final DioClient _dioClient;
   final HttpCookieRepository _httpCookieRepository;

@@ -274,6 +274,35 @@ class PostmanCubit extends Cubit<PostmanState> {
     emit(state.copyWith(clearSelectedCollection: true));
   }
 
+  Future<void> updateCollection(PostmanCollectionEntity collection) async {
+    final nextCollections = _upsertImportedCollection(collection);
+
+    emit(
+      state.copyWith(
+        collections: nextCollections,
+        selectedCollection: state.selectedCollection?.id == collection.id
+            ? collection
+            : state.selectedCollection,
+      ),
+    );
+    await saveCachedPostmanCollectionsUseCase(nextCollections);
+  }
+
+  Future<void> deleteCollection(String collectionId) async {
+    final nextCollections = state.collections
+        .where((collection) => collection.id != collectionId)
+        .toList(growable: false);
+
+    emit(
+      state.copyWith(
+        collections: nextCollections,
+        clearSelectedCollection:
+            state.selectedCollection?.id == collectionId,
+      ),
+    );
+    await saveCachedPostmanCollectionsUseCase(nextCollections);
+  }
+
   Future<void> _persistLinkedSession({
     required String apiKey,
     required PostmanAccountEntity account,

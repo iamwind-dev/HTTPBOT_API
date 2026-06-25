@@ -431,7 +431,10 @@ class _PostmanShell extends StatelessWidget {
                   context.read<PostmanCubit>().clearSelectedCollection(),
               icon: const Icon(Icons.arrow_back_ios_new_rounded),
             ),
-      bottomSlot: const PostmanSearch(),
+      trailing: const _CollectionsMoreButton(),
+      bottomSlot: state.selectedCollection == null
+          ? const PostmanSearch()
+          : null,
       body: const PostmanScreen(),
       floatingActionButton: const PostmanShellActionButton(),
       onTabSelected: onTabSelected,

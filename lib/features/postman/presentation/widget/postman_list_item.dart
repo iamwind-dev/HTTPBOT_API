@@ -4,10 +4,16 @@ import 'package:httpbot_api/features/postman/presentation/model/postman_list_ite
 import 'package:httpbot_api/generated/assets.gen.dart';
 
 class PostmanListItem extends StatelessWidget {
-  const PostmanListItem({super.key, required this.item, required this.onTap});
+  const PostmanListItem({
+    super.key,
+    required this.item,
+    required this.onTap,
+    required this.onMoreTap,
+  });
 
   final PostmanListItemModel item;
   final VoidCallback onTap;
+  final VoidCallback onMoreTap;
 
   @override
   Widget build(BuildContext context) {
@@ -15,6 +21,8 @@ class PostmanListItem extends StatelessWidget {
 
     return InkWell(
       onTap: onTap,
+      onLongPress: onMoreTap,
+      borderRadius: BorderRadius.circular(18),
       child: Column(
         children: [
           Row(
@@ -49,10 +57,16 @@ class PostmanListItem extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 10),
-              Icon(
-                Icons.arrow_forward_ios,
-                color: colors.secondary.withValues(alpha: 0.3),
-                size: 18,
+              InkWell(
+                onTap: onMoreTap,
+                borderRadius: BorderRadius.circular(18),
+                child: Padding(
+                  padding: const EdgeInsets.all(4),
+                  child: Icon(
+                    Icons.more_horiz_rounded,
+                    color: colors.secondary.withValues(alpha: 0.6),
+                  ),
+                ),
               ),
             ],
           ),

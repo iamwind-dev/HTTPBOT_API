@@ -10,4 +10,16 @@ class PostmanVariableEntity {
   final String value;
   final String type;
   final bool isEnabled;
+
+  PostmanVariableEntity copyWith({
+    String? key,
+    String? value,
+    String? type,
+    bool? isEnabled,
+  }) => PostmanVariableEntity(
+    key: key ?? this.key,
+    value: value ?? this.value,
+    type: type ?? this.type,
+    isEnabled: isEnabled ?? this.isEnabled,
+  );
 }

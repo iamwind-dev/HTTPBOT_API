@@ -11,7 +11,11 @@ import 'package:httpbot_api/features/request_builder/domain/entities/request_key
 import 'package:httpbot_api/features/request_builder/domain/entities/request_variable.dart';
 import 'package:httpbot_api/features/request_builder/domain/entities/request_variable_store.dart';
 import 'package:httpbot_api/features/request_builder/domain/entities/requests_method.dart';
+import 'package:httpbot_api/features/request_builder/domain/helpers/curl_command_builder.dart';
+import 'package:httpbot_api/features/request_builder/domain/helpers/simple_curl_request_parser.dart';
 import 'package:httpbot_api/features/request_builder/domain/usecases/get_request_variable_store_use_case.dart';
+import 'package:httpbot_api/features/request_builder/presentation/models/request_editor_result.dart';
+import 'package:httpbot_api/features/request_builder/presentation/widgets/view_curl_sheet.dart';
 import 'package:httpbot_api/features/request_builder/presentation/widgets/request_editor_sheet.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -215,6 +219,7 @@ class _CollectionDetailView extends StatefulWidget {
 class _CollectionDetailViewState extends State<_CollectionDetailView> {
   final Set<String> _expandedFolders = <String>{};
   late final TextEditingController _searchController;
+  static const _curlParser = SimpleCurlRequestParser();
 
   String get _searchQuery => _searchController.text;
 
@@ -284,6 +289,7 @@ class _CollectionDetailViewState extends State<_CollectionDetailView> {
             request: request,
             depth: 0,
             onTap: () => _openRequestEditor(request),
+            onLongPress: () => _showRequestActions(request: request),
           ),
         for (final folder in visibleFolders)
           _CollectionFolderNode(
@@ -297,10 +303,78 @@ class _CollectionDetailViewState extends State<_CollectionDetailView> {
                 _expandedFolders.add(folderKey);
               }
             }),
+            onLongPress: _showFolderActions,
             onRequestTap: _openRequestEditor,
+            onRequestLongPress: ({
+              required request,
+              required folderKey,
+            }) => _showRequestActions(
+              request: request,
+              folderKey: folderKey,
+            ),
           ),
       ],
     );
+  }
+
+  Future<void> _showFolderActions(_VisibleFolderNode folder) async {
+    final action = await showModalBottomSheet<_FolderTreeAction>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const _FolderActionsSheet(),
+    );
+
+    if (!mounted || action == null) {
+      return;
+    }
+
+    switch (action) {
+      case _FolderTreeAction.rename:
+        await _renameFolder(folder);
+        break;
+      case _FolderTreeAction.newRequest:
+        await _createFolderRequest(folder);
+        break;
+      case _FolderTreeAction.newFolder:
+        await _createChildFolder(folder);
+        break;
+      case _FolderTreeAction.importCurl:
+        await _importCurlIntoFolder(folder);
+        break;
+      case _FolderTreeAction.delete:
+        await _deleteFolder(folder);
+        break;
+    }
+  }
+
+  Future<void> _showRequestActions({
+    required ImportedCollectionRequestEntity request,
+    String? folderKey,
+  }) async {
+    final action = await showModalBottomSheet<_RequestTreeAction>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const _RequestActionsSheet(),
+    );
+
+    if (!mounted || action == null) {
+      return;
+    }
+
+    switch (action) {
+      case _RequestTreeAction.edit:
+        await _editRequest(request: request, folderKey: folderKey);
+        break;
+      case _RequestTreeAction.duplicate:
+        _duplicateRequest(request: request, folderKey: folderKey);
+        break;
+      case _RequestTreeAction.viewCurl:
+        await _viewCurlRequest(request);
+        break;
+      case _RequestTreeAction.delete:
+        await _deleteRequest(request: request, folderKey: folderKey);
+        break;
+    }
   }
 
   Future<void> _openRequestEditor(
@@ -559,6 +633,458 @@ class _CollectionDetailViewState extends State<_CollectionDetailView> {
     }
     return '$parentKey/$folderName';
   }
+
+  Future<void> _renameFolder(_VisibleFolderNode folder) async {
+    final nextName = await _showNameEditorDialog(
+      title: 'Rename Folder',
+      actionLabel: 'Rename',
+      initialValue: folder.folder.name,
+    );
+    if (!mounted || nextName == null || nextName == folder.folder.name) {
+      return;
+    }
+
+    final updatedCollection = widget.collection.copyWith(
+      folders: _updateFolderTree(
+        widget.collection.folders,
+        folder.key,
+        (target) => target.copyWith(name: nextName),
+      ),
+    );
+
+    context.read<CollectionCubit>().updateCollection(updatedCollection);
+  }
+
+  Future<void> _createChildFolder(_VisibleFolderNode folder) async {
+    final folderName = await _showNameEditorDialog(
+      title: 'New Folder',
+      actionLabel: 'Create',
+      initialValue: '',
+    );
+    if (!mounted || folderName == null) {
+      return;
+    }
+
+    final updatedCollection = widget.collection.copyWith(
+      folders: _updateFolderTree(
+        widget.collection.folders,
+        folder.key,
+        (target) => target.copyWith(
+          folders: [
+            ...target.folders,
+            ImportedCollectionFolderEntity(name: folderName),
+          ],
+        ),
+      ),
+    );
+
+    context.read<CollectionCubit>().updateCollection(updatedCollection);
+    setState(() => _expandedFolders.add(folder.key));
+  }
+
+  Future<void> _deleteFolder(_VisibleFolderNode folder) async {
+    final confirmed = await _showDeleteFolderDialog(folder.folder.name);
+    if (!mounted || confirmed != true) {
+      return;
+    }
+
+    final updatedCollection = widget.collection.copyWith(
+      folders: _deleteFolderFromTree(widget.collection.folders, folder.key),
+    );
+    context.read<CollectionCubit>().updateCollection(updatedCollection);
+  }
+
+  Future<void> _createFolderRequest(_VisibleFolderNode folder) async {
+    final variableStore = await getIt<GetRequestVariableStoreUseCase>()();
+    if (!mounted) {
+      return;
+    }
+
+    final result = await showRequestEditorSheet(
+      context,
+      title: 'Untitled Request',
+      initialDraft: const RequestDraft(),
+      variableStore: _mergeImportedVariables(
+        existingStore: variableStore,
+        collection: widget.collection,
+      ),
+    );
+
+    if (!mounted || result == null) {
+      return;
+    }
+
+    final request = _requestFromEditorResult(result);
+    final updatedCollection = widget.collection.copyWith(
+      folders: _updateFolderTree(
+        widget.collection.folders,
+        folder.key,
+        (target) => target.copyWith(requests: [...target.requests, request]),
+      ),
+    );
+
+    context.read<CollectionCubit>().updateCollection(updatedCollection);
+    setState(() => _expandedFolders.add(folder.key));
+  }
+
+  Future<void> _importCurlIntoFolder(_VisibleFolderNode folder) async {
+    final curlCommand = await Navigator.of(context).push<String>(
+      MaterialPageRoute<String>(
+        fullscreenDialog: true,
+        builder: (_) => const _CurlImportPage(),
+      ),
+    );
+
+    if (!mounted || curlCommand == null || curlCommand.trim().isEmpty) {
+      return;
+    }
+
+    final parsedDraft = _curlParser.parse(curlCommand);
+    final variableStore = await getIt<GetRequestVariableStoreUseCase>()();
+    if (!mounted) {
+      return;
+    }
+
+    final result = await showRequestEditorSheet(
+      context,
+      title: 'Imported cURL Request',
+      initialDraft: parsedDraft,
+      variableStore: _mergeImportedVariables(
+        existingStore: variableStore,
+        collection: widget.collection,
+      ),
+    );
+
+    if (!mounted || result == null) {
+      return;
+    }
+
+    final request = _requestFromEditorResult(result);
+    final updatedCollection = widget.collection.copyWith(
+      folders: _updateFolderTree(
+        widget.collection.folders,
+        folder.key,
+        (target) => target.copyWith(requests: [...target.requests, request]),
+      ),
+    );
+
+    context.read<CollectionCubit>().updateCollection(updatedCollection);
+    setState(() => _expandedFolders.add(folder.key));
+  }
+
+  Future<void> _viewCurlRequest(ImportedCollectionRequestEntity request) async {
+    final curlCommand = const CurlCommandBuilder().build(
+      draft: _draftFromImportedRequest(request),
+    );
+    await showViewCurlSheet(context, curlCommand: curlCommand);
+  }
+
+  void _duplicateRequest({
+    required ImportedCollectionRequestEntity request,
+    String? folderKey,
+  }) {
+    final duplicatedRequest = request.copyWith(title: '${request.title} Copy');
+
+    final updatedCollection = folderKey == null
+        ? widget.collection.copyWith(
+            rootRequests: _duplicateRootRequest(
+              widget.collection.rootRequests,
+              request,
+              duplicatedRequest,
+            ),
+          )
+        : widget.collection.copyWith(
+            folders: _updateFolderTree(
+              widget.collection.folders,
+              folderKey,
+              (target) => target.copyWith(
+                requests: _duplicateFolderRequest(
+                  target.requests,
+                  request,
+                  duplicatedRequest,
+                ),
+              ),
+            ),
+          );
+
+    context.read<CollectionCubit>().updateCollection(updatedCollection);
+  }
+
+  Future<void> _deleteRequest({
+    required ImportedCollectionRequestEntity request,
+    String? folderKey,
+  }) async {
+    final confirmed = await _showDeleteRequestDialog(
+      request.title.trim().isEmpty ? 'Untitled Request' : request.title,
+    );
+    if (!mounted || confirmed != true) {
+      return;
+    }
+
+    final updatedCollection = folderKey == null
+        ? widget.collection.copyWith(
+            rootRequests: _deleteRootRequest(
+              widget.collection.rootRequests,
+              request,
+            ),
+          )
+        : widget.collection.copyWith(
+            folders: _updateFolderTree(
+              widget.collection.folders,
+              folderKey,
+              (target) => target.copyWith(
+                requests: _deleteFolderRequest(target.requests, request),
+              ),
+            ),
+          );
+
+    context.read<CollectionCubit>().updateCollection(updatedCollection);
+  }
+
+  List<ImportedCollectionFolderEntity> _updateFolderTree(
+    List<ImportedCollectionFolderEntity> folders,
+    String targetKey,
+    ImportedCollectionFolderEntity Function(ImportedCollectionFolderEntity)
+    transform, [
+    String parentKey = '',
+  ]) {
+    return folders.map((folder) {
+      final currentKey = _folderKey(parentKey, folder.name);
+      if (currentKey == targetKey) {
+        return transform(folder);
+      }
+
+      return folder.copyWith(
+        folders: _updateFolderTree(
+          folder.folders,
+          targetKey,
+          transform,
+          currentKey,
+        ),
+      );
+    }).toList(growable: false);
+  }
+
+  List<ImportedCollectionFolderEntity> _deleteFolderFromTree(
+    List<ImportedCollectionFolderEntity> folders,
+    String targetKey, [
+    String parentKey = '',
+  ]) {
+    final nextFolders = <ImportedCollectionFolderEntity>[];
+    for (final folder in folders) {
+      final currentKey = _folderKey(parentKey, folder.name);
+      if (currentKey == targetKey) {
+        continue;
+      }
+      nextFolders.add(
+        folder.copyWith(
+          folders: _deleteFolderFromTree(
+            folder.folders,
+            targetKey,
+            currentKey,
+          ),
+        ),
+      );
+    }
+    return nextFolders;
+  }
+
+  List<ImportedCollectionRequestEntity> _replaceRootRequest(
+    List<ImportedCollectionRequestEntity> requests,
+    ImportedCollectionRequestEntity source,
+    ImportedCollectionRequestEntity replacement,
+  ) {
+    final index = requests.indexOf(source);
+    if (index < 0) {
+      return requests;
+    }
+    final updated = [...requests];
+    updated[index] = replacement;
+    return List<ImportedCollectionRequestEntity>.unmodifiable(updated);
+  }
+
+  List<ImportedCollectionRequestEntity> _replaceFolderRequest(
+    List<ImportedCollectionRequestEntity> requests,
+    ImportedCollectionRequestEntity source,
+    ImportedCollectionRequestEntity replacement,
+  ) {
+    return _replaceRootRequest(requests, source, replacement);
+  }
+
+  List<ImportedCollectionRequestEntity> _duplicateRootRequest(
+    List<ImportedCollectionRequestEntity> requests,
+    ImportedCollectionRequestEntity source,
+    ImportedCollectionRequestEntity duplicate,
+  ) {
+    final index = requests.indexOf(source);
+    if (index < 0) {
+      return [...requests, duplicate];
+    }
+    return [
+      ...requests.sublist(0, index + 1),
+      duplicate,
+      ...requests.sublist(index + 1),
+    ];
+  }
+
+  List<ImportedCollectionRequestEntity> _duplicateFolderRequest(
+    List<ImportedCollectionRequestEntity> requests,
+    ImportedCollectionRequestEntity source,
+    ImportedCollectionRequestEntity duplicate,
+  ) {
+    return _duplicateRootRequest(requests, source, duplicate);
+  }
+
+  List<ImportedCollectionRequestEntity> _deleteRootRequest(
+    List<ImportedCollectionRequestEntity> requests,
+    ImportedCollectionRequestEntity source,
+  ) {
+    final index = requests.indexOf(source);
+    if (index < 0) {
+      return requests;
+    }
+    return [
+      ...requests.sublist(0, index),
+      ...requests.sublist(index + 1),
+    ];
+  }
+
+  List<ImportedCollectionRequestEntity> _deleteFolderRequest(
+    List<ImportedCollectionRequestEntity> requests,
+    ImportedCollectionRequestEntity source,
+  ) {
+    return _deleteRootRequest(requests, source);
+  }
+
+  ImportedCollectionRequestEntity _requestFromEditorResult(
+    RequestEditorResult result,
+  ) {
+    final draft = result.draft;
+    return ImportedCollectionRequestEntity(
+      method: draft.method.wireName,
+      title: result.title.trim().isEmpty ? 'Untitled Request' : result.title,
+      url: draft.url,
+      baseUrlValue: '',
+      queryParameters: draft.queryParameters
+          .where((item) => item.key.trim().isNotEmpty || item.value.trim().isNotEmpty)
+          .map(
+            (item) => ImportedRequestFieldEntity(
+              name: item.key,
+              value: item.value,
+              description: item.description,
+            ),
+          )
+          .toList(growable: false),
+      headers: draft.headers
+          .where((item) => item.key.trim().isNotEmpty || item.value.trim().isNotEmpty)
+          .map(
+            (item) => ImportedRequestFieldEntity(
+              name: item.key,
+              value: item.value,
+              description: item.description,
+            ),
+          )
+          .toList(growable: false),
+      bodyContentType: _contentTypeFromDraft(draft),
+      bodyContent: _bodyContentFromDraft(draft),
+    );
+  }
+
+  Future<void> _editRequest({
+    required ImportedCollectionRequestEntity request,
+    String? folderKey,
+  }) async {
+    final variableStore = await getIt<GetRequestVariableStoreUseCase>()();
+    if (!mounted) {
+      return;
+    }
+
+    final result = await showRequestEditorSheet(
+      context,
+      title: request.title,
+      initialDraft: _draftFromImportedRequest(request),
+      variableStore: _mergeImportedVariables(
+        existingStore: variableStore,
+        collection: widget.collection,
+      ),
+    );
+
+    if (!mounted || result == null) {
+      return;
+    }
+
+    final updatedRequest = _requestFromEditorResult(result);
+    final updatedCollection = folderKey == null
+        ? widget.collection.copyWith(
+            rootRequests: _replaceRootRequest(
+              widget.collection.rootRequests,
+              request,
+              updatedRequest,
+            ),
+          )
+        : widget.collection.copyWith(
+            folders: _updateFolderTree(
+              widget.collection.folders,
+              folderKey,
+              (target) => target.copyWith(
+                requests: _replaceFolderRequest(
+                  target.requests,
+                  request,
+                  updatedRequest,
+                ),
+              ),
+            ),
+          );
+
+    context.read<CollectionCubit>().updateCollection(updatedCollection);
+  }
+
+  String _contentTypeFromDraft(RequestDraft draft) {
+    return switch (draft.body.type) {
+      RequestBodyType.raw => draft.body.raw.subtype.contentType,
+      RequestBodyType.xWwwFormUrlEncoded => 'application/x-www-form-urlencoded',
+      RequestBodyType.formData => 'multipart/form-data',
+      RequestBodyType.graphql => 'application/json',
+      RequestBodyType.none => '',
+    };
+  }
+
+  String _bodyContentFromDraft(RequestDraft draft) {
+    return switch (draft.body.type) {
+      RequestBodyType.raw => draft.body.raw.content,
+      RequestBodyType.graphql => draft.body.graphQl.query,
+      _ => '',
+    };
+  }
+
+  Future<String?> _showNameEditorDialog({
+    required String title,
+    required String actionLabel,
+    required String initialValue,
+  }) async {
+    return showDialog<String>(
+      context: context,
+      builder: (_) => _FolderNameDialog(
+        title: title,
+        actionLabel: actionLabel,
+        initialValue: initialValue,
+      ),
+    );
+  }
+
+  Future<bool?> _showDeleteFolderDialog(String folderName) {
+    return showDialog<bool>(
+      context: context,
+      builder: (_) => _DeleteFolderDialog(folderName: folderName),
+    );
+  }
+
+  Future<bool?> _showDeleteRequestDialog(String requestTitle) {
+    return showDialog<bool>(
+      context: context,
+      builder: (_) => _DeleteRequestDialog(requestTitle: requestTitle),
+    );
+  }
 }
 
 class _CollectionSearchBar extends StatelessWidget {
@@ -607,14 +1133,22 @@ class _CollectionFolderNode extends StatelessWidget {
     required this.depth,
     required this.expandedKeys,
     required this.onToggle,
+    required this.onLongPress,
     required this.onRequestTap,
+    required this.onRequestLongPress,
   });
 
   final _VisibleFolderNode folder;
   final int depth;
   final Set<String> expandedKeys;
   final ValueChanged<String> onToggle;
+  final ValueChanged<_VisibleFolderNode> onLongPress;
   final ValueChanged<ImportedCollectionRequestEntity> onRequestTap;
+  final Future<void> Function({
+    required ImportedCollectionRequestEntity request,
+    required String folderKey,
+  })
+  onRequestLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -629,6 +1163,7 @@ class _CollectionFolderNode extends StatelessWidget {
           expanded: expanded,
           depth: depth,
           onTap: () => onToggle(folder.key),
+          onLongPress: () => onLongPress(folder),
         ),
         Divider(
           color: colors.divider,
@@ -641,6 +1176,10 @@ class _CollectionFolderNode extends StatelessWidget {
               request: request,
               depth: depth + 1,
               onTap: () => onRequestTap(request),
+              onLongPress: () => onRequestLongPress(
+                request: request,
+                folderKey: folder.key,
+              ),
             ),
           for (final child in folder.visibleChildren)
             _CollectionFolderNode(
@@ -648,7 +1187,9 @@ class _CollectionFolderNode extends StatelessWidget {
               depth: depth + 1,
               expandedKeys: expandedKeys,
               onToggle: onToggle,
+              onLongPress: onLongPress,
               onRequestTap: onRequestTap,
+              onRequestLongPress: onRequestLongPress,
             ),
         ],
       ],
@@ -663,6 +1204,7 @@ class _FolderRow extends StatelessWidget {
     required this.expanded,
     required this.depth,
     required this.onTap,
+    required this.onLongPress,
   });
 
   final String name;
@@ -670,6 +1212,7 @@ class _FolderRow extends StatelessWidget {
   final bool expanded;
   final int depth;
   final VoidCallback onTap;
+  final VoidCallback onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -678,6 +1221,7 @@ class _FolderRow extends StatelessWidget {
 
     return InkWell(
       onTap: onTap,
+      onLongPress: onLongPress,
       borderRadius: BorderRadius.circular(18),
       child: Padding(
         padding: EdgeInsets.fromLTRB(leftPadding, 14, 0, 14),
@@ -735,11 +1279,13 @@ class _RequestRow extends StatelessWidget {
     required this.request,
     required this.depth,
     required this.onTap,
+    required this.onLongPress,
   });
 
   final ImportedCollectionRequestEntity request;
   final int depth;
   final VoidCallback onTap;
+  final VoidCallback onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -750,6 +1296,7 @@ class _RequestRow extends StatelessWidget {
 
     return InkWell(
       onTap: onTap,
+      onLongPress: onLongPress,
       borderRadius: BorderRadius.circular(20),
       child: Padding(
         padding: EdgeInsets.fromLTRB(leftPadding, 16, 0, 18),
@@ -944,6 +1491,509 @@ class _CollectionActionMenuItem extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+enum _FolderTreeAction { rename, newRequest, newFolder, importCurl, delete }
+
+enum _RequestTreeAction { edit, duplicate, viewCurl, delete }
+
+class _FolderActionsSheet extends StatelessWidget {
+  const _FolderActionsSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        child: Align(
+          alignment: Alignment.bottomLeft,
+          child: Container(
+            width: 280,
+            decoration: BoxDecoration(
+              color: colors.surface,
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: [
+                BoxShadow(
+                  color: colors.modalShadow,
+                  blurRadius: 24,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _CollectionActionMenuItem(
+                  icon: Icons.edit_outlined,
+                  label: 'Rename...',
+                  onTap: () =>
+                      Navigator.of(context).pop(_FolderTreeAction.rename),
+                ),
+                _CollectionActionMenuItem(
+                  icon: Icons.add_circle_outline_rounded,
+                  label: 'New Request',
+                  onTap: () =>
+                      Navigator.of(context).pop(_FolderTreeAction.newRequest),
+                ),
+                _CollectionActionMenuItem(
+                  icon: Icons.create_new_folder_outlined,
+                  label: 'New Folder',
+                  onTap: () =>
+                      Navigator.of(context).pop(_FolderTreeAction.newFolder),
+                ),
+                _CollectionActionMenuItem(
+                  icon: Icons.code_rounded,
+                  label: 'Import curl...',
+                  onTap: () =>
+                      Navigator.of(context).pop(_FolderTreeAction.importCurl),
+                ),
+                _CollectionActionMenuItem(
+                  icon: Icons.delete_outline_rounded,
+                  label: 'Delete',
+                  danger: true,
+                  onTap: () =>
+                      Navigator.of(context).pop(_FolderTreeAction.delete),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RequestActionsSheet extends StatelessWidget {
+  const _RequestActionsSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        child: Align(
+          alignment: Alignment.bottomLeft,
+          child: Container(
+            width: 280,
+            decoration: BoxDecoration(
+              color: colors.surface,
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: [
+                BoxShadow(
+                  color: colors.modalShadow,
+                  blurRadius: 24,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _CollectionActionMenuItem(
+                  icon: Icons.edit_outlined,
+                  label: 'Edit',
+                  onTap: () =>
+                      Navigator.of(context).pop(_RequestTreeAction.edit),
+                ),
+                _CollectionActionMenuItem(
+                  icon: Icons.copy_rounded,
+                  label: 'Duplicate',
+                  onTap: () =>
+                      Navigator.of(context).pop(_RequestTreeAction.duplicate),
+                ),
+                _CollectionActionMenuItem(
+                  icon: Icons.code_rounded,
+                  label: 'View curl',
+                  onTap: () =>
+                      Navigator.of(context).pop(_RequestTreeAction.viewCurl),
+                ),
+                _CollectionActionMenuItem(
+                  icon: Icons.delete_outline_rounded,
+                  label: 'Delete',
+                  danger: true,
+                  onTap: () =>
+                      Navigator.of(context).pop(_RequestTreeAction.delete),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FolderNameDialog extends StatelessWidget {
+  const _FolderNameDialog({
+    required this.title,
+    required this.actionLabel,
+    required this.initialValue,
+  });
+
+  final String title;
+  final String actionLabel;
+  final String initialValue;
+
+  @override
+  Widget build(BuildContext context) {
+    return _FolderNameDialogBody(
+      title: title,
+      actionLabel: actionLabel,
+      initialValue: initialValue,
+      confirmButtonBuilder: (label, onTap) => _CollectionDialogButton(
+        label: label,
+        onTap: onTap,
+      ),
+      cancelButtonBuilder: (label, onTap) => _CollectionDialogButton(
+        label: label,
+        onTap: onTap,
+      ),
+    );
+  }
+}
+
+class _FolderNameDialogBody extends StatefulWidget {
+  const _FolderNameDialogBody({
+    required this.title,
+    required this.actionLabel,
+    required this.initialValue,
+    required this.confirmButtonBuilder,
+    required this.cancelButtonBuilder,
+  });
+
+  final String title;
+  final String actionLabel;
+  final String initialValue;
+  final Widget Function(String label, VoidCallback onTap) confirmButtonBuilder;
+  final Widget Function(String label, VoidCallback onTap) cancelButtonBuilder;
+
+  @override
+  State<_FolderNameDialogBody> createState() => _FolderNameDialogBodyState();
+}
+
+class _FolderNameDialogBodyState extends State<_FolderNameDialogBody> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialValue);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      child: Container(
+        decoration: BoxDecoration(
+          color: colors.surface,
+          borderRadius: BorderRadius.circular(28),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 14),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              widget.title,
+              style: TextStyle(
+                color: colors.textPrimary,
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              decoration: BoxDecoration(
+                color: colors.surfaceMuted,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              child: TextField(
+                controller: _controller,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  border: InputBorder.none,
+                  hintText: 'Folder Name',
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: widget.cancelButtonBuilder(
+                    'Cancel',
+                    () => Navigator.of(context).pop(),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: widget.confirmButtonBuilder(
+                    widget.actionLabel,
+                    () {
+                      final value = _controller.text.trim();
+                      if (value.isEmpty) {
+                        return;
+                      }
+                      Navigator.of(context).pop(value);
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DeleteFolderDialog extends StatelessWidget {
+  const _DeleteFolderDialog({required this.folderName});
+
+  final String folderName;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      child: Container(
+        decoration: BoxDecoration(
+          color: colors.surface,
+          borderRadius: BorderRadius.circular(28),
+        ),
+        padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Delete Folder',
+              style: TextStyle(
+                color: colors.textPrimary,
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Are you sure you would like to delete this folder? This will delete all sub-folders and requests inside.',
+              style: TextStyle(
+                color: colors.textSecondary,
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              folderName,
+              style: TextStyle(
+                color: colors.textPrimary,
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: _CollectionDialogButton(
+                    label: 'Cancel',
+                    onTap: () => Navigator.of(context).pop(false),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _CollectionDialogButton(
+                    label: 'Delete',
+                    danger: true,
+                    onTap: () => Navigator.of(context).pop(true),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DeleteRequestDialog extends StatelessWidget {
+  const _DeleteRequestDialog({required this.requestTitle});
+
+  final String requestTitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      child: Container(
+        decoration: BoxDecoration(
+          color: colors.surface,
+          borderRadius: BorderRadius.circular(28),
+        ),
+        padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Delete Request',
+              style: TextStyle(
+                color: colors.textPrimary,
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Are you sure you would like to delete this request?',
+              style: TextStyle(
+                color: colors.textSecondary,
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              requestTitle,
+              style: TextStyle(
+                color: colors.textPrimary,
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: _CollectionDialogButton(
+                    label: 'Cancel',
+                    onTap: () => Navigator.of(context).pop(false),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _CollectionDialogButton(
+                    label: 'Delete',
+                    danger: true,
+                    onTap: () => Navigator.of(context).pop(true),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CurlImportPage extends StatefulWidget {
+  const _CurlImportPage();
+
+  @override
+  State<_CurlImportPage> createState() => _CurlImportPageState();
+}
+
+class _CurlImportPageState extends State<_CurlImportPage> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+
+    return Scaffold(
+      backgroundColor: colors.background,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  _HeaderCircleButton(
+                    icon: Icons.close_rounded,
+                    onTap: () => Navigator.of(context).pop(),
+                  ),
+                  Expanded(
+                    child: Text(
+                      'Import curl',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: colors.textPrimary,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  _HeaderCircleButton(
+                    icon: Icons.check_rounded,
+                    filled: true,
+                    onTap: () => Navigator.of(context).pop(_controller.text),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: _EditorCard(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  child: TextField(
+                    controller: _controller,
+                    expands: true,
+                    maxLines: null,
+                    minLines: null,
+                    decoration: const InputDecoration(
+                      border: InputBorder.none,
+                      hintText: 'curl https://api.example.com -X GET',
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

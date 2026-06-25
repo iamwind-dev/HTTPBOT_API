@@ -13,6 +13,18 @@ class PostmanFolderEntity {
     this.folders = const [],
   });
 
+  PostmanFolderEntity copyWith({
+    String? id,
+    String? name,
+    List<PostmanRequestEntity>? requests,
+    List<PostmanFolderEntity>? folders,
+  }) => PostmanFolderEntity(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    requests: requests ?? this.requests,
+    folders: folders ?? this.folders,
+  );
+
   int get itemCount =>
       requests.length +
       folders.fold(0, (sum, item) => sum + item.itemCount);
