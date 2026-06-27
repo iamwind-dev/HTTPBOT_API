@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -29,6 +30,7 @@ import '../../features/request_builder/domain/usecases/save_saved_request_drafts
 import '../../features/request_builder/presentation/cubit/request_builder_cubit.dart';
 import '../../features/request_builder/presentation/pages/request_builder_page.dart';
 import '../../features/request_builder/presentation/widgets/manage_environments_sheet.dart';
+import '../../features/request_builder/presentation/widgets/request_cookies_sheet.dart';
 import '../../features/request_builder/presentation/widgets/request_editor_sheet.dart';
 import '../../features/request_builder/presentation/widgets/request_search_field.dart';
 import '../../features/request_builder/presentation/widgets/request_shell_action_button.dart';
@@ -55,8 +57,11 @@ import '../../features/postman/presentation/cubit/postman_state.dart';
 import '../../features/postman/presentation/screens/postman_account_screen.dart';
 import '../../features/settings/presentation/cubit/settings_cubit.dart';
 import '../../features/settings/presentation/models/settings_catalog.dart';
+import '../../features/settings/presentation/pages/settings_cookies_page.dart';
 import '../../features/settings/presentation/pages/settings_detail_page.dart';
+import '../../features/settings/presentation/pages/settings_global_variables_page.dart';
 import '../../features/settings/presentation/pages/settings_page.dart';
+import '../../features/settings/presentation/pages/settings_request_settings_page.dart';
 import '../../injection/injection.dart';
 import 'app_shell_tab.dart';
 
@@ -202,12 +207,19 @@ abstract final class AppRouter {
                     builder: (context, state) {
                       final itemId = state.pathParameters['itemId'] ?? '';
                       final item = SettingsCatalog.findItemById(itemId);
+                      final cookiesController = SettingsCookiesController();
 
                       return _SettingsDetailShell(
                         itemTitle: item?.title ?? AppStrings.settingsTitle,
                         onBack: () => _handleSettingsBack(context),
+                        trailing: _buildSettingsDetailTrailing(
+                          context: context,
+                          itemId: itemId,
+                          cookiesController: cookiesController,
+                        ),
                         body: _buildSettingsDetailBody(
                           itemId: itemId,
+                          cookiesController: cookiesController,
                           loadPostmanApiKeyUseCase: loadPostmanApiKeyUseCase,
                           loadPostmanAccountUseCase: loadPostmanAccountUseCase,
                           clearPostmanApiKeyUseCase: clearPostmanApiKeyUseCase,
@@ -286,6 +298,7 @@ abstract final class AppRouter {
 
   static Widget _buildSettingsDetailBody({
     required String itemId,
+    required SettingsCookiesController cookiesController,
     required LoadPostmanApiKeyUseCase loadPostmanApiKeyUseCase,
     required LoadPostmanAccountUseCase loadPostmanAccountUseCase,
     required ClearPostmanApiKeyUseCase clearPostmanApiKeyUseCase,
@@ -295,8 +308,20 @@ abstract final class AppRouter {
     required ClearCachedPostmanCollectionsUseCase
     clearCachedPostmanCollectionsUseCase,
   }) {
+    if (itemId == 'request-settings') {
+      return const SettingsRequestSettingsPage();
+    }
+
+    if (itemId == 'cookies') {
+      return SettingsCookiesPage(controller: cookiesController);
+    }
+
     if (itemId == 'environments') {
       return const ManageEnvironmentsView();
+    }
+
+    if (itemId == 'global-variables') {
+      return const SettingsGlobalVariablesPage();
     }
 
     if (itemId == 'postman-account') {
@@ -316,6 +341,30 @@ abstract final class AppRouter {
     }
 
     return const SettingsDetailPage();
+  }
+
+  static Widget? _buildSettingsDetailTrailing({
+    required BuildContext context,
+    required String itemId,
+    required SettingsCookiesController cookiesController,
+  }) {
+    if (itemId == 'cookies') {
+      return IconButton(
+        key: const ValueKey<String>(AppWidgetKeys.requestsCookiesAddButton),
+        onPressed: () async {
+          final didSave = await showRequestCookieEditorSheet(
+            context,
+            initialDomain: cookiesController.selectedDomain,
+          );
+          if (didSave == true) {
+            cookiesController.requestReload();
+          }
+        },
+        icon: const Icon(CupertinoIcons.add),
+      );
+    }
+
+    return null;
   }
 }
 
@@ -468,12 +517,14 @@ class _SettingsDetailShell extends StatelessWidget {
     required this.onBack,
     required this.body,
     required this.onTabSelected,
+    this.trailing,
   });
 
   final String itemTitle;
   final VoidCallback onBack;
   final Widget body;
   final ValueChanged<AppShellTab> onTabSelected;
+  final Widget? trailing;
 
   // Keep placeholder settings destinations inside the shared shell and preserve back navigation.
   @override
@@ -481,6 +532,7 @@ class _SettingsDetailShell extends StatelessWidget {
     currentTab: AppShellTab.settings,
     title: itemTitle,
     leading: _SettingsBackButton(onPressed: onBack),
+    trailing: trailing,
     body: body,
     onTabSelected: onTabSelected,
   );

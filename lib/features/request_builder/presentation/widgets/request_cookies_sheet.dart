@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
@@ -11,6 +12,49 @@ import '../../domain/entities/http_cookie_entity.dart';
 import '../../domain/helpers/http_cookie_utils.dart';
 import '../../domain/repositories/http_cookie_repository.dart';
 import 'request_modal_sheet.dart';
+
+class SettingsCookiesController extends ChangeNotifier {
+  String? _selectedDomain;
+  List<String> _availableDomains = const <String>[];
+  int _reloadVersion = 0;
+
+  String? get selectedDomain => _selectedDomain;
+  List<String> get availableDomains => _availableDomains;
+  int get reloadVersion => _reloadVersion;
+
+  String get selectedDomainLabel => _selectedDomain ?? 'All Domains';
+
+  void setDomains(List<String> domains) {
+    final normalized = List<String>.unmodifiable(domains);
+    final hasChanged = !listEquals(_availableDomains, normalized);
+    final nextSelectedDomain = normalized.contains(_selectedDomain)
+        ? _selectedDomain
+        : null;
+    final selectionChanged = nextSelectedDomain != _selectedDomain;
+
+    if (!hasChanged && !selectionChanged) {
+      return;
+    }
+
+    _availableDomains = normalized;
+    _selectedDomain = nextSelectedDomain;
+    notifyListeners();
+  }
+
+  void selectDomain(String? domain) {
+    if (_selectedDomain == domain) {
+      return;
+    }
+
+    _selectedDomain = domain;
+    notifyListeners();
+  }
+
+  void requestReload() {
+    _reloadVersion++;
+    notifyListeners();
+  }
+}
 
 Future<void> showRequestCookiesSheet(
   BuildContext context, {
@@ -247,29 +291,100 @@ Future<void> showRequestManageCookiesSheet(
   String? initialDomain,
 }) => showRequestModalSheet<void>(
   context,
-  builder: (context) => _ManageCookiesSheet(initialDomain: initialDomain),
+  builder: (context) => ManageCookiesView(
+    initialDomain: initialDomain,
+    onClose: () => Navigator.of(context).pop(),
+  ),
 );
 
-class _ManageCookiesSheet extends StatefulWidget {
-  const _ManageCookiesSheet({this.initialDomain});
+class ManageCookiesView extends StatefulWidget {
+  const ManageCookiesView({
+    super.key,
+    this.initialDomain,
+    this.onClose,
+    this.useSheetCard = true,
+    this.showHeader = true,
+    this.reloadListenable,
+    this.cookiesController,
+  });
 
   final String? initialDomain;
+  final VoidCallback? onClose;
+  final bool useSheetCard;
+  final bool showHeader;
+  final ValueListenable<Object?>? reloadListenable;
+  final SettingsCookiesController? cookiesController;
 
   @override
-  State<_ManageCookiesSheet> createState() => _ManageCookiesSheetState();
+  State<ManageCookiesView> createState() => _ManageCookiesViewState();
 }
 
-class _ManageCookiesSheetState extends State<_ManageCookiesSheet> {
+class _ManageCookiesViewState extends State<ManageCookiesView> {
   late final HttpCookieRepository _repository;
   late Future<List<HttpCookieEntity>> _cookiesFuture;
   String? _selectedDomain;
+  int _lastReloadVersion = 0;
 
   @override
   void initState() {
     super.initState();
     _repository = getIt<HttpCookieRepository>();
-    _selectedDomain = widget.initialDomain;
+    _selectedDomain =
+        widget.cookiesController?.selectedDomain ?? widget.initialDomain;
+    _lastReloadVersion = widget.cookiesController?.reloadVersion ?? 0;
     _cookiesFuture = _repository.getAllCookies();
+    widget.reloadListenable?.addListener(_handleExternalReload);
+    widget.cookiesController?.addListener(_handleControllerChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant ManageCookiesView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.reloadListenable != widget.reloadListenable) {
+      oldWidget.reloadListenable?.removeListener(_handleExternalReload);
+      widget.reloadListenable?.addListener(_handleExternalReload);
+    }
+    if (oldWidget.cookiesController != widget.cookiesController) {
+      oldWidget.cookiesController?.removeListener(_handleControllerChanged);
+      widget.cookiesController?.addListener(_handleControllerChanged);
+      _selectedDomain =
+          widget.cookiesController?.selectedDomain ?? widget.initialDomain;
+      _lastReloadVersion = widget.cookiesController?.reloadVersion ?? 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.reloadListenable?.removeListener(_handleExternalReload);
+    widget.cookiesController?.removeListener(_handleControllerChanged);
+    super.dispose();
+  }
+
+  void _handleExternalReload() {
+    _reload();
+  }
+
+  void _handleControllerChanged() {
+    final controller = widget.cookiesController;
+    if (controller == null) {
+      return;
+    }
+
+    final nextSelectedDomain = controller.selectedDomain;
+    final shouldReload = controller.reloadVersion != _lastReloadVersion;
+    if (_selectedDomain != nextSelectedDomain && mounted) {
+      setState(() {
+        _selectedDomain = nextSelectedDomain;
+        _cookiesFuture = _repository.getAllCookies();
+      });
+      _lastReloadVersion = controller.reloadVersion;
+      return;
+    }
+
+    if (shouldReload) {
+      _lastReloadVersion = controller.reloadVersion;
+      _reload();
+    }
   }
 
   Future<void> _reload() async {
@@ -372,9 +487,8 @@ class _ManageCookiesSheetState extends State<_ManageCookiesSheet> {
   }
 
   @override
-  Widget build(BuildContext context) => RequestModalSheetCard(
-    key: const ValueKey<String>(AppWidgetKeys.requestsCookiesManageSheet),
-    child: FutureBuilder<List<HttpCookieEntity>>(
+  Widget build(BuildContext context) {
+    final content = FutureBuilder<List<HttpCookieEntity>>(
       future: _cookiesFuture,
       builder: (context, snapshot) {
         final allCookies = snapshot.data ?? const <HttpCookieEntity>[];
@@ -383,6 +497,7 @@ class _ManageCookiesSheetState extends State<_ManageCookiesSheet> {
             .toSet()
             .toList(growable: false)
           ..sort();
+        widget.cookiesController?.setDomains(allDomains);
         final visibleCookies = _selectedDomain == null
             ? allCookies
             : allCookies
@@ -390,46 +505,51 @@ class _ManageCookiesSheetState extends State<_ManageCookiesSheet> {
                   .toList(growable: false);
 
         return Column(
+          key: const ValueKey<String>(AppWidgetKeys.requestsCookiesManageSheet),
           children: [
-            _CookieSheetHeader(
-              title: AppStrings.cookiesManageTitle,
-              closeKey: AppWidgetKeys.requestsCookiesCloseButton,
-              addKey: AppWidgetKeys.requestsCookiesAddButton,
-              onClose: () => Navigator.of(context).pop(),
-              onAdd: _openAddCookie,
-              trailing: PopupMenuButton<String?>(
-                key: const ValueKey<String>(
-                  AppWidgetKeys.requestsCookiesFilterButton,
-                ),
-                tooltip: AppStrings.cookiesAllDomains,
-                onSelected: (value) {
-                  setState(() {
-                    _selectedDomain = value;
-                  });
-                },
-                itemBuilder: (context) => [
-                  const PopupMenuItem<String?>(
-                    value: null,
-                    child: Text(AppStrings.cookiesAllDomains),
+            if (widget.showHeader)
+              _CookieSheetHeader(
+                title: AppStrings.cookiesManageTitle,
+                closeKey: AppWidgetKeys.requestsCookiesCloseButton,
+                addKey: AppWidgetKeys.requestsCookiesAddButton,
+                onClose:
+                    widget.onClose ?? () => Navigator.of(context).maybePop(),
+                showCloseButton: widget.onClose != null,
+                onAdd: _openAddCookie,
+                trailing: PopupMenuButton<String?>(
+                  key: const ValueKey<String>(
+                    AppWidgetKeys.requestsCookiesFilterButton,
                   ),
-                  for (final domain in allDomains)
-                    PopupMenuItem<String?>(
-                      value: domain,
-                      child: Text(domain),
+                  tooltip: AppStrings.cookiesAllDomains,
+                  onSelected: (value) {
+                    setState(() {
+                      _selectedDomain = value;
+                    });
+                    widget.cookiesController?.selectDomain(value);
+                  },
+                  itemBuilder: (context) => [
+                    const PopupMenuItem<String?>(
+                      value: null,
+                      child: Text(AppStrings.cookiesAllDomains),
                     ),
-                ],
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.small,
-                    vertical: AppSpacing.medium,
-                  ),
-                  child: Text(
-                    _selectedDomain ?? AppStrings.cookiesAllDomains,
-                    style: Theme.of(context).textTheme.bodyMedium,
+                    for (final domain in allDomains)
+                      PopupMenuItem<String?>(
+                        value: domain,
+                        child: Text(domain),
+                      ),
+                  ],
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.small,
+                      vertical: AppSpacing.medium,
+                    ),
+                    child: Text(
+                      _selectedDomain ?? AppStrings.cookiesAllDomains,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
                   ),
                 ),
               ),
-            ),
             Expanded(
               child: snapshot.connectionState == ConnectionState.waiting
                   ? const Center(child: CircularProgressIndicator())
@@ -450,8 +570,14 @@ class _ManageCookiesSheetState extends State<_ManageCookiesSheet> {
           ],
         );
       },
-    ),
-  );
+    );
+
+    if (!widget.useSheetCard) {
+      return content;
+    }
+
+    return RequestModalSheetCard(child: content);
+  }
 
   List<Widget> _buildGroupedCookieSections(List<HttpCookieEntity> cookies) {
     final groupedCookies = <String, List<HttpCookieEntity>>{};
@@ -726,12 +852,14 @@ class _CookieSheetHeader extends StatelessWidget {
     required this.title,
     required this.closeKey,
     required this.onClose,
+    this.showCloseButton = true,
     this.addKey,
     this.onAdd,
     this.trailing,
   });
 
   final String closeKey;
+  final bool showCloseButton;
   final String? addKey;
   final VoidCallback onClose;
   final VoidCallback? onAdd;
@@ -747,12 +875,15 @@ class _CookieSheetHeader extends StatelessWidget {
       AppSpacing.medium,
     ),
     child: Row(
-      children: [
-        IconButton(
-          key: ValueKey<String>(closeKey),
-          onPressed: onClose,
-          icon: const Icon(CupertinoIcons.xmark),
-        ),
+        children: [
+        if (showCloseButton)
+          IconButton(
+            key: ValueKey<String>(closeKey),
+            onPressed: onClose,
+            icon: const Icon(CupertinoIcons.xmark),
+          )
+        else
+          const SizedBox(width: 48),
         Expanded(
           child: Text(
             title,
@@ -760,15 +891,51 @@ class _CookieSheetHeader extends StatelessWidget {
             style: Theme.of(context).textTheme.titleLarge,
           ),
         ),
-        trailing ??
-            IconButton(
-              key: addKey == null ? null : ValueKey<String>(addKey!),
-              onPressed: onAdd,
-              icon: const Icon(CupertinoIcons.add),
-            ),
+        _HeaderTrailingActions(
+          addKey: addKey,
+          onAdd: onAdd,
+          trailing: trailing,
+        ),
       ],
     ),
   );
+}
+
+class _HeaderTrailingActions extends StatelessWidget {
+  const _HeaderTrailingActions({
+    required this.addKey,
+    required this.onAdd,
+    required this.trailing,
+  });
+
+  final String? addKey;
+  final VoidCallback? onAdd;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final addButton = IconButton(
+      key: addKey == null ? null : ValueKey<String>(addKey!),
+      onPressed: onAdd,
+      icon: const Icon(CupertinoIcons.add),
+    );
+
+    if (trailing == null) {
+      return addButton;
+    }
+
+    if (onAdd == null) {
+      return trailing!;
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        trailing!,
+        addButton,
+      ],
+    );
+  }
 }
 
 class _CookieListCard extends StatelessWidget {
