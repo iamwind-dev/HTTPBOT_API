@@ -40,6 +40,8 @@ import '../features/request_history/domain/usecases/get_request_history_entries_
 import '../features/request_history/domain/usecases/save_request_history_entry_use_case.dart';
 import '../features/request_history/presentation/cubit/request_history_cubit.dart';
 import '../features/request_builder/data/repositories/request_execution_repository_impl.dart';
+import '../features/request_builder/data/repositories/response_filter_repository_impl.dart';
+import '../features/request_builder/domain/repositories/response_filter_repository.dart';
 import '../features/request_builder/data/repositories/http_cookie_repository_impl.dart';
 import '../features/request_builder/data/repositories/request_builder_repository_impl.dart';
 import '../features/request_builder/data/datasources/oauth2_remote_datasource.dart';
@@ -184,6 +186,9 @@ void configureDependencies() {
     )
     ..registerLazySingleton<RequestHistoryRepository>(
       RequestHistoryRepositoryImpl.new,
+    )
+    ..registerLazySingleton<ResponseFilterRepository>(
+      ResponseFilterRepositoryImpl.new,
     )
     ..registerLazySingleton(
       () => GetRequestDraftUseCase(getIt<RequestBuilderRepository>()),

@@ -184,7 +184,8 @@ abstract final class AppStrings {
   static const requestResponseViewBody = 'Body';
   static const requestResponseNoHeaders = 'No Headers';
   static const requestResponseNoCookies = 'No Cookies';
-  static const requestResponseNoMetrics = 'No Metrics';
+  static const requestResponseNoMetrics = 'No metrics available.';
+  static const requestResponseNoRequestData = 'No request data available.';
   static const requestResponseRequestHeaders = 'Headers';
   static const requestResponseRequestBody = 'Body';
   static const requestResponseRequestBodyEmpty = '<empty>';
@@ -195,6 +196,69 @@ abstract final class AppStrings {
   static const requestResponseDuration = 'Duration';
   static const requestResponseMethod = 'Method';
   static const requestResponseUrl = 'URL';
+  static const requestResponseCopiedRequest = 'Request copied.';
+  static const requestResponseCopiedMetrics = 'Metrics copied.';
+  static String requestResponseExchangeTitle(int index) => 'Request #$index';
+  static const requestMetricUrl = 'URL';
+  static const requestMetricMethod = 'HTTP Method';
+  static const requestMetricResponseCode = 'Response Code';
+  static const requestMetricProtocol = 'Protocol';
+  static const requestMetricRemoteAddress = 'Remote Address';
+  static const requestMetricTls = 'TLS';
+  static const requestMetricKeptAlive = 'Kept Alive';
+  static const requestMetricRequestHeaderSize = 'Request Header Size';
+  static const requestMetricRequestSize = 'Request Size';
+  static const requestMetricResponseHeaderSize = 'Response Header Size';
+  static const requestMetricResponseSize = 'Response Size';
+  static const requestMetricRequestStart = 'Request Start';
+  static const requestMetricRequestEnd = 'Request End';
+  static const requestMetricResponseStart = 'Response Start';
+  static const requestMetricResponseEnd = 'Response End';
+  static const requestMetricDnsLookupDuration = 'DNS Lookup Duration';
+  static const requestMetricConnectDuration = 'Connect Duration';
+  static const requestMetricTlsHandshake = 'TLS Handshake';
+  static const requestMetricRequestDuration = 'Request Duration';
+  static const requestMetricResponseDuration = 'Response Duration';
+  static const filterResponseTitle = 'Filter Response';
+  static const filterResponseCloseTooltip = 'Close filter response';
+  static const filterResponseEmptyBody = 'No response body to filter.';
+  static const filterResponseCopyResult = 'Copy Result';
+  static const filterResponseCopyQuery = 'Copy Query';
+  static const filterResponseResultCopied = 'Result copied.';
+  static const filterResponseQueryCopied = 'Query copied.';
+  static const filterResponseJqPlaceholder = 'Enter jq Query';
+  static const filterResponseJsonPathPlaceholder = 'Enter JSONPath Query';
+  static const filterResponseXPathPlaceholder = 'Enter XPath Query';
+  static const filterResponseHelp = 'Help';
+  static const filterResponseWrap = 'Wrap Response';
+  static const filterResponseSaveQuery = 'Save Query';
+  static const filterResponseManageQueries = 'Manage Queries';
+  static const filterResponseSaveEmpty = 'Enter a query to save.';
+  static const filterResponseSaved = 'Query saved.';
+  static const filterResponseHelpTitle = 'Filter Help';
+  static const filterResponseHelpBody =
+      'jq        .headers.Host\n'
+      'JSONPath  \$.headers.Host\n'
+      'XPath     //item/name';
+  static const responseFiltersTitle = 'Response Filters';
+  static const responseFiltersEmptyTitle = 'No Saved Filters';
+  static const responseFiltersEmptyMessage =
+      'Save a query from Filter Response to reuse it later.';
+  static const responseFilterEditorAddTitle = 'New Filter';
+  static const responseFilterEditorEditTitle = 'Edit Filter';
+  static const responseFilterNameLabel = 'Name';
+  static const responseFilterQueryLabel = 'Query';
+  static const responseFilterModeLabel = 'Mode';
+  static const responseFilterNameRequired = 'Name is required.';
+  static const responseFilterQueryRequired = 'Query is required.';
+  static const responseFilterSave = 'Save';
+  static const responseFilterDelete = 'Delete';
+  static const historyTitle = 'History';
+  static const historyCloseTooltip = 'Close history';
+  static const historyEmptyTitle = 'No History';
+  static const historyFooter =
+      'The last 10 responses will be saved here. You can change this in the '
+      'request settings.';
   static const savedCredentialsTitle = 'Saved Credentials';
   static const savedCredentialsEmptyTitle = 'No Saved Credentials';
   static const savedCredentialsEmptyMessage =

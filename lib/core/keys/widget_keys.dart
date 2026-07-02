@@ -51,6 +51,41 @@ abstract final class AppWidgetKeys {
   static const requestsResponseCloseButton = 'requests_response_close_button';
   static const requestsResponseSendButton = 'requests_response_send_button';
   static const requestsResponseSummaryBadge = 'requests_response_summary_badge';
+  static const requestsResponseRawRequestCard =
+      'requests_response_raw_request_card';
+  static const requestsResponseShareButton = 'requests_response_share_button';
+  static const requestsResponseFilterButton =
+      'requests_response_filter_button';
+  static const filterResponseSheet = 'filter_response_sheet';
+  static const filterResponseCloseButton = 'filter_response_close_button';
+  static const filterResponseMoreButton = 'filter_response_more_button';
+  static const filterResponseQueryField = 'filter_response_query_field';
+  static const filterResponseModePicker = 'filter_response_mode_picker';
+
+  static String filterResponseModeOption(String mode) =>
+      'filter_response_mode_option_$mode';
+
+  static String filterResponseToken(String token) =>
+      'filter_response_token_$token';
+
+  static const responseFiltersSheet = 'response_filters_sheet';
+  static const responseFiltersAddButton = 'response_filters_add_button';
+  static const responseFilterEditorSheet = 'response_filter_editor_sheet';
+  static const responseFilterEditorNameField =
+      'response_filter_editor_name_field';
+  static const responseFilterEditorQueryField =
+      'response_filter_editor_query_field';
+  static const responseFilterEditorSaveButton =
+      'response_filter_editor_save_button';
+
+  static String responseFilterListItemAt(int index) =>
+      'response_filter_item_$index';
+
+  static const requestHistorySheet = 'request_history_sheet';
+  static const requestHistoryCloseButton = 'request_history_close_button';
+
+  static String requestHistoryItemAt(int index) =>
+      'request_history_item_$index';
   static const viewCurlSheet = 'view_curl_sheet';
   static const viewCurlCloseButton = 'view_curl_close_button';
   static const viewCurlShareButton = 'view_curl_share_button';
@@ -117,6 +152,9 @@ abstract final class AppWidgetKeys {
 
   static String requestsResponseViewSelectorItem(String mode) =>
       'requests_response_view_selector_item_$mode';
+
+  static String requestsResponseMetricsExchangeAt(int index) =>
+      'requests_response_metrics_exchange_$index';
 
   static const requestsEditorManageCredentialsButton =
       'requests_editor_manage_credentials_button';
