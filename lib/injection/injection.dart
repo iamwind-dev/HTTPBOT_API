@@ -80,6 +80,11 @@ import '../features/request_builder/domain/usecases/save_request_variable_store_
 import '../features/request_builder/domain/usecases/save_saved_request_drafts_use_case.dart';
 import '../features/request_builder/domain/usecases/resolve_request_use_case.dart';
 import '../features/request_builder/presentation/bloc/request_send_bloc.dart';
+import '../features/web_sockets/data/datasources/io_web_socket_client.dart';
+import '../features/web_sockets/domain/repositories/web_socket_client.dart';
+import '../features/web_sockets/domain/repositories/web_socket_repository.dart';
+import '../features/web_sockets/data/repositories_impl/web_socket_repository_impl.dart';
+import '../features/web_sockets/presentation/cubits/web_socket_list_cubit.dart';
 
 final getIt = GetIt.instance;
 
@@ -99,6 +104,9 @@ void configureDependencies() {
     ..registerLazySingleton<ExternalUriLauncher>(
       UrlLauncherExternalUriLauncher.new,
     )
+    ..registerLazySingleton<WebSocketClient>(IoWebSocketClient.new)
+    ..registerLazySingleton<WebSocketRepository>(WebSocketRepositoryImpl.new)
+    ..registerFactory(() => WebSocketListCubit(getIt<WebSocketRepository>()))
     ..registerLazySingleton<ThemeModeStore>(SharedPreferencesThemeModeStore.new)
     ..registerFactory(() => ThemeCubit(getIt<ThemeModeStore>()))
     ..registerLazySingleton<PostmanLocalDataSource>(
@@ -265,7 +273,8 @@ void configureDependencies() {
     () => ExchangeOAuth2AuthorizationCodeUseCase(getIt<OAuth2Repository>()),
   );
   getIt.registerLazySingleton(
-    () => RequestOAuth2PasswordCredentialsTokenUseCase(getIt<OAuth2Repository>()),
+    () =>
+        RequestOAuth2PasswordCredentialsTokenUseCase(getIt<OAuth2Repository>()),
   );
   getIt.registerLazySingleton(
     () => RequestOAuth2ClientCredentialsTokenUseCase(getIt<OAuth2Repository>()),

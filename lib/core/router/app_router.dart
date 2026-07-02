@@ -13,6 +13,7 @@ import 'package:httpbot_api/features/postman/presentation/widget/search_postman.
 import 'package:httpbot_api/features/web_sockets/presentation/screens/websocket_screen.dart';
 import 'package:httpbot_api/features/web_sockets/presentation/widget/search_websocket.dart';
 import 'package:httpbot_api/features/web_sockets/presentation/widget/websocket_shell_action_button.dart';
+import 'package:httpbot_api/features/web_sockets/presentation/cubits/web_socket_list_cubit.dart';
 
 import '../../core/constants/app_strings.dart';
 import '../../core/keys/widget_keys.dart';
@@ -134,9 +135,12 @@ abstract final class AppRouter {
             routes: <RouteBase>[
               GoRoute(
                 path: '/websockets',
-                builder: (context, state) => _WebSocketsShell(
-                  onTabSelected: (tab) =>
-                      _handleShellTabSelection(context, tab),
+                builder: (context, state) => BlocProvider<WebSocketListCubit>(
+                  create: (_) => getIt<WebSocketListCubit>()..load(),
+                  child: _WebSocketsShell(
+                    onTabSelected: (tab) =>
+                        _handleShellTabSelection(context, tab),
+                  ),
                 ),
               ),
             ],

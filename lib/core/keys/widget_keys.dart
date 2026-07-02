@@ -3,6 +3,13 @@ abstract final class AppWidgetKeys {
   static const requestsFavoriteButton = 'requests_favorite_button';
   static const requestsFab = 'requests_fab';
   static const websocketsFab = 'websockets_fab';
+  static const websocketsUrlField = 'websockets_url_field';
+  static const websocketsConnectButton = 'websockets_connect_button';
+  static const websocketsMessageField = 'websockets_message_field';
+  static const websocketsSendButton = 'websockets_send_button';
+  static const websocketsBinaryButton = 'websockets_binary_button';
+  static const websocketsTimeoutField = 'websockets_timeout_field';
+  static const websocketsVerifySslSwitch = 'websockets_verify_ssl_switch';
   static const collectionsFab = 'collections_fab';
   static const postmanFab = 'postman_fab';
   static const requestsListItemPrefix = 'requests_list_item';
@@ -38,7 +45,8 @@ abstract final class AppWidgetKeys {
   static const requestsCookiesFilterButton = 'requests_cookies_filter_button';
   static const requestsTestsSheet = 'requests_tests_sheet';
   static const requestsTestEditorSheet = 'requests_test_editor_sheet';
-  static const requestsTestValueEditorSheet = 'requests_test_value_editor_sheet';
+  static const requestsTestValueEditorSheet =
+      'requests_test_value_editor_sheet';
   static const requestsTestsAddButton = 'requests_tests_add_button';
   static const requestsTestsCloseButton = 'requests_tests_close_button';
   static const requestsSettingsSheet = 'requests_settings_sheet';
@@ -54,8 +62,7 @@ abstract final class AppWidgetKeys {
   static const requestsResponseRawRequestCard =
       'requests_response_raw_request_card';
   static const requestsResponseShareButton = 'requests_response_share_button';
-  static const requestsResponseFilterButton =
-      'requests_response_filter_button';
+  static const requestsResponseFilterButton = 'requests_response_filter_button';
   static const filterResponseSheet = 'filter_response_sheet';
   static const filterResponseCloseButton = 'filter_response_close_button';
   static const filterResponseMoreButton = 'filter_response_more_button';
