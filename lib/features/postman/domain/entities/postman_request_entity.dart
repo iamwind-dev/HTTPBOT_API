@@ -26,5 +26,27 @@ class PostmanRequestEntity {
     this.auth = const PostmanAuthEntity(),
   });
 
+  PostmanRequestEntity copyWith({
+    String? id,
+    String? name,
+    String? description,
+    String? method,
+    PostmanUrlEntity? url,
+    List<PostmanKeyValueEntity>? queryParameters,
+    List<PostmanKeyValueEntity>? headers,
+    PostmanBodyEntity? body,
+    PostmanAuthEntity? auth,
+  }) => PostmanRequestEntity(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    description: description ?? this.description,
+    method: method ?? this.method,
+    url: url ?? this.url,
+    queryParameters: queryParameters ?? this.queryParameters,
+    headers: headers ?? this.headers,
+    body: body ?? this.body,
+    auth: auth ?? this.auth,
+  );
+
   String get rawUrl => url.raw;
 }

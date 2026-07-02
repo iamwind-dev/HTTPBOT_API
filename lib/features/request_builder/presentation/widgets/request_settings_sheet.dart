@@ -18,53 +18,66 @@ Future<void> showRequestSettingsSheet(
   context,
   builder: (context) => BlocProvider<RequestEditorCubit>.value(
     value: requestEditorCubit,
-    child: const _RequestSettingsSheet(),
+    child: RequestSettingsView(onClose: () => Navigator.of(context).pop()),
   ),
 );
 
-class _RequestSettingsSheet extends StatelessWidget {
-  const _RequestSettingsSheet();
+class RequestSettingsView extends StatelessWidget {
+  const RequestSettingsView({
+    super.key,
+    this.onClose,
+    this.useSheetCard = true,
+    this.showHeader = true,
+  });
+
+  final VoidCallback? onClose;
+  final bool useSheetCard;
+  final bool showHeader;
 
   @override
-  Widget build(BuildContext context) => RequestModalSheetCard(
-    key: const ValueKey<String>(AppWidgetKeys.requestsSettingsSheet),
-    child: BlocBuilder<RequestEditorCubit, dynamic>(
+  Widget build(BuildContext context) {
+    final content = BlocBuilder<RequestEditorCubit, dynamic>(
       builder: (context, state) {
         final settings = state.draft.settings as RequestSettings;
         return Column(
+          key: const ValueKey<String>(AppWidgetKeys.requestsSettingsSheet),
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.medium,
-                AppSpacing.small,
-                AppSpacing.medium,
-                AppSpacing.medium,
-              ),
-              child: Row(
-                children: [
-                  IconButton(
-                    key: const ValueKey<String>(
-                      AppWidgetKeys.requestsSettingsCloseButton,
+            if (showHeader)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.medium,
+                  AppSpacing.small,
+                  AppSpacing.medium,
+                  AppSpacing.medium,
+                ),
+                child: Row(
+                  children: [
+                    if (onClose != null)
+                      IconButton(
+                        key: const ValueKey<String>(
+                          AppWidgetKeys.requestsSettingsCloseButton,
+                        ),
+                        onPressed: onClose,
+                        icon: const Icon(CupertinoIcons.xmark),
+                      )
+                    else
+                      const SizedBox(width: 48),
+                    Expanded(
+                      child: Text(
+                        AppStrings.requestSettingsTitle,
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
                     ),
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(CupertinoIcons.xmark),
-                  ),
-                  Expanded(
-                    child: Text(
-                      AppStrings.requestSettingsTitle,
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                  ),
-                  const SizedBox(width: 48),
-                ],
+                    const SizedBox(width: 48),
+                  ],
+                ),
               ),
-            ),
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(
+                padding: EdgeInsets.fromLTRB(
                   AppSpacing.large,
-                  0,
+                  showHeader ? 0 : AppSpacing.medium,
                   AppSpacing.large,
                   AppSpacing.large,
                 ),
@@ -77,6 +90,7 @@ class _RequestSettingsSheet extends StatelessWidget {
                             AppStrings.requestSettingsSavedResponsesInHistory,
                         value: settings.savedResponsesInHistory.toString(),
                         onTap: () => _editSavedResponses(context, settings),
+                        forceSingleLine: true,
                       ),
                       _SettingsValueRow(
                         fieldName: 'timeout_seconds',
@@ -84,6 +98,7 @@ class _RequestSettingsSheet extends StatelessWidget {
                             AppStrings.requestSettingsTimeoutIntervalInSeconds,
                         value: settings.timeoutSeconds.toString(),
                         onTap: () => _editTimeout(context, settings),
+                        forceSingleLine: true,
                       ),
                       _SettingsValueRow(
                         fieldName: 'user_agent',
@@ -146,8 +161,14 @@ class _RequestSettingsSheet extends StatelessWidget {
           ],
         );
       },
-    ),
-  );
+    );
+
+    if (!useSheetCard) {
+      return content;
+    }
+
+    return RequestModalSheetCard(child: content);
+  }
 
   Future<void> _editSavedResponses(
     BuildContext context,
@@ -360,12 +381,14 @@ class _SettingsValueRow extends StatelessWidget {
     required this.label,
     required this.value,
     required this.onTap,
+    this.forceSingleLine = false,
   });
 
   final String fieldName;
   final String label;
   final String value;
   final VoidCallback onTap;
+  final bool forceSingleLine;
 
   @override
   Widget build(BuildContext context) => InkWell(
@@ -379,12 +402,20 @@ class _SettingsValueRow extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: Text(label, style: Theme.of(context).textTheme.bodyMedium),
+            child: Text(
+              label,
+              maxLines: forceSingleLine ? 1 : null,
+              overflow: forceSingleLine ? TextOverflow.ellipsis : null,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
           ),
           const SizedBox(width: AppSpacing.small),
-          Flexible(
+          ConstrainedBox(
+            constraints: const BoxConstraints(minWidth: 24),
             child: Text(
               value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.end,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: context.appColors.textSecondary,

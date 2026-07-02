@@ -69,6 +69,8 @@ class PostmanCubit extends Cubit<PostmanState> {
           workspaces: workspaces,
           collections: collections,
           selectedWorkspaceId: _resolveInitialWorkspaceId(workspaces),
+          clearSelectedCollection: true,
+          clearPickerSelection: true,
         ),
       );
     } catch (e) {
@@ -84,6 +86,10 @@ class PostmanCubit extends Cubit<PostmanState> {
   Future<bool> linkPostman({
     required String apiKey,
   }) async {
+    final existingCollections = List<PostmanCollectionEntity>.from(
+      state.collections,
+    );
+
     emit(
       state.copyWith(
         isLoadingCollections: true,
@@ -93,7 +99,7 @@ class PostmanCubit extends Cubit<PostmanState> {
         clearSelectedWorkspace: true,
         clearPickerSelection: true,
         clearSelectedCollection: true,
-        collections: [],
+        collections: existingCollections,
       ),
     );
 
@@ -136,7 +142,7 @@ class PostmanCubit extends Cubit<PostmanState> {
           isLoadingCollections: false,
           apiKey: apiKey,
           workspaces: workspacesWithCollections,
-          collections: const [],
+          collections: existingCollections,
           clearSelectedCollection: true,
           clearPickerSelection: true,
           selectedWorkspaceId: initialWorkspaceId,
@@ -146,7 +152,7 @@ class PostmanCubit extends Cubit<PostmanState> {
         apiKey: apiKey,
         account: account,
         workspaces: workspacesWithCollections,
-        collections: const [],
+        collections: existingCollections,
       );
       return true;
     } catch (e) {
@@ -163,6 +169,23 @@ class PostmanCubit extends Cubit<PostmanState> {
   Future<void> loadCollectionDetail({
     required PostmanCollectionEntity collection,
   }) async {
+    final hasCachedDetail =
+        collection.folders.isNotEmpty ||
+        collection.requests.isNotEmpty ||
+        collection.variables.isNotEmpty ||
+        collection.description.trim().isNotEmpty;
+
+    if (state.apiKey.trim().isEmpty) {
+      emit(
+        state.copyWith(
+          isLoadingCollectionDetail: false,
+          selectedCollection: collection,
+          clearErrorMessage: true,
+        ),
+      );
+      return;
+    }
+
     emit(
       state.copyWith(
         isLoadingCollectionDetail: true,
@@ -187,6 +210,17 @@ class PostmanCubit extends Cubit<PostmanState> {
       );
       await saveCachedPostmanCollectionsUseCase(nextCollections);
     } catch (e) {
+      if (hasCachedDetail) {
+        emit(
+          state.copyWith(
+            isLoadingCollectionDetail: false,
+            selectedCollection: collection,
+            errorMessage: 'Opened cached collection data.',
+          ),
+        );
+        return;
+      }
+
       emit(
         state.copyWith(
           isLoadingCollectionDetail: false,
@@ -272,6 +306,35 @@ class PostmanCubit extends Cubit<PostmanState> {
 
   void clearSelectedCollection() {
     emit(state.copyWith(clearSelectedCollection: true));
+  }
+
+  Future<void> updateCollection(PostmanCollectionEntity collection) async {
+    final nextCollections = _upsertImportedCollection(collection);
+
+    emit(
+      state.copyWith(
+        collections: nextCollections,
+        selectedCollection: state.selectedCollection?.id == collection.id
+            ? collection
+            : state.selectedCollection,
+      ),
+    );
+    await saveCachedPostmanCollectionsUseCase(nextCollections);
+  }
+
+  Future<void> deleteCollection(String collectionId) async {
+    final nextCollections = state.collections
+        .where((collection) => collection.id != collectionId)
+        .toList(growable: false);
+
+    emit(
+      state.copyWith(
+        collections: nextCollections,
+        clearSelectedCollection:
+            state.selectedCollection?.id == collectionId,
+      ),
+    );
+    await saveCachedPostmanCollectionsUseCase(nextCollections);
   }
 
   Future<void> _persistLinkedSession({

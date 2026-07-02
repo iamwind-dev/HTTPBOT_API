@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
@@ -21,19 +23,29 @@ Future<List<RequestVariable>?> showGlobalVariablesSheet(
   useSafeArea: true,
   isScrollControlled: true,
   backgroundColor: context.appColors.background,
-  builder: (context) => _GlobalVariablesSheet(variables: variables),
+  builder: (context) => GlobalVariablesView(
+    variables: variables,
+    onClose: () => Navigator.of(context).pop(),
+  ),
 );
 
-class _GlobalVariablesSheet extends StatefulWidget {
-  const _GlobalVariablesSheet({required this.variables});
+class GlobalVariablesView extends StatefulWidget {
+  const GlobalVariablesView({
+    super.key,
+    required this.variables,
+    this.onClose,
+    this.onSave,
+  });
 
   final List<RequestVariable> variables;
+  final VoidCallback? onClose;
+  final Future<void> Function(List<RequestVariable> variables)? onSave;
 
   @override
-  State<_GlobalVariablesSheet> createState() => _GlobalVariablesSheetState();
+  State<GlobalVariablesView> createState() => _GlobalVariablesViewState();
 }
 
-class _GlobalVariablesSheetState extends State<_GlobalVariablesSheet> {
+class _GlobalVariablesViewState extends State<GlobalVariablesView> {
   late final TextEditingController _keyController = TextEditingController();
   late final TextEditingController _valueController = TextEditingController();
   late final FocusNode _keyFocusNode = FocusNode();
@@ -76,7 +88,7 @@ class _GlobalVariablesSheetState extends State<_GlobalVariablesSheet> {
   }
 
   /// Validates and returns the final list when the user taps the check button.
-  void _save() {
+  Future<void> _save() async {
     final result = _buildValidatedVariables(includePending: true);
     if (result.errorMessage != null) {
       setState(() {
@@ -85,7 +97,14 @@ class _GlobalVariablesSheetState extends State<_GlobalVariablesSheet> {
       return;
     }
 
-    Navigator.of(context).pop(result.variables);
+    if (widget.onSave != null) {
+      await widget.onSave!(result.variables);
+      return;
+    }
+
+    if (mounted) {
+      Navigator.of(context).pop(result.variables);
+    }
   }
 
   /// Removes a row from local state without persisting until save is tapped.
@@ -213,7 +232,11 @@ class _GlobalVariablesSheetState extends State<_GlobalVariablesSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _GlobalVariablesHeader(onClose: _close, onSave: _save),
+              _GlobalVariablesHeader(
+                onClose: widget.onClose ?? _close,
+                showCloseButton: widget.onClose != null,
+                onSave: _save,
+              ),
               const SizedBox(height: AppSpacing.large),
               _VariablesCard(
                 variables: _variables,
@@ -254,20 +277,28 @@ class _GlobalVariablesSheetState extends State<_GlobalVariablesSheet> {
 }
 
 class _GlobalVariablesHeader extends StatelessWidget {
-  const _GlobalVariablesHeader({required this.onClose, required this.onSave});
+  const _GlobalVariablesHeader({
+    required this.onClose,
+    required this.onSave,
+    this.showCloseButton = true,
+  });
 
   final VoidCallback onClose;
-  final VoidCallback onSave;
+  final Future<void> Function() onSave;
+  final bool showCloseButton;
 
   /// Builds the X, centered title, and blue check toolbar.
   @override
   Widget build(BuildContext context) => Row(
     children: [
-      IconButton(
-        key: const ValueKey<String>(AppWidgetKeys.globalVariablesCloseButton),
-        onPressed: onClose,
-        icon: const Icon(CupertinoIcons.xmark),
-      ),
+      if (showCloseButton)
+        IconButton(
+          key: const ValueKey<String>(AppWidgetKeys.globalVariablesCloseButton),
+          onPressed: onClose,
+          icon: const Icon(CupertinoIcons.xmark),
+        )
+      else
+        const SizedBox(width: 48),
       Expanded(
         child: Text(
           'Global Variables',
@@ -277,7 +308,7 @@ class _GlobalVariablesHeader extends StatelessWidget {
       ),
       IconButton(
         key: const ValueKey<String>(AppWidgetKeys.globalVariablesSaveButton),
-        onPressed: onSave,
+        onPressed: () => unawaited(onSave()),
         color: context.appColors.primary,
         icon: const Icon(CupertinoIcons.check_mark),
       ),

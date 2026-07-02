@@ -32,11 +32,11 @@ class _LinkPostmanBottomSheetBodyState
       final didLink = await cubit.linkPostman(apiKey: apiKey);
       if (!mounted) return;
       if (!didLink) {
-        final message =
-            cubit.state.errorMessage ?? 'Unable to load Postman workspaces.';
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(message)));
+        await showDialog<void>(
+          context: context,
+          barrierDismissible: true,
+          builder: (_) => const _PostmanLinkErrorDialog(),
+        );
         return;
       }
       final rootContext = Navigator.of(context, rootNavigator: true).context;
@@ -213,6 +213,66 @@ class _LinkPostmanBottomSheetBodyState
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PostmanLinkErrorDialog extends StatelessWidget {
+  const _PostmanLinkErrorDialog();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 340),
+        decoration: BoxDecoration(
+          color: colors.surface,
+          borderRadius: BorderRadius.circular(28),
+        ),
+        padding: const EdgeInsets.fromLTRB(24, 22, 24, 18),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Error',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                color: colors.textPrimary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              "Unable to link Postman account.\nPlease ensure you've entered a valid API key",
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: colors.textSecondary,
+                fontWeight: FontWeight.w500,
+                height: 1.45,
+              ),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: () => Navigator.of(context).pop(),
+                style: FilledButton.styleFrom(
+                  backgroundColor: colors.surfaceMuted,
+                  foregroundColor: colors.textPrimary,
+                  minimumSize: const Size.fromHeight(52),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.xLarge),
+                  ),
+                ),
+                child: const Text('OK'),
+              ),
+            ),
+          ],
         ),
       ),
     );

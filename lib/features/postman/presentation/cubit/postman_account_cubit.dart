@@ -68,7 +68,6 @@ class PostmanAccountCubit extends Cubit<PostmanAccountState> {
     await clearPostmanAccountUseCase();
     await clearPostmanApiKeyUseCase();
     await clearCachedPostmanWorkspacesUseCase();
-    await clearCachedPostmanCollectionsUseCase();
 
     emit(
       const PostmanAccountState(),
