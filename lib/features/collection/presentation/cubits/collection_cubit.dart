@@ -24,6 +24,7 @@ class CollectionCubit extends Cubit<CollectionState> {
       state.copyWith(
         items: snapshot.items,
         selectedCollectionId: snapshot.selectedCollectionId,
+        clearValidationMessage: true,
       ),
     );
   }
@@ -49,6 +50,7 @@ class CollectionCubit extends Cubit<CollectionState> {
           isImporting: false,
           items: [imported, ...state.items],
           selectedCollectionId: imported.id,
+          clearValidationMessage: true,
         ),
       );
       await _persistState();
@@ -79,6 +81,7 @@ class CollectionCubit extends Cubit<CollectionState> {
           isImporting: false,
           items: [imported, ...state.items],
           selectedCollectionId: imported.id,
+          clearValidationMessage: true,
         ),
       );
       await _persistState();
@@ -98,23 +101,43 @@ class CollectionCubit extends Cubit<CollectionState> {
       return;
     }
 
-    emit(state.copyWith(selectedCollectionId: collectionId));
+    emit(
+      state.copyWith(
+        selectedCollectionId: collectionId,
+        clearValidationMessage: true,
+      ),
+    );
     _persistState();
   }
 
   void clearSelectedCollection() {
-    emit(state.copyWith(clearSelectedCollection: true));
+    emit(
+      state.copyWith(
+        clearSelectedCollection: true,
+        clearValidationMessage: true,
+      ),
+    );
     _persistState();
+  }
+
+  void updateSearchQuery(String value) {
+    emit(
+      state.copyWith(
+        searchQuery: value,
+      ),
+    );
   }
 
   void updateCollection(ImportedCollectionEntity updatedCollection) {
     final updatedItems = state.items
         .map(
-          (item) => item.id == updatedCollection.id ? updatedCollection : item,
+          (item) => item.id == updatedCollection.id
+              ? updatedCollection.copyWith(updatedAt: DateTime.now())
+              : item,
         )
         .toList(growable: false);
 
-    emit(state.copyWith(items: updatedItems));
+    emit(state.copyWith(items: updatedItems, clearValidationMessage: true));
     _persistState();
   }
 
@@ -127,9 +150,80 @@ class CollectionCubit extends Cubit<CollectionState> {
       state.copyWith(
         items: updatedItems,
         clearSelectedCollection: state.selectedCollectionId == collectionId,
+        clearValidationMessage: true,
       ),
     );
     _persistState();
+  }
+
+  bool createCollection(ImportedCollectionEntity draft) {
+    final trimmedName = draft.name.trim();
+    if (trimmedName.isEmpty) {
+      emit(
+        state.copyWith(
+          validationMessage: 'Collection name is required.',
+        ),
+      );
+      return false;
+    }
+
+    final now = DateTime.now();
+    final collection = draft.copyWith(
+      name: trimmedName,
+      updatedAt: now,
+      createdAt: draft.createdAt ?? now,
+    );
+
+    emit(
+      state.copyWith(
+        items: [collection, ...state.items],
+        selectedCollectionId: collection.id,
+        clearValidationMessage: true,
+      ),
+    );
+    _persistState();
+    return true;
+  }
+
+  bool createFolder({
+    required String collectionId,
+    required String name,
+  }) {
+    final trimmedName = name.trim();
+    if (trimmedName.isEmpty) {
+      emit(
+        state.copyWith(
+          validationMessage: 'Folder name is required.',
+        ),
+      );
+      return false;
+    }
+
+    ImportedCollectionEntity? collection;
+    for (final item in state.items) {
+      if (item.id == collectionId) {
+        collection = item;
+        break;
+      }
+    }
+    if (collection == null) {
+      emit(
+        state.copyWith(
+          validationMessage: 'Collection not found.',
+        ),
+      );
+      return false;
+    }
+
+    updateCollection(
+      collection.copyWith(
+        folders: [
+          ...collection.folders,
+          ImportedCollectionFolderEntity(name: trimmedName),
+        ],
+      ),
+    );
+    return true;
   }
 
   Future<void> _persistState() {

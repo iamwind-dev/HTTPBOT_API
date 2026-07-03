@@ -237,8 +237,9 @@ class CollectionFileImporter {
       name: fallbackName,
       description: '',
       importType: CollectionImportType.har,
-      authLabel: 'No Auth',
       rootRequests: requests,
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
     );
   }
 
@@ -285,9 +286,10 @@ class CollectionFileImporter {
       description: description,
       importType: CollectionImportType.openApiSpec,
       variables: _buildOpenApiCollectionVariables(root),
-      authLabel: 'No Auth',
       folders: folders,
       rootRequests: rootRequests,
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
     );
   }
 
@@ -366,7 +368,6 @@ class CollectionFileImporter {
       name: name,
       description: '',
       importType: CollectionImportType.postmanCollection,
-      authLabel: 'No Auth',
       rootRequests: List<ImportedCollectionRequestEntity>.generate(
         requestCount,
         (index) => ImportedCollectionRequestEntity(
@@ -375,6 +376,8 @@ class CollectionFileImporter {
           url: '',
         ),
       ),
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
     );
   }
 

@@ -11,6 +11,29 @@ abstract final class AppWidgetKeys {
   static const websocketsTimeoutField = 'websockets_timeout_field';
   static const websocketsVerifySslSwitch = 'websockets_verify_ssl_switch';
   static const collectionsFab = 'collections_fab';
+  static const collectionsDetailFab = 'collections_detail_fab';
+  static const collectionsSearchField = 'collections_search_field';
+  static const collectionsNewCollectionNameField =
+      'collections_new_collection_name_field';
+  static const collectionsNewCollectionSaveButton =
+      'collections_new_collection_save_button';
+  static const collectionsNewCollectionCloseButton =
+      'collections_new_collection_close_button';
+  static const collectionsNewCollectionAction =
+      'collections_new_collection_action';
+  static const collectionsNewCollectionAuthTypeField =
+      'collections_new_collection_auth_type_field';
+  static const collectionsDetailMenuSheet = 'collections_detail_menu_sheet';
+  static const collectionsDetailNewFolderAction =
+      'collections_detail_new_folder_action';
+  static const collectionsDetailNewRequestAction =
+      'collections_detail_new_request_action';
+  static const collectionsDetailImportCurlAction =
+      'collections_detail_import_curl_action';
+  static const collectionsNewFolderNameField =
+      'collections_new_folder_name_field';
+  static const collectionsNewFolderCreateButton =
+      'collections_new_folder_create_button';
   static const postmanFab = 'postman_fab';
   static const requestsListItemPrefix = 'requests_list_item';
   static const requestsEditorSheet = 'requests_editor_sheet';

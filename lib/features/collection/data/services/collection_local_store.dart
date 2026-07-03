@@ -82,6 +82,7 @@ class CollectionLocalStore {
     'description': collection.description,
     'importType': collection.importType.name,
     'authLabel': collection.authLabel,
+    'auth': importedCollectionAuthToJson(collection.auth),
     'variables': collection.variables
         .map(_variableToJson)
         .toList(growable: false),
@@ -89,6 +90,8 @@ class CollectionLocalStore {
     'rootRequests': collection.rootRequests
         .map(_requestToJson)
         .toList(growable: false),
+    'createdAt': collection.createdAt?.toIso8601String(),
+    'updatedAt': collection.updatedAt?.toIso8601String(),
   };
 
   Map<String, Object?> _variableToJson(
@@ -143,7 +146,10 @@ class CollectionLocalStore {
       name: json['name'] as String? ?? 'Imported Collection',
       description: json['description'] as String? ?? '',
       importType: _importTypeFromName(json['importType'] as String?),
-      authLabel: json['authLabel'] as String? ?? 'No Auth',
+      auth: importedCollectionAuthFromJson(
+        json['auth'],
+        legacyAuthLabel: json['authLabel'] as String?,
+      ),
       variables: _listFromJson(
         json['variables'],
         (item) => _variableFromJson(item),
@@ -153,6 +159,8 @@ class CollectionLocalStore {
         json['rootRequests'],
         (item) => _requestFromJson(item),
       ),
+      createdAt: _dateTimeFromJson(json['createdAt']),
+      updatedAt: _dateTimeFromJson(json['updatedAt']),
     );
   }
 
@@ -221,7 +229,15 @@ class CollectionLocalStore {
 
     return value
         .whereType<Map>()
-        .map((item) => builder(Map<String, dynamic>.from(item)))
-        .toList(growable: false);
+      .map((item) => builder(Map<String, dynamic>.from(item)))
+      .toList(growable: false);
+  }
+
+  DateTime? _dateTimeFromJson(Object? value) {
+    if (value is! String || value.trim().isEmpty) {
+      return null;
+    }
+
+    return DateTime.tryParse(value);
   }
 }

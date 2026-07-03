@@ -464,7 +464,9 @@ class _CollectionsShell extends StatelessWidget {
               ? const CollectionSearch()
               : null,
           body: const CollectionScreen(),
-          floatingActionButton: const CollectionsShellActionButton(),
+          floatingActionButton: state.selectedCollection == null
+              ? const CollectionsShellActionButton()
+              : null,
           onTabSelected: onTabSelected,
         ),
       );

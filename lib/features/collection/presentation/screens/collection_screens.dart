@@ -2,8 +2,10 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:httpbot_api/core/keys/widget_keys.dart';
 import 'package:httpbot_api/core/widgets/body_empty.dart';
 import 'package:httpbot_api/features/collection/presentation/model/list_collections.dart';
+import 'package:httpbot_api/features/collection/presentation/widget/collection_editor_page.dart';
 import 'package:httpbot_api/features/collection/presentation/widget/collections_list_item.dart';
 import 'package:httpbot_api/features/request_builder/domain/entities/request_body_draft.dart';
 import 'package:httpbot_api/features/request_builder/domain/entities/request_draft.dart';
@@ -32,12 +34,19 @@ class CollectionScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocBuilder<CollectionCubit, CollectionState>(
       builder: (context, state) {
-        final collections = state.items
+        final filteredItems = state.items
+            .where(
+              (item) => item.name.toLowerCase().contains(
+                    state.searchQuery.trim().toLowerCase(),
+                  ),
+            )
+            .toList(growable: false);
+        final collections = filteredItems
             .map(
               (item) => CollectionItemModel(
                 id: item.id,
                 folderName: item.name,
-                itemCount: item.itemCount,
+                itemCount: item.requestCount,
               ),
             )
             .toList(growable: false);
@@ -58,7 +67,7 @@ class CollectionScreen extends StatelessWidget {
                   separatorBuilder: (_, __) => const SizedBox(height: 12),
                   itemBuilder: (context, index) {
                     final item = collections[index];
-                    final collection = state.items[index];
+                    final collection = filteredItems[index];
                     return CollectionsListItem(
                       item: item,
                       onTap: () => context
@@ -108,7 +117,7 @@ class CollectionScreen extends StatelessWidget {
     final updated = await Navigator.of(context).push<ImportedCollectionEntity>(
       MaterialPageRoute<ImportedCollectionEntity>(
         fullscreenDialog: true,
-        builder: (_) => _CollectionEditorPage(collection: collection),
+        builder: (_) => CollectionEditorPage(initialCollection: collection),
       ),
     );
 
@@ -250,71 +259,144 @@ class _CollectionDetailViewState extends State<_CollectionDetailView> {
   @override
   Widget build(BuildContext context) {
     final colors = context.appColors;
+    final normalizedSearchQuery = _searchQuery.trim();
     final visibleFolders = _filterFolders(
       widget.collection.folders,
-      _searchQuery.trim(),
+      normalizedSearchQuery,
     );
     final visibleRootRequests = widget.collection.rootRequests
         .where((request) => _requestMatchesQuery(request, _searchQuery))
         .toList(growable: false);
+    final isEmptyCollection =
+        widget.collection.folders.isEmpty && widget.collection.rootRequests.isEmpty;
 
     final hasVisibleItems =
         visibleFolders.isNotEmpty || visibleRootRequests.isNotEmpty;
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
+    return Stack(
       children: [
-        _CollectionSearchBar(
-          controller: _searchController,
-          onChanged: (_) => setState(() {}),
-        ),
-        const SizedBox(height: 12),
-        Divider(color: colors.divider, thickness: 1),
-        const SizedBox(height: 10),
-        if (!hasVisibleItems)
-          Padding(
-            padding: const EdgeInsets.only(top: 48),
-            child: Text(
-              'No matching items',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: colors.textSecondary,
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
+        ListView(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
+          children: [
+            _CollectionSearchBar(
+              controller: _searchController,
+              onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: 12),
+            Divider(color: colors.divider, thickness: 1),
+            const SizedBox(height: 10),
+            if (!hasVisibleItems)
+              Padding(
+                padding: const EdgeInsets.only(top: 48),
+                child: isEmptyCollection && normalizedSearchQuery.isEmpty
+                    ? Column(
+                        children: [
+                          Icon(
+                            Icons.import_export_rounded,
+                            size: 56,
+                            color: colors.textSecondary,
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            'No Requests',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: colors.textPrimary,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            "Tap '+' to create a new request.",
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: colors.textSecondary,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      )
+                    : Text(
+                        'No matching items',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: colors.textSecondary,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
               ),
-            ),
+            for (final request in visibleRootRequests)
+              _RequestRow(
+                request: request,
+                depth: 0,
+                onTap: () => _openRequestEditor(request),
+                onLongPress: () => _showRequestActions(request: request),
+              ),
+            for (final folder in visibleFolders)
+              _CollectionFolderNode(
+                folder: folder,
+                depth: 0,
+                expandedKeys: _expandedFolders,
+                onToggle: (folderKey) => setState(() {
+                  if (_expandedFolders.contains(folderKey)) {
+                    _expandedFolders.remove(folderKey);
+                  } else {
+                    _expandedFolders.add(folderKey);
+                  }
+                }),
+                onLongPress: _showFolderActions,
+                onRequestTap: _openRequestEditor,
+                onRequestLongPress: ({
+                  required request,
+                  required folderKey,
+                }) => _showRequestActions(
+                  request: request,
+                  folderKey: folderKey,
+                ),
+              ),
+          ],
+        ),
+        Positioned(
+          right: 16,
+          bottom: 16,
+          child: FloatingActionButton(
+            key: const ValueKey<String>(AppWidgetKeys.collectionsDetailFab),
+            heroTag: AppWidgetKeys.collectionsDetailFab,
+            backgroundColor: colors.methodGet,
+            foregroundColor: colors.textOnPrimary,
+            onPressed: _showDetailActionMenu,
+            child: const Icon(Icons.add_rounded),
           ),
-        for (final request in visibleRootRequests)
-          _RequestRow(
-            request: request,
-            depth: 0,
-            onTap: () => _openRequestEditor(request),
-            onLongPress: () => _showRequestActions(request: request),
-          ),
-        for (final folder in visibleFolders)
-          _CollectionFolderNode(
-            folder: folder,
-            depth: 0,
-            expandedKeys: _expandedFolders,
-            onToggle: (folderKey) => setState(() {
-              if (_expandedFolders.contains(folderKey)) {
-                _expandedFolders.remove(folderKey);
-              } else {
-                _expandedFolders.add(folderKey);
-              }
-            }),
-            onLongPress: _showFolderActions,
-            onRequestTap: _openRequestEditor,
-            onRequestLongPress: ({
-              required request,
-              required folderKey,
-            }) => _showRequestActions(
-              request: request,
-              folderKey: folderKey,
-            ),
-          ),
+        ),
       ],
     );
+  }
+
+  Future<void> _showDetailActionMenu() async {
+    final action = await showModalBottomSheet<_CollectionDetailAction>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const _CollectionDetailActionsSheet(),
+    );
+
+    if (!mounted || action == null) {
+      return;
+    }
+
+    switch (action) {
+      case _CollectionDetailAction.importCurl:
+        await _importCurlIntoCollection();
+        break;
+      case _CollectionDetailAction.newFolder:
+        await _createRootFolder();
+        break;
+      case _CollectionDetailAction.newRequest:
+        await _createRootRequest();
+        break;
+    }
   }
 
   Future<void> _showFolderActions(_VisibleFolderNode folder) async {
@@ -682,6 +764,29 @@ class _CollectionDetailViewState extends State<_CollectionDetailView> {
     setState(() => _expandedFolders.add(folder.key));
   }
 
+  Future<void> _createRootFolder() async {
+    final folderName = await _showNameEditorDialog(
+      title: 'New Folder',
+      actionLabel: 'Create',
+      initialValue: '',
+    );
+    if (!mounted || folderName == null) {
+      return;
+    }
+
+    final didCreate = context.read<CollectionCubit>().createFolder(
+      collectionId: widget.collection.id,
+      name: folderName,
+    );
+    if (!mounted || !didCreate) {
+      return;
+    }
+
+    setState(() {
+      _expandedFolders.add(folderName);
+    });
+  }
+
   Future<void> _deleteFolder(_VisibleFolderNode folder) async {
     final confirmed = await _showDeleteFolderDialog(folder.folder.name);
     if (!mounted || confirmed != true) {
@@ -727,6 +832,34 @@ class _CollectionDetailViewState extends State<_CollectionDetailView> {
     setState(() => _expandedFolders.add(folder.key));
   }
 
+  Future<void> _createRootRequest() async {
+    final variableStore = await getIt<GetRequestVariableStoreUseCase>()();
+    if (!mounted) {
+      return;
+    }
+
+    final result = await showRequestEditorSheet(
+      context,
+      title: 'Untitled Request',
+      initialDraft: const RequestDraft(),
+      variableStore: _mergeImportedVariables(
+        existingStore: variableStore,
+        collection: widget.collection,
+      ),
+    );
+
+    if (!mounted || result == null) {
+      return;
+    }
+
+    final request = _requestFromEditorResult(result);
+    context.read<CollectionCubit>().updateCollection(
+      widget.collection.copyWith(
+        rootRequests: [...widget.collection.rootRequests, request],
+      ),
+    );
+  }
+
   Future<void> _importCurlIntoFolder(_VisibleFolderNode folder) async {
     final curlCommand = await Navigator.of(context).push<String>(
       MaterialPageRoute<String>(
@@ -770,6 +903,46 @@ class _CollectionDetailViewState extends State<_CollectionDetailView> {
 
     context.read<CollectionCubit>().updateCollection(updatedCollection);
     setState(() => _expandedFolders.add(folder.key));
+  }
+
+  Future<void> _importCurlIntoCollection() async {
+    final curlCommand = await Navigator.of(context).push<String>(
+      MaterialPageRoute<String>(
+        fullscreenDialog: true,
+        builder: (_) => const _CurlImportPage(),
+      ),
+    );
+
+    if (!mounted || curlCommand == null || curlCommand.trim().isEmpty) {
+      return;
+    }
+
+    final parsedDraft = _curlParser.parse(curlCommand);
+    final variableStore = await getIt<GetRequestVariableStoreUseCase>()();
+    if (!mounted) {
+      return;
+    }
+
+    final result = await showRequestEditorSheet(
+      context,
+      title: 'Imported cURL Request',
+      initialDraft: parsedDraft,
+      variableStore: _mergeImportedVariables(
+        existingStore: variableStore,
+        collection: widget.collection,
+      ),
+    );
+
+    if (!mounted || result == null) {
+      return;
+    }
+
+    final request = _requestFromEditorResult(result);
+    context.read<CollectionCubit>().updateCollection(
+      widget.collection.copyWith(
+        rootRequests: [...widget.collection.rootRequests, request],
+      ),
+    );
   }
 
   Future<void> _viewCurlRequest(ImportedCollectionRequestEntity request) async {
@@ -1108,6 +1281,7 @@ class _CollectionSearchBar extends StatelessWidget {
         border: Border.all(color: colors.border),
       ),
       child: TextField(
+        key: const ValueKey<String>(AppWidgetKeys.collectionsSearchField),
         controller: controller,
         onChanged: onChanged,
         style: TextStyle(color: colors.textPrimary, fontSize: 18),
@@ -1462,12 +1636,14 @@ class _CollectionActionMenuItem extends StatelessWidget {
     required this.label,
     required this.onTap,
     this.danger = false,
+    this.itemKey,
   });
 
   final IconData icon;
   final String label;
   final VoidCallback onTap;
   final bool danger;
+  final Key? itemKey;
 
   @override
   Widget build(BuildContext context) {
@@ -1475,6 +1651,7 @@ class _CollectionActionMenuItem extends StatelessWidget {
     final foreground = danger ? const Color(0xFFFF453A) : colors.textPrimary;
 
     return InkWell(
+      key: itemKey,
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
@@ -1482,12 +1659,15 @@ class _CollectionActionMenuItem extends StatelessWidget {
           children: [
             Icon(icon, size: 28, color: foreground),
             const SizedBox(width: 18),
-            Text(
-              label,
-              style: TextStyle(
-                color: foreground,
-                fontSize: 18,
-                fontWeight: FontWeight.w500,
+            Expanded(
+              child: Text(
+                label,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: foreground,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ),
           ],
@@ -1500,6 +1680,8 @@ class _CollectionActionMenuItem extends StatelessWidget {
 enum _FolderTreeAction { rename, newRequest, newFolder, importCurl, delete }
 
 enum _RequestTreeAction { edit, duplicate, viewCurl, delete }
+
+enum _CollectionDetailAction { importCurl, newFolder, newRequest }
 
 class _FolderActionsSheet extends StatelessWidget {
   const _FolderActionsSheet();
@@ -1561,6 +1743,73 @@ class _FolderActionsSheet extends StatelessWidget {
                   danger: true,
                   onTap: () =>
                       Navigator.of(context).pop(_FolderTreeAction.delete),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CollectionDetailActionsSheet extends StatelessWidget {
+  const _CollectionDetailActionsSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        child: Align(
+          alignment: Alignment.bottomRight,
+          child: Container(
+            key: const ValueKey<String>(AppWidgetKeys.collectionsDetailMenuSheet),
+            width: 280,
+            decoration: BoxDecoration(
+              color: colors.surface,
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: [
+                BoxShadow(
+                  color: colors.modalShadow,
+                  blurRadius: 24,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _CollectionActionMenuItem(
+                  itemKey: const ValueKey<String>(
+                    AppWidgetKeys.collectionsDetailImportCurlAction,
+                  ),
+                  icon: Icons.code_rounded,
+                  label: 'Import curl...',
+                  onTap: () =>
+                      Navigator.of(context).pop(_CollectionDetailAction.importCurl),
+                ),
+                _CollectionActionMenuItem(
+                  itemKey: const ValueKey<String>(
+                    AppWidgetKeys.collectionsDetailNewFolderAction,
+                  ),
+                  icon: Icons.create_new_folder_outlined,
+                  label: 'New Folder',
+                  onTap: () =>
+                      Navigator.of(context).pop(_CollectionDetailAction.newFolder),
+                ),
+                _CollectionActionMenuItem(
+                  itemKey: const ValueKey<String>(
+                    AppWidgetKeys.collectionsDetailNewRequestAction,
+                  ),
+                  icon: Icons.add_circle_outline_rounded,
+                  label: 'New Request',
+                  onTap: () =>
+                      Navigator.of(context).pop(_CollectionDetailAction.newRequest),
                 ),
               ],
             ),
@@ -1655,6 +1904,9 @@ class _FolderNameDialog extends StatelessWidget {
       confirmButtonBuilder: (label, onTap) => _CollectionDialogButton(
         label: label,
         onTap: onTap,
+        buttonKey: label == 'Create'
+            ? const ValueKey<String>(AppWidgetKeys.collectionsNewFolderCreateButton)
+            : null,
       ),
       cancelButtonBuilder: (label, onTap) => _CollectionDialogButton(
         label: label,
@@ -1729,6 +1981,9 @@ class _FolderNameDialogBodyState extends State<_FolderNameDialogBody> {
               ),
               padding: const EdgeInsets.symmetric(horizontal: 14),
               child: TextField(
+                key: const ValueKey<String>(
+                  AppWidgetKeys.collectionsNewFolderNameField,
+                ),
                 controller: _controller,
                 autofocus: true,
                 decoration: const InputDecoration(
@@ -2070,11 +2325,13 @@ class _CollectionDialogButton extends StatelessWidget {
     required this.label,
     required this.onTap,
     this.danger = false,
+    this.buttonKey,
   });
 
   final String label;
   final VoidCallback onTap;
   final bool danger;
+  final Key? buttonKey;
 
   @override
   Widget build(BuildContext context) {
@@ -2083,6 +2340,7 @@ class _CollectionDialogButton extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
+        key: buttonKey,
         borderRadius: BorderRadius.circular(22),
         onTap: onTap,
         child: Ink(
