@@ -39,8 +39,6 @@ import '../../domain/usecases/save_request_variable_store_use_case.dart';
 import '../../domain/usecases/fetch_graphql_schema_use_case.dart';
 import '../../domain/usecases/get_saved_graphql_queries_use_case.dart';
 import '../../domain/usecases/get_saved_graphql_variables_use_case.dart';
-import '../../domain/usecases/request_oauth2_client_credentials_token_use_case.dart';
-import '../../domain/usecases/request_oauth2_password_credentials_token_use_case.dart';
 import '../../domain/usecases/save_saved_graphql_queries_use_case.dart';
 import '../../domain/usecases/save_saved_graphql_variables_use_case.dart';
 import '../bloc/request_send_bloc.dart';

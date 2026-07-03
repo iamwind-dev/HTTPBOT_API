@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/keys/widget_keys.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_theme_context.dart';
@@ -39,8 +40,8 @@ class CollectionsActionMenu extends StatelessWidget {
             ),
             child: Material(
               color: Colors.transparent,
-              child: Container(
-                decoration: BoxDecoration(
+                child: Container(
+                  decoration: BoxDecoration(
                   color: colors.surface,
                   borderRadius: BorderRadius.circular(32),
                   border: Border.all(
@@ -58,71 +59,77 @@ class CollectionsActionMenu extends StatelessWidget {
                   horizontal: AppSpacing.medium,
                   vertical: AppSpacing.medium,
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _CollectionsActionRow(
-                      icon: Icons.help_outline_rounded,
-                      label: 'Help',
-                      onTap: null,
-                    ),
-                    const SizedBox(height: AppSpacing.small),
-                    const _CollectionsActionDivider(),
-                    const SizedBox(height: AppSpacing.small),
-                    const _CollectionsSectionLabel(label: 'HAR Format'),
-                    const SizedBox(height: AppSpacing.xSmall),
-                    _CollectionsActionRow(
-                      icon: Icons.arrow_downward_rounded,
-                      label: 'Import HAR',
-                      onTap: () =>
-                          onSelected(CollectionActionMenuItem.importHar),
-                    ),
-                    const SizedBox(height: AppSpacing.small),
-                    const _CollectionsActionDivider(),
-                    const SizedBox(height: AppSpacing.small),
-                    const _CollectionsSectionLabel(
-                      label: 'OpenAPI/Swagger (Beta)',
-                    ),
-                    const SizedBox(height: AppSpacing.xSmall),
-                    _CollectionsActionRow(
-                      icon: Icons.arrow_downward_rounded,
-                      label: 'Import from URL',
-                      onTap: () =>
-                          onSelected(CollectionActionMenuItem.importFromUrl),
-                    ),
-                    _CollectionsActionRow(
-                      label: 'Import from Directory',
-                      onTap: () => onSelected(
-                        CollectionActionMenuItem.importFromDirectory,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _CollectionsActionRow(
+                        icon: Icons.help_outline_rounded,
+                        label: 'Help',
+                        onTap: null,
                       ),
-                    ),
-                    _CollectionsActionRow(
-                      label: 'Import Spec',
-                      onTap: () =>
-                          onSelected(CollectionActionMenuItem.importSpec),
-                    ),
-                    const SizedBox(height: AppSpacing.small),
-                    const _CollectionsActionDivider(),
-                    const SizedBox(height: AppSpacing.small),
-                    const _CollectionsSectionLabel(label: 'Postman Format'),
-                    const SizedBox(height: AppSpacing.xSmall),
-                    _CollectionsActionRow(
-                      icon: Icons.arrow_downward_rounded,
-                      label: 'Import Collection',
-                      onTap: () =>
-                          onSelected(CollectionActionMenuItem.importCollection),
-                    ),
-                    const SizedBox(height: AppSpacing.small),
-                    const _CollectionsActionDivider(),
-                    const SizedBox(height: AppSpacing.small),
-                    _CollectionsActionRow(
-                      icon: Icons.add_rounded,
-                      label: 'New Collection',
-                      onTap: () =>
-                          onSelected(CollectionActionMenuItem.newCollection),
-                    ),
-                  ],
+                      const SizedBox(height: AppSpacing.small),
+                      const _CollectionsActionDivider(),
+                      const SizedBox(height: AppSpacing.small),
+                      const _CollectionsSectionLabel(label: 'HAR Format'),
+                      const SizedBox(height: AppSpacing.xSmall),
+                      _CollectionsActionRow(
+                        icon: Icons.arrow_downward_rounded,
+                        label: 'Import HAR',
+                        onTap: () =>
+                            onSelected(CollectionActionMenuItem.importHar),
+                      ),
+                      const SizedBox(height: AppSpacing.small),
+                      const _CollectionsActionDivider(),
+                      const SizedBox(height: AppSpacing.small),
+                      const _CollectionsSectionLabel(
+                        label: 'OpenAPI/Swagger (Beta)',
+                      ),
+                      const SizedBox(height: AppSpacing.xSmall),
+                      _CollectionsActionRow(
+                        icon: Icons.arrow_downward_rounded,
+                        label: 'Import from URL',
+                        onTap: () =>
+                            onSelected(CollectionActionMenuItem.importFromUrl),
+                      ),
+                      _CollectionsActionRow(
+                        label: 'Import from Directory',
+                        onTap: () => onSelected(
+                          CollectionActionMenuItem.importFromDirectory,
+                        ),
+                      ),
+                      _CollectionsActionRow(
+                        label: 'Import Spec',
+                        onTap: () =>
+                            onSelected(CollectionActionMenuItem.importSpec),
+                      ),
+                      const SizedBox(height: AppSpacing.small),
+                      const _CollectionsActionDivider(),
+                      const SizedBox(height: AppSpacing.small),
+                      const _CollectionsSectionLabel(label: 'Postman Format'),
+                      const SizedBox(height: AppSpacing.xSmall),
+                      _CollectionsActionRow(
+                        icon: Icons.arrow_downward_rounded,
+                        label: 'Import Collection',
+                        onTap: () => onSelected(
+                          CollectionActionMenuItem.importCollection,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.small),
+                      const _CollectionsActionDivider(),
+                      const SizedBox(height: AppSpacing.small),
+                      _CollectionsActionRow(
+                        itemKey: const ValueKey<String>(
+                          AppWidgetKeys.collectionsNewCollectionAction,
+                        ),
+                        icon: Icons.add_rounded,
+                        label: 'New Collection',
+                        onTap: () =>
+                            onSelected(CollectionActionMenuItem.newCollection),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -169,11 +176,13 @@ class _CollectionsActionRow extends StatelessWidget {
     required this.label,
     required this.onTap,
     this.icon,
+    this.itemKey,
   });
 
   final String label;
   final VoidCallback? onTap;
   final IconData? icon;
+  final Key? itemKey;
 
   @override
   Widget build(BuildContext context) {
@@ -188,6 +197,7 @@ class _CollectionsActionRow extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
+        key: itemKey,
         borderRadius: BorderRadius.circular(AppRadius.large),
         onTap: onTap,
         child: Padding(

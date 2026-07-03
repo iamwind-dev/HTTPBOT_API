@@ -8,6 +8,7 @@ import '../../../../core/theme/app_theme_context.dart';
 import '../../data/services/collection_file_importer.dart';
 import '../../domain/entities/collection_import_type.dart';
 import '../cubits/collection_cubit.dart';
+import 'collection_editor_page.dart';
 import 'collections_action_menu.dart';
 import 'import_from_url_sheet.dart';
 import 'openapi_directory_dialog.dart';
@@ -83,8 +84,29 @@ class CollectionsShellActionButton extends StatelessWidget {
         await _showOpenApiDirectoryDialog(context);
         break;
       case CollectionActionMenuItem.newCollection:
-        _showNotImplementedMessage(context, 'New Collection');
+        await _showNewCollectionEditor(context);
         break;
+    }
+  }
+
+  Future<void> _showNewCollectionEditor(BuildContext context) async {
+    final created = await Navigator.of(context).push(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => CollectionEditorPage(
+          initialCollection: CollectionEditorPage.createDraft(),
+          isCreating: true,
+        ),
+      ),
+    );
+
+    if (!context.mounted || created == null) {
+      return;
+    }
+
+    final didCreate = context.read<CollectionCubit>().createCollection(created);
+    if (!didCreate || !context.mounted) {
+      return;
     }
   }
 
@@ -233,11 +255,5 @@ class CollectionsShellActionButton extends StatelessWidget {
         const SnackBar(content: Text('Unable to import from the directory.')),
       );
     }
-  }
-
-  void _showNotImplementedMessage(BuildContext context, String label) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('$label is not available yet.')));
   }
 }

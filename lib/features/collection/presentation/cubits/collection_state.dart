@@ -7,11 +7,15 @@ class CollectionState extends Equatable {
     this.items = const [],
     this.isImporting = false,
     this.selectedCollectionId,
+    this.validationMessage,
+    this.searchQuery = '',
   });
 
   final List<ImportedCollectionEntity> items;
   final bool isImporting;
   final String? selectedCollectionId;
+  final String? validationMessage;
+  final String searchQuery;
 
   ImportedCollectionEntity? get selectedCollection {
     final id = selectedCollectionId;
@@ -32,6 +36,9 @@ class CollectionState extends Equatable {
     List<ImportedCollectionEntity>? items,
     bool? isImporting,
     String? selectedCollectionId,
+    String? validationMessage,
+    String? searchQuery,
+    bool clearValidationMessage = false,
     bool clearSelectedCollection = false,
   }) => CollectionState(
     items: items ?? this.items,
@@ -39,8 +46,18 @@ class CollectionState extends Equatable {
     selectedCollectionId: clearSelectedCollection
         ? null
         : (selectedCollectionId ?? this.selectedCollectionId),
+    validationMessage: clearValidationMessage
+        ? null
+        : (validationMessage ?? this.validationMessage),
+    searchQuery: searchQuery ?? this.searchQuery,
   );
 
   @override
-  List<Object?> get props => [items, isImporting, selectedCollectionId];
+  List<Object?> get props => [
+    items,
+    isImporting,
+    selectedCollectionId,
+    validationMessage,
+    searchQuery,
+  ];
 }

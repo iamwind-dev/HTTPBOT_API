@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/constants/app_strings.dart';
 import '../../../../core/keys/widget_keys.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_theme_context.dart';
+import '../cubits/collection_cubit.dart';
 
 class CollectionSearch extends StatelessWidget {
   const CollectionSearch({super.key});
@@ -14,8 +16,8 @@ class CollectionSearch extends StatelessWidget {
     final colors = context.appColors;
 
     return TextField(
-      key: const ValueKey<String>(AppWidgetKeys.requestsSearchField),
-      //  onChanged: context.read<RequestBuilderCubit>().updateSearchQuery,
+      key: const ValueKey<String>(AppWidgetKeys.collectionsSearchField),
+      onChanged: context.read<CollectionCubit>().updateSearchQuery,
       textInputAction: TextInputAction.search,
       decoration: InputDecoration(
         isDense: true,
