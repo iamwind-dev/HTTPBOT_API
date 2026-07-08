@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -8,7 +10,6 @@ import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_theme_context.dart';
 import '../../../../injection/injection.dart';
-import '../../domain/entities/request_auth_draft.dart';
 import '../../domain/entities/saved_credential.dart';
 import '../../domain/usecases/apply_api_key_credential_to_auth_use_case.dart';
 import '../cubit/manage_credentials_cubit.dart';
@@ -17,7 +18,8 @@ import '../cubit/request_editor_cubit.dart';
 import 'create_auth_sheet.dart';
 import 'request_modal_sheet.dart';
 
-/// Opens the Saved Credentials sheet, preserving the editor cubit scope.
+enum SavedCredentialsMode { manage, select }
+
 Future<void> showSavedCredentialsSheet(
   BuildContext context, {
   required RequestEditorCubit editorCubit,
@@ -30,42 +32,80 @@ Future<void> showSavedCredentialsSheet(
         create: (_) => getIt<ManageCredentialsCubit>()..load(),
       ),
     ],
-    child: const _SavedCredentialsSheet(),
+    child: const _SavedCredentialsSheet(mode: SavedCredentialsMode.select),
   ),
 );
 
+class SavedCredentialsPage extends StatelessWidget {
+  const SavedCredentialsPage({super.key});
+
+  @override
+  Widget build(BuildContext context) => BlocProvider<ManageCredentialsCubit>(
+    create: (_) => getIt<ManageCredentialsCubit>()..load(),
+    child: const SavedCredentialsView(mode: SavedCredentialsMode.manage),
+  );
+}
+
 class _SavedCredentialsSheet extends StatelessWidget {
-  const _SavedCredentialsSheet();
+  const _SavedCredentialsSheet({required this.mode});
+
+  final SavedCredentialsMode mode;
 
   @override
   Widget build(BuildContext context) => RequestModalSheetCard(
     key: const ValueKey<String>(AppWidgetKeys.savedCredentialsSheet),
-    child: Padding(
+    child: SavedCredentialsView(mode: mode, useSheetScaffold: true),
+  );
+}
+
+class SavedCredentialsView extends StatelessWidget {
+  const SavedCredentialsView({
+    super.key,
+    required this.mode,
+    this.useSheetScaffold = false,
+  });
+
+  final SavedCredentialsMode mode;
+  final bool useSheetScaffold;
+
+  @override
+  Widget build(BuildContext context) {
+    final content = Padding(
       padding: const EdgeInsets.all(AppSpacing.large),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _Header(
-            onClose: () => Navigator.of(context).pop(),
-            onDeleteAll: () =>
-                context.read<ManageCredentialsCubit>().deleteAll(),
+            mode: mode,
+            onClose: () => Navigator.of(context).maybePop(),
+            onDeleteAll: () => context.read<ManageCredentialsCubit>().deleteAll(),
             onAdd: () => _openCreateAuth(context),
           ),
           const SizedBox(height: AppSpacing.large),
           Expanded(
             child: BlocBuilder<ManageCredentialsCubit, ManageCredentialsState>(
               builder: (context, state) {
+                if (state.status == ManageCredentialsStatus.loading &&
+                    state.credentials.isEmpty) {
+                  return const Center(child: CircularProgressIndicator());
+                }
                 if (state.credentials.isEmpty) {
                   return const _EmptyState();
                 }
-                return _CredentialsList(credentials: state.credentials);
+                return _CredentialsList(mode: mode, credentials: state.credentials);
               },
             ),
           ),
         ],
       ),
-    ),
-  );
+    );
+
+    if (useSheetScaffold) {
+      return content;
+    }
+
+    return content;
+  }
 
   Future<void> _openCreateAuth(BuildContext context) => showCreateAuthSheet(
     context,
@@ -75,11 +115,13 @@ class _SavedCredentialsSheet extends StatelessWidget {
 
 class _Header extends StatelessWidget {
   const _Header({
+    required this.mode,
     required this.onClose,
     required this.onDeleteAll,
     required this.onAdd,
   });
 
+  final SavedCredentialsMode mode;
   final VoidCallback onClose;
   final VoidCallback onDeleteAll;
   final VoidCallback onAdd;
@@ -90,13 +132,16 @@ class _Header extends StatelessWidget {
 
     return Row(
       children: [
-        IconButton(
-          key: const ValueKey<String>(
-            AppWidgetKeys.savedCredentialsCloseButton,
+        if (mode == SavedCredentialsMode.select)
+          IconButton(
+            key: const ValueKey<String>(
+              AppWidgetKeys.savedCredentialsCloseButton,
+            ),
+            icon: const Icon(CupertinoIcons.xmark),
+            onPressed: onClose,
           ),
-          icon: const Icon(CupertinoIcons.xmark),
-          onPressed: onClose,
-        ),
+        if (mode == SavedCredentialsMode.select)
+          const SizedBox(width: AppSpacing.xSmall),
         Expanded(
           child: Text(
             AppStrings.savedCredentialsTitle,
@@ -150,7 +195,7 @@ class _EmptyState extends StatelessWidget {
         children: [
           Icon(
             CupertinoIcons.lock_shield,
-            size: AppSpacing.xxLarge,
+            size: AppSpacing.xxxLarge,
             color: colors.textSecondary,
           ),
           const SizedBox(height: AppSpacing.medium),
@@ -179,34 +224,37 @@ class _EmptyState extends StatelessWidget {
 }
 
 class _CredentialsList extends StatelessWidget {
-  const _CredentialsList({required this.credentials});
+  const _CredentialsList({required this.mode, required this.credentials});
 
+  final SavedCredentialsMode mode;
   final List<SavedCredential> credentials;
 
   @override
   Widget build(BuildContext context) => ListView.separated(
     itemCount: credentials.length,
     separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.small),
-    itemBuilder: (context, index) =>
-        _CredentialTile(credential: credentials[index], index: index),
+    itemBuilder: (context, index) => _CredentialTile(
+      credential: credentials[index],
+      index: index,
+      mode: mode,
+    ),
   );
 }
 
 class _CredentialTile extends StatelessWidget {
-  const _CredentialTile({required this.credential, required this.index});
+  const _CredentialTile({
+    required this.credential,
+    required this.index,
+    required this.mode,
+  });
 
   final SavedCredential credential;
   final int index;
+  final SavedCredentialsMode mode;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.appColors;
-    final location = credential.apiKey.location == ApiKeyLocation.header
-        ? 'Header'
-        : 'Query';
-    final subtitle = credential.type == AuthType.apiKey
-        ? '${credential.apiKey.name} • $location'
-        : credential.type.label;
 
     return Material(
       color: Colors.transparent,
@@ -215,8 +263,8 @@ class _CredentialTile extends StatelessWidget {
         borderRadius: const BorderRadius.all(
           Radius.circular(AppRadius.xxLarge),
         ),
-        onTap: () => _apply(context),
-        onLongPress: () => _showDeleteSheet(context),
+        onTap: () => _onTap(context),
+        onLongPress: () => _showActions(context),
         child: DecoratedBox(
           decoration: BoxDecoration(
             color: colors.surface,
@@ -246,7 +294,7 @@ class _CredentialTile extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        subtitle,
+                        credential.type.label,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: colors.textSecondary,
                         ),
@@ -263,19 +311,30 @@ class _CredentialTile extends StatelessWidget {
     );
   }
 
-  void _apply(BuildContext context) {
-    const applyUseCase = ApplyApiKeyCredentialToAuthUseCase();
-    final editorCubit = context.read<RequestEditorCubit>();
-    editorCubit.updateAuth(
-      applyUseCase(editorCubit.state.draft.auth, credential),
+  void _onTap(BuildContext context) {
+    if (mode == SavedCredentialsMode.select) {
+      const applyUseCase = ApplyApiKeyCredentialToAuthUseCase();
+      final editorCubit = context.read<RequestEditorCubit>();
+      editorCubit.updateAuth(
+        applyUseCase(editorCubit.state.draft.auth, credential),
+      );
+      Navigator.of(context).pop();
+      return;
+    }
+
+    unawaited(
+      showCreateAuthSheet(
+        context,
+        cubit: context.read<ManageCredentialsCubit>(),
+        initialCredentialName: credential.name,
+        initialAuth: credential.auth,
+        editingCredential: credential,
+      ),
     );
-    Navigator.of(context).pop();
   }
 
-  Future<void> _showDeleteSheet(BuildContext context) async {
-    final cubit = context.read<ManageCredentialsCubit>();
-    final colors = context.appColors;
-    final shouldDelete = await showModalBottomSheet<bool>(
+  Future<void> _showActions(BuildContext context) async {
+    final action = await showModalBottomSheet<String>(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (sheetContext) => SafeArea(
@@ -283,46 +342,69 @@ class _CredentialTile extends StatelessWidget {
           padding: const EdgeInsets.all(AppSpacing.large),
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: colors.surface,
+              color: context.appColors.surface,
               borderRadius: const BorderRadius.all(
                 Radius.circular(AppRadius.xxLarge),
               ),
             ),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                borderRadius: const BorderRadius.all(
-                  Radius.circular(AppRadius.xxLarge),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  title: const Text('Edit'),
+                  onTap: () => Navigator.of(sheetContext).pop('edit'),
                 ),
-                onTap: () => Navigator.of(sheetContext).pop(true),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.large,
-                    vertical: AppSpacing.medium,
-                  ),
-                  child: Row(
-                    children: [
-                      Text(
-                        'Delete',
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: colors.methodDelete,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const Spacer(),
-                      Icon(CupertinoIcons.delete, color: colors.methodDelete),
-                    ],
-                  ),
+                const Divider(height: 1),
+                ListTile(
+                  title: const Text('Delete'),
+                  onTap: () => Navigator.of(sheetContext).pop('delete'),
                 ),
-              ),
+              ],
             ),
           ),
         ),
       ),
     );
 
-    if (shouldDelete ?? false) {
-      await cubit.delete(credential.id);
+    if (!context.mounted) {
+      return;
+    }
+
+    if (action == 'edit') {
+      _onTap(context);
+      return;
+    }
+
+    if (action == 'delete') {
+      final shouldDelete = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Delete Credential'),
+          content: const Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Are you sure you want to delete this credential?'),
+              SizedBox(height: AppSpacing.small),
+              Text('This credential will be removed from saved credentials.'),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Delete'),
+            ),
+          ],
+        ),
+      );
+
+      if (shouldDelete == true && context.mounted) {
+        await context.read<ManageCredentialsCubit>().delete(credential.id);
+      }
     }
   }
 }

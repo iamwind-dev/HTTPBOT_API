@@ -1,9 +1,8 @@
-import 'dart:convert';
-
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../domain/entities/request_body_draft.dart';
 import '../../domain/entities/request_draft.dart';
+import '../../domain/helpers/graphql_input_utils.dart';
 import '../../domain/helpers/request_auth_validator.dart';
 import '../../domain/usecases/apply_request_auth_use_case.dart';
 import '../../domain/usecases/evaluate_request_tests_use_case.dart';
@@ -154,20 +153,6 @@ class RequestSendBloc extends Bloc<RequestSendEvent, RequestSendState> {
   }
 
   String? _validateGraphQlVariables(String variables) {
-    final trimmed = variables.trim();
-    if (trimmed.isEmpty) {
-      return null;
-    }
-
-    try {
-      final decoded = jsonDecode(trimmed);
-      if (decoded is Map<String, dynamic>) {
-        return null;
-      }
-    } on FormatException {
-      // Fall through to the shared error message below.
-    }
-
-    return 'GraphQL variables must be a valid JSON object.';
+    return validateGraphQlVariablesInput(variables);
   }
 }

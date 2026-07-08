@@ -7,6 +7,7 @@ import '../entities/request_execution_result.dart';
 import '../entities/request_key_value.dart';
 import '../entities/request_test.dart';
 import '../entities/request_test_result.dart';
+import '../helpers/response_query_evaluator.dart';
 import '../helpers/request_test_label_builder.dart';
 
 class EvaluateRequestTestsUseCase {
@@ -184,8 +185,8 @@ class EvaluateRequestTestsUseCase {
   }) {
     final path = _requiredText(test.jsonPath, 'JSON Path is required.');
     final decoded = jsonDecode(body);
-    final values = _evaluateJsonPath(path, decoded);
-    final actualValue = _serializeEvaluatedValues(values);
+    final values = evaluateJsonPathExpression(path, decoded);
+    final actualValue = serializeEvaluatedJsonValues(values);
 
     return _evaluateStringTest(
       test: test,
@@ -353,7 +354,7 @@ class EvaluateRequestTestsUseCase {
   }) {
     final path = _requiredText(test.xPath, 'XPath is required.');
     final document = xml.XmlDocument.parse(body);
-    final values = _evaluateXPath(path, document);
+    final values = evaluateXPathExpression(path, document);
     final actualValue = values.join(', ');
 
     return _evaluateStringTest(
@@ -399,103 +400,6 @@ class EvaluateRequestTestsUseCase {
     }
 
     return uniqueKeys.toList(growable: false);
-  }
-
-  List<Object?> _evaluateJsonPath(String path, Object? root) {
-    if (!path.startsWith(r'$')) {
-      throw const FormatException(r'JSON Path must start with $.');
-    }
-
-    var cursor = 1;
-    var currentValues = <Object?>[root];
-
-    while (cursor < path.length) {
-      if (path[cursor] == '.') {
-        cursor++;
-        final nextDot = _findNextSpecialCharacter(path, cursor);
-        final key = path.substring(cursor, nextDot);
-        if (key.trim().isEmpty) {
-          throw const FormatException('JSON Path key is invalid.');
-        }
-
-        currentValues = _readJsonProperty(currentValues, key);
-        cursor = nextDot;
-        continue;
-      }
-
-      if (path[cursor] == '[') {
-        final closingIndex = path.indexOf(']', cursor);
-        if (closingIndex == -1) {
-          throw const FormatException('JSON Path bracket is not closed.');
-        }
-
-        final token = path.substring(cursor + 1, closingIndex).trim();
-        if (token == '*') {
-          currentValues = _readJsonWildcard(currentValues);
-        } else {
-          final index = int.tryParse(token);
-          if (index == null) {
-            throw const FormatException('JSON Path array index is invalid.');
-          }
-          currentValues = _readJsonIndex(currentValues, index);
-        }
-        cursor = closingIndex + 1;
-        continue;
-      }
-
-      throw const FormatException('JSON Path contains unsupported syntax.');
-    }
-
-    return currentValues;
-  }
-
-  List<String> _evaluateXPath(String path, xml.XmlDocument document) {
-    final trimmedPath = path.trim();
-    if (trimmedPath.isEmpty) {
-      throw const FormatException('XPath is required.');
-    }
-
-    if (trimmedPath.startsWith('//')) {
-      final tagName = trimmedPath.substring(2).trim();
-      if (tagName.isEmpty || tagName.contains('/')) {
-        throw const FormatException('Unsupported XPath expression.');
-      }
-
-      return document
-          .findAllElements(tagName)
-          .map((element) => element.innerText)
-          .toList(growable: false);
-    }
-
-    if (!trimmedPath.startsWith('/')) {
-      throw const FormatException('XPath must start with / or //.');
-    }
-
-    final segments = trimmedPath
-        .split('/')
-        .where((segment) => segment.trim().isNotEmpty)
-        .toList(growable: false);
-    if (segments.isEmpty) {
-      throw const FormatException('XPath is invalid.');
-    }
-
-    Iterable<xml.XmlElement> current = [document.rootElement];
-    var segmentIndex = 0;
-
-    if (document.rootElement.name.local == segments.first) {
-      segmentIndex = 1;
-    }
-
-    for (var index = segmentIndex; index < segments.length; index++) {
-      final segment = segments[index];
-      current = current.expand(
-        (element) => element.childElements.where(
-          (child) => child.name.local == segment,
-        ),
-      );
-    }
-
-    return current.map((element) => element.innerText).toList(growable: false);
   }
 
   String? _headerValue(List<KeyValueItem> headers, String? headerName) {
@@ -545,17 +449,6 @@ class EvaluateRequestTestsUseCase {
       _normalizeForCase(left, caseSensitive) ==
       _normalizeForCase(right, caseSensitive);
 
-  int _findNextSpecialCharacter(String path, int startIndex) {
-    var cursor = startIndex;
-    while (cursor < path.length &&
-        path[cursor] != '.' &&
-        path[cursor] != '[') {
-      cursor++;
-    }
-
-    return cursor;
-  }
-
   String _formatNum(num value) {
     return value == value.roundToDouble()
         ? value.toInt().toString()
@@ -592,41 +485,6 @@ class EvaluateRequestTestsUseCase {
     message: passed ? null : 'Assertion failed.',
   );
 
-  List<Object?> _readJsonIndex(List<Object?> values, int index) {
-    final nextValues = <Object?>[];
-    for (final value in values) {
-      if (value is List && index >= 0 && index < value.length) {
-        nextValues.add(value[index]);
-      }
-    }
-
-    return nextValues;
-  }
-
-  List<Object?> _readJsonProperty(List<Object?> values, String key) {
-    final nextValues = <Object?>[];
-    for (final value in values) {
-      if (value is Map && value.containsKey(key)) {
-        nextValues.add(value[key]);
-      }
-    }
-
-    return nextValues;
-  }
-
-  List<Object?> _readJsonWildcard(List<Object?> values) {
-    final nextValues = <Object?>[];
-    for (final value in values) {
-      if (value is List) {
-        nextValues.addAll(value);
-      } else if (value is Map) {
-        nextValues.addAll(value.values);
-      }
-    }
-
-    return nextValues;
-  }
-
   String _requiredText(String? value, String message) {
     final trimmed = value?.trim() ?? '';
     if (trimmed.isEmpty) {
@@ -634,29 +492,5 @@ class EvaluateRequestTestsUseCase {
     }
 
     return trimmed;
-  }
-
-  String _serializeEvaluatedValues(List<Object?> values) {
-    if (values.isEmpty) {
-      return '';
-    }
-
-    if (values.length == 1) {
-      return _serializeSingleJsonValue(values.first);
-    }
-
-    return values.map(_serializeSingleJsonValue).join(', ');
-  }
-
-  String _serializeSingleJsonValue(Object? value) {
-    if (value == null) {
-      return 'null';
-    }
-
-    if (value is String) {
-      return value;
-    }
-
-    return jsonEncode(value);
   }
 }

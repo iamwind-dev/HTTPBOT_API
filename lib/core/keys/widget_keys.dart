@@ -74,12 +74,45 @@ abstract final class AppWidgetKeys {
   static const requestsResponseCloseButton = 'requests_response_close_button';
   static const requestsResponseSendButton = 'requests_response_send_button';
   static const requestsResponseSummaryBadge = 'requests_response_summary_badge';
+  static const requestsResponseFilterButton = 'requests_response_filter_button';
+  static const requestsResponseFilterSheet = 'requests_response_filter_sheet';
+  static const requestsResponseFilterMenuButton =
+      'requests_response_filter_menu_button';
+  static const requestsResponseFilterQueryField =
+      'requests_response_filter_query_field';
+  static const requestsResponseFilterLanguageButton =
+      'requests_response_filter_language_button';
   static const viewCurlSheet = 'view_curl_sheet';
   static const viewCurlCloseButton = 'view_curl_close_button';
   static const viewCurlShareButton = 'view_curl_share_button';
   static const settingsList = 'settings_list';
   static const settingsBackButton = 'settings_back_button';
   static const settingsThemeModeSwitch = 'settings_theme_mode_switch';
+  static const settingsGraphQlSegmentedControl =
+      'settings_graphql_segmented_control';
+  static const settingsGraphQlAddButton = 'settings_graphql_add_button';
+  static const settingsGraphQlHelpButton = 'settings_graphql_help_button';
+  static const settingsGraphQlEmptyState = 'settings_graphql_empty_state';
+  static const settingsGraphQlEditorNameField =
+      'settings_graphql_editor_name_field';
+  static const settingsGraphQlEditorValueField =
+      'settings_graphql_editor_value_field';
+  static const settingsGraphQlEditorOperationNameField =
+      'settings_graphql_editor_operation_name_field';
+  static const settingsResponseFiltersEmptyState =
+      'settings_response_filters_empty_state';
+  static const settingsResponseFiltersAddButton =
+      'settings_response_filters_add_button';
+  static const settingsResponseFiltersMoreButton =
+      'settings_response_filters_more_button';
+  static const settingsResponseFiltersSheet =
+      'settings_response_filters_sheet';
+  static const settingsResponseFilterNameField =
+      'settings_response_filter_name_field';
+  static const settingsResponseFilterTypeField =
+      'settings_response_filter_type_field';
+  static const settingsResponseFilterValueField =
+      'settings_response_filter_value_field';
   static const requestsTab = 'requests_tab';
   static const websocketsTab = 'websockets_tab';
   static const websocketsList = 'websockets_list';
@@ -140,6 +173,12 @@ abstract final class AppWidgetKeys {
 
   static String requestsResponseViewSelectorItem(String mode) =>
       'requests_response_view_selector_item_$mode';
+
+  static String settingsGraphQlListItemAt(String section, int index) =>
+      'settings_graphql_${section}_item_$index';
+
+  static String settingsResponseFilterListItemAt(int index) =>
+      'settings_response_filter_item_$index';
 
   static const requestsEditorManageCredentialsButton =
       'requests_editor_manage_credentials_button';

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -23,6 +22,7 @@ import '../../domain/entities/request_key_value.dart';
 import '../../domain/entities/request_variable_store.dart';
 import '../../domain/entities/requests_method.dart';
 import '../../domain/helpers/curl_command_builder.dart';
+import '../../domain/helpers/graphql_input_utils.dart';
 import '../../domain/entities/saved_graphql_query_entity.dart';
 import '../../domain/entities/saved_graphql_variable_entity.dart';
 import '../../domain/entities/graphql_schema_view_entity.dart';
@@ -50,6 +50,7 @@ import '../cubit/request_editor_state.dart';
 import '../models/request_editor_response_badge_data.dart';
 import '../models/request_editor_result.dart';
 import 'api_key_presets.dart';
+import 'create_auth_sheet.dart';
 import 'global_variables_sheet.dart';
 import 'manage_environments_sheet.dart';
 import 'method_notes/method_header_note.dart';
@@ -1698,6 +1699,16 @@ class _BodyModeCard extends StatelessWidget {
                   initialTab: _GraphQlEditorTab.variables,
                 ),
               ),
+              const _KeyValueDivider(),
+              _BodyActionRow(
+                fieldKey: 'requests_editor_graphql_operation_name_field',
+                label: 'Operation Name',
+                value: _graphQlSummary(body.graphQl.operationName ?? ''),
+                onTap: () => _openGraphQlEditor(
+                  context,
+                  initialTab: _GraphQlEditorTab.query,
+                ),
+              ),
             ],
           },
         ],
@@ -2562,6 +2573,7 @@ class _GraphQlEditorSheet extends StatefulWidget {
 class _GraphQlEditorSheetState extends State<_GraphQlEditorSheet> {
   late final TextEditingController _queryController;
   late final TextEditingController _variablesController;
+  late final TextEditingController _operationNameController;
   late _GraphQlEditorTab _currentTab;
   bool _isLoadingSchema = false;
 
@@ -2569,6 +2581,7 @@ class _GraphQlEditorSheetState extends State<_GraphQlEditorSheet> {
   void dispose() {
     _queryController.dispose();
     _variablesController.dispose();
+    _operationNameController.dispose();
     super.dispose();
   }
 
@@ -2578,6 +2591,9 @@ class _GraphQlEditorSheetState extends State<_GraphQlEditorSheet> {
     _queryController = TextEditingController(text: widget.initialValue.query);
     _variablesController = TextEditingController(
       text: widget.initialValue.variables,
+    );
+    _operationNameController = TextEditingController(
+      text: widget.initialValue.operationName ?? '',
     );
     _currentTab = widget.initialTab;
   }
@@ -2626,7 +2642,7 @@ class _GraphQlEditorSheetState extends State<_GraphQlEditorSheet> {
             graphQl: GraphQlBodyDraft(
               query: _queryController.text,
               variables: _variablesController.text,
-              operationName: widget.initialValue.operationName,
+              operationName: _operationNameController.text,
             ),
           ),
         ),
@@ -2695,9 +2711,10 @@ class _GraphQlEditorSheetState extends State<_GraphQlEditorSheet> {
       final now = DateTime.now();
       final entry = SavedGraphQlQueryEntity(
         id: now.microsecondsSinceEpoch.toString(),
-        name: formResult.name.trim().isEmpty
-            ? 'Untitled Query'
-            : formResult.name.trim(),
+        name: buildSavedGraphQlQueryName(
+          proposedName: formResult.name,
+          query: formResult.value,
+        ),
         query: formResult.value,
         filterType: _normalizeOptionalText(formResult.filterType),
         createdAt: now,
@@ -2716,9 +2733,10 @@ class _GraphQlEditorSheetState extends State<_GraphQlEditorSheet> {
     final now = DateTime.now();
     final entry = SavedGraphQlVariableEntity(
       id: now.microsecondsSinceEpoch.toString(),
-      name: formResult.name.trim().isEmpty
-          ? 'Untitled Variables'
-          : formResult.name.trim(),
+      name: buildSavedGraphQlVariablesName(
+        proposedName: formResult.name,
+        variablesJson: formResult.value,
+      ),
       variables: formResult.value,
       filterType: _normalizeOptionalText(formResult.filterType),
       createdAt: now,
@@ -2773,7 +2791,7 @@ class _GraphQlEditorSheetState extends State<_GraphQlEditorSheet> {
       _GraphQlEditorResult(
         query: _queryController.text,
         variables: _variablesController.text,
-        operationName: widget.initialValue.operationName,
+        operationName: _normalizeOptionalText(_operationNameController.text),
       ),
     );
   }
@@ -2843,6 +2861,19 @@ class _GraphQlEditorSheetState extends State<_GraphQlEditorSheet> {
                   icon: const Icon(CupertinoIcons.check_mark),
                 ),
               ],
+            ),
+            const SizedBox(height: AppSpacing.medium),
+            _EditorTextField(
+              fieldKey: AppWidgetKeys.settingsGraphQlEditorOperationNameField,
+              value: _operationNameController.text,
+              label: 'Operation Name',
+              hintText: 'Optional',
+              onChanged: (value) {
+                _operationNameController.value = TextEditingValue(
+                  text: value,
+                  selection: TextSelection.collapsed(offset: value.length),
+                );
+              },
             ),
             const SizedBox(height: AppSpacing.medium),
             Expanded(
@@ -3144,9 +3175,10 @@ class _SavedGraphQlQueriesSheetState extends State<_SavedGraphQlQueriesSheet> {
             return entry;
           }
           return entry.copyWith(
-            name: result.name.trim().isEmpty
-                ? 'Untitled Query'
-                : result.name.trim(),
+            name: buildSavedGraphQlQueryName(
+              proposedName: result.name,
+              query: result.value,
+            ),
             query: result.value,
             filterType: _normalizeOptionalText(result.filterType),
             clearFilterType: _normalizeOptionalText(result.filterType) == null,
@@ -3274,9 +3306,10 @@ class _SavedGraphQlVariablesSheetState
             return entry;
           }
           return entry.copyWith(
-            name: result.name.trim().isEmpty
-                ? 'Untitled Variables'
-                : result.name.trim(),
+            name: buildSavedGraphQlVariablesName(
+              proposedName: result.name,
+              variablesJson: result.value,
+            ),
             variables: result.value,
             filterType: _normalizeOptionalText(result.filterType),
             clearFilterType: _normalizeOptionalText(result.filterType) == null,
@@ -3686,6 +3719,35 @@ class _GraphQlSchemaSheet extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (result.schema case final schema?) ...[
+                      Text(
+                        'Root Types',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: AppSpacing.small),
+                      for (final type in schema.rootTypes) ...[
+                        _SchemaTypeCard(type: type),
+                        const SizedBox(height: AppSpacing.small),
+                      ],
+                      const SizedBox(height: AppSpacing.large),
+                      Text(
+                        'All Types',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: AppSpacing.small),
+                      for (final type in schema.types) ...[
+                        _SchemaTypeCard(type: type),
+                        const SizedBox(height: AppSpacing.small),
+                      ],
+                    ] else ...[
+                      Text(
+                        'Schema is not available for this endpoint.',
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          color: context.appColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: AppSpacing.large),
                     Text(
                       'Formatted',
                       style: Theme.of(context).textTheme.titleMedium,
@@ -3710,25 +3772,158 @@ class _GraphQlSchemaSheet extends StatelessWidget {
   );
 }
 
+class RequestAuthEditorSection extends StatelessWidget {
+  const RequestAuthEditorSection({
+    super.key,
+    required this.auth,
+    required this.queryParameters,
+    required this.headers,
+    this.showCredentialActions = true,
+  });
+
+  final RequestAuthDraft auth;
+  final List<KeyValueItem> queryParameters;
+  final List<KeyValueItem> headers;
+  final bool showCredentialActions;
+
+  @override
+  Widget build(BuildContext context) => _AuthSection(
+    auth: auth,
+    queryParameters: queryParameters,
+    headers: headers,
+    showCredentialActions: showCredentialActions,
+  );
+}
+
+class _SchemaTypeCard extends StatelessWidget {
+  const _SchemaTypeCard({required this.type});
+
+  final GraphQlTypeEntity type;
+
+  @override
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: _buildCardDecoration(context),
+    child: Padding(
+      padding: const EdgeInsets.all(AppSpacing.medium),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '${type.kind} ${type.name}',
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
+          if (type.description?.isNotEmpty ?? false) ...[
+            const SizedBox(height: AppSpacing.xSmall),
+            Text(
+              type.description!,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: context.appColors.textSecondary,
+              ),
+            ),
+          ],
+          if (type.fields.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.medium),
+            Text('Fields', style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: AppSpacing.xSmall),
+            for (final field in type.fields) ...[
+              _SchemaFieldTile(field: field),
+              const SizedBox(height: AppSpacing.xSmall),
+            ],
+          ],
+          if (type.inputFields.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.medium),
+            Text('Input Fields', style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: AppSpacing.xSmall),
+            for (final field in type.inputFields) ...[
+              Text(
+                '${field.name}: ${field.type.displayName}',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              if (field.description?.isNotEmpty ?? false)
+                Text(
+                  field.description!,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: context.appColors.textSecondary,
+                  ),
+                ),
+              const SizedBox(height: AppSpacing.xSmall),
+            ],
+          ],
+          if (type.enumValues.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.medium),
+            Text('Enum Values', style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: AppSpacing.xSmall),
+            for (final value in type.enumValues) ...[
+              Text(value.name, style: Theme.of(context).textTheme.bodyMedium),
+              if (value.description?.isNotEmpty ?? false)
+                Text(
+                  value.description!,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: context.appColors.textSecondary,
+                  ),
+                ),
+              const SizedBox(height: AppSpacing.xSmall),
+            ],
+          ],
+          if (type.possibleTypes.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.medium),
+            Text(
+              'Possible Types',
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            const SizedBox(height: AppSpacing.xSmall),
+            Wrap(
+              spacing: AppSpacing.xSmall,
+              runSpacing: AppSpacing.xSmall,
+              children: [
+                for (final possibleType in type.possibleTypes)
+                  Chip(label: Text(possibleType.displayName)),
+              ],
+            ),
+          ],
+        ],
+      ),
+    ),
+  );
+}
+
+class _SchemaFieldTile extends StatelessWidget {
+  const _SchemaFieldTile({required this.field});
+
+  final GraphQlFieldEntity field;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        '${field.name}: ${field.type.displayName}',
+        style: Theme.of(context).textTheme.bodyMedium,
+      ),
+      if (field.arguments.isNotEmpty) ...[
+        const SizedBox(height: AppSpacing.xxSmall),
+        Text(
+          'Arguments: ${field.arguments.map((item) => '${item.name}: ${item.type.displayName}').join(', ')}',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: context.appColors.textSecondary,
+          ),
+        ),
+      ],
+      if (field.description?.isNotEmpty ?? false) ...[
+        const SizedBox(height: AppSpacing.xxSmall),
+        Text(
+          field.description!,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: context.appColors.textSecondary,
+          ),
+        ),
+      ],
+    ],
+  );
+}
+
 String? _validateGraphQlVariablesInput(String value) {
-  final trimmed = value.trim();
-  if (trimmed.isEmpty) {
-    return null;
-  }
-
-  try {
-    final decoded = jsonDecode(trimmed);
-    if (decoded is Map<String, dynamic>) {
-      return null;
-    }
-    if (decoded is Map) {
-      return null;
-    }
-  } on FormatException {
-    return 'GraphQL variables must be a valid JSON object.';
-  }
-
-  return 'GraphQL variables must be a valid JSON object.';
+  return validateGraphQlVariablesInput(value);
 }
 
 String? _normalizeOptionalText(String? value) {
@@ -3752,11 +3947,13 @@ class _AuthSection extends StatelessWidget {
     required this.auth,
     required this.queryParameters,
     required this.headers,
+    this.showCredentialActions = true,
   });
 
   final RequestAuthDraft auth;
   final List<KeyValueItem> queryParameters;
   final List<KeyValueItem> headers;
+  final bool showCredentialActions;
 
   /// Builds the auth-mode selector and the visible credential fields.
   @override
@@ -3770,25 +3967,41 @@ class _AuthSection extends StatelessWidget {
           children: [
             const _EditorSectionTitle(title: AppStrings.requestEditorAuth),
             const Spacer(),
-            PopupMenuButton<String>(
-              key: const ValueKey<String>(
-                AppWidgetKeys.requestsEditorManageCredentialsButton,
-              ),
-              tooltip: 'Auth actions',
-              icon: const Icon(CupertinoIcons.ellipsis),
-              color: context.appColors.surface,
-              position: PopupMenuPosition.under,
-              onSelected: (_) => showSavedCredentialsSheet(
-                context,
-                editorCubit: context.read<RequestEditorCubit>(),
-              ),
-              itemBuilder: (context) => [
-                const PopupMenuItem<String>(
-                  value: 'manage_credentials',
-                  child: Text(AppStrings.requestEditorApiKeyManageCredentials),
+            if (showCredentialActions)
+              PopupMenuButton<String>(
+                key: const ValueKey<String>(
+                  AppWidgetKeys.requestsEditorManageCredentialsButton,
                 ),
-              ],
-            ),
+                tooltip: 'Auth actions',
+                icon: const Icon(CupertinoIcons.ellipsis),
+                color: context.appColors.surface,
+                position: PopupMenuPosition.under,
+                onSelected: (value) {
+                  switch (value) {
+                    case 'manage_credentials':
+                      showSavedCredentialsSheet(
+                        context,
+                        editorCubit: context.read<RequestEditorCubit>(),
+                      );
+                    case 'save_current_auth':
+                      showCreateAuthSheet(
+                        context,
+                        initialCredentialName: '',
+                        initialAuth: auth,
+                      );
+                  }
+                },
+                itemBuilder: (context) => [
+                  const PopupMenuItem<String>(
+                    value: 'manage_credentials',
+                    child: Text(AppStrings.requestEditorApiKeyManageCredentials),
+                  ),
+                  const PopupMenuItem<String>(
+                    value: 'save_current_auth',
+                    child: Text('Save Current Auth as Credential'),
+                  ),
+                ],
+              ),
           ],
         ),
         const SizedBox(height: AppSpacing.small),
@@ -4671,10 +4884,12 @@ class _ApiKeyAuthFields extends StatelessWidget {
         Align(
           alignment: Alignment.centerLeft,
           child: TextButton.icon(
-            onPressed: () => showSavedCredentialsSheet(
-              context,
-              editorCubit: context.read<RequestEditorCubit>(),
-            ),
+            onPressed: () {
+              showSavedCredentialsSheet(
+                context,
+                editorCubit: context.read<RequestEditorCubit>(),
+              );
+            },
             icon: const Icon(CupertinoIcons.lock),
             label: const Text(AppStrings.requestEditorApiKeyManageCredentials),
           ),

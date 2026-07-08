@@ -34,6 +34,7 @@ import '../../features/request_builder/presentation/widgets/request_cookies_shee
 import '../../features/request_builder/presentation/widgets/request_editor_sheet.dart';
 import '../../features/request_builder/presentation/widgets/request_search_field.dart';
 import '../../features/request_builder/presentation/widgets/request_shell_action_button.dart';
+import '../../features/request_builder/presentation/widgets/saved_response_filters_sheet.dart';
 import '../../features/postman/domain/usecases/clear_postman_account_usecase.dart';
 import '../../features/postman/domain/usecases/clear_postman_api_key_usecase.dart';
 import '../../features/postman/domain/usecases/clear_cached_postman_collections_usecase.dart';
@@ -59,9 +60,12 @@ import '../../features/settings/presentation/cubit/settings_cubit.dart';
 import '../../features/settings/presentation/models/settings_catalog.dart';
 import '../../features/settings/presentation/pages/settings_cookies_page.dart';
 import '../../features/settings/presentation/pages/settings_detail_page.dart';
+import '../../features/settings/presentation/pages/settings_graphql_page.dart';
 import '../../features/settings/presentation/pages/settings_global_variables_page.dart';
 import '../../features/settings/presentation/pages/settings_page.dart';
 import '../../features/settings/presentation/pages/settings_request_settings_page.dart';
+import '../../features/settings/presentation/pages/settings_response_filters_page.dart';
+import '../../features/settings/presentation/pages/settings_saved_credentials_page.dart';
 import '../../injection/injection.dart';
 import 'app_shell_tab.dart';
 
@@ -208,6 +212,8 @@ abstract final class AppRouter {
                       final itemId = state.pathParameters['itemId'] ?? '';
                       final item = SettingsCatalog.findItemById(itemId);
                       final cookiesController = SettingsCookiesController();
+                      final responseFiltersController =
+                          SavedResponseFiltersController();
 
                       return _SettingsDetailShell(
                         itemTitle: item?.title ?? AppStrings.settingsTitle,
@@ -216,10 +222,12 @@ abstract final class AppRouter {
                           context: context,
                           itemId: itemId,
                           cookiesController: cookiesController,
+                          responseFiltersController: responseFiltersController,
                         ),
                         body: _buildSettingsDetailBody(
                           itemId: itemId,
                           cookiesController: cookiesController,
+                          responseFiltersController: responseFiltersController,
                           loadPostmanApiKeyUseCase: loadPostmanApiKeyUseCase,
                           loadPostmanAccountUseCase: loadPostmanAccountUseCase,
                           clearPostmanApiKeyUseCase: clearPostmanApiKeyUseCase,
@@ -299,6 +307,7 @@ abstract final class AppRouter {
   static Widget _buildSettingsDetailBody({
     required String itemId,
     required SettingsCookiesController cookiesController,
+    required SavedResponseFiltersController responseFiltersController,
     required LoadPostmanApiKeyUseCase loadPostmanApiKeyUseCase,
     required LoadPostmanAccountUseCase loadPostmanAccountUseCase,
     required ClearPostmanApiKeyUseCase clearPostmanApiKeyUseCase,
@@ -324,6 +333,18 @@ abstract final class AppRouter {
       return const SettingsGlobalVariablesPage();
     }
 
+    if (itemId == 'saved-auth') {
+      return const SettingsSavedCredentialsPage();
+    }
+
+    if (itemId == 'response-filters') {
+      return SettingsResponseFiltersPage(controller: responseFiltersController);
+    }
+
+    if (itemId == 'graphql') {
+      return const SettingsGraphQlPage();
+    }
+
     if (itemId == 'postman-account') {
       return BlocProvider(
         create: (_) => PostmanAccountCubit(
@@ -347,6 +368,7 @@ abstract final class AppRouter {
     required BuildContext context,
     required String itemId,
     required SettingsCookiesController cookiesController,
+    required SavedResponseFiltersController responseFiltersController,
   }) {
     if (itemId == 'cookies') {
       return IconButton(
@@ -361,6 +383,12 @@ abstract final class AppRouter {
           }
         },
         icon: const Icon(CupertinoIcons.add),
+      );
+    }
+
+    if (itemId == 'response-filters') {
+      return SettingsResponseFiltersActions(
+        controller: responseFiltersController,
       );
     }
 

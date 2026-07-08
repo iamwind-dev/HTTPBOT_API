@@ -7,9 +7,9 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../domain/entities/request_auth_draft.dart';
 import '../../domain/entities/saved_credential.dart';
 import '../../domain/repositories/saved_credentials_repository.dart';
+import '../mappers/request_auth_draft_codec.dart';
 
 class SavedCredentialsRepositoryImpl implements SavedCredentialsRepository {
   static const _storageKey = 'request_builder_saved_credentials';
@@ -53,29 +53,22 @@ class SavedCredentialsRepositoryImpl implements SavedCredentialsRepository {
   Map<String, Object?> _toJson(SavedCredential credential) => {
     'id': credential.id,
     'name': credential.name,
-    'type': credential.type.name,
-    'apiKey': {
-      'name': credential.apiKey.name,
-      'value': credential.apiKey.value,
-      'location': credential.apiKey.location.name,
-    },
+    'auth': requestAuthDraftToJson(credential.auth),
+    'createdAt': credential.createdAt.toIso8601String(),
+    'updatedAt': credential.updatedAt.toIso8601String(),
   };
 
   SavedCredential _fromJson(Map<String, dynamic> json) {
-    final apiKeyJson = json['apiKey'];
-    final apiKeyMap = apiKeyJson is Map
-        ? Map<String, dynamic>.from(apiKeyJson)
-        : const <String, dynamic>{};
-
     return SavedCredential(
       id: json['id'] as String? ?? '',
       name: json['name'] as String? ?? '',
-      type: _authTypeFromName(json['type'] as String?),
-      apiKey: ApiKeyAuthDraft(
-        name: apiKeyMap['name'] as String? ?? '',
-        value: apiKeyMap['value'] as String? ?? '',
-        location: _apiKeyLocationFromName(apiKeyMap['location'] as String?),
-      ),
+      auth: requestAuthDraftFromJson(mapFromJson(json['auth'])),
+      createdAt:
+          DateTime.tryParse(json['createdAt'] as String? ?? '') ??
+          DateTime.fromMillisecondsSinceEpoch(0),
+      updatedAt:
+          DateTime.tryParse(json['updatedAt'] as String? ?? '') ??
+          DateTime.fromMillisecondsSinceEpoch(0),
     );
   }
 
@@ -89,15 +82,4 @@ class SavedCredentialsRepositoryImpl implements SavedCredentialsRepository {
         .map((item) => _fromJson(Map<String, dynamic>.from(item)))
         .toList(growable: false);
   }
-
-  AuthType _authTypeFromName(String? name) => AuthType.values.firstWhere(
-    (type) => type.name == name,
-    orElse: () => AuthType.apiKey,
-  );
-
-  ApiKeyLocation _apiKeyLocationFromName(String? name) =>
-      ApiKeyLocation.values.firstWhere(
-        (location) => location.name == name,
-        orElse: () => ApiKeyLocation.header,
-      );
 }

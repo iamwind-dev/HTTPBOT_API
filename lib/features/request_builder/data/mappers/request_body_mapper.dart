@@ -1,9 +1,9 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
 
 import '../../domain/entities/request_body_draft.dart';
+import '../../domain/helpers/graphql_input_utils.dart';
 import '../../domain/entities/request_key_value.dart';
 
 class RequestBodyPayload {
@@ -107,33 +107,7 @@ Map<String, dynamic> buildGraphQLBody(RequestBodyDraft body) =>
     <String, dynamic>{
       'query': body.graphQl.query,
       if (body.graphQl.variables.trim().isNotEmpty)
-        'variables': _parseGraphQlVariables(body.graphQl.variables),
+        'variables': parseGraphQlVariablesJson(body.graphQl.variables),
       if (body.graphQl.operationName?.trim().isNotEmpty ?? false)
         'operationName': body.graphQl.operationName!.trim(),
     };
-
-Map<String, dynamic> _parseGraphQlVariables(String variables) {
-  final trimmed = variables.trim();
-  if (trimmed.isEmpty) {
-    return <String, dynamic>{};
-  }
-
-  final Object? decoded;
-  try {
-    decoded = jsonDecode(trimmed);
-  } on FormatException {
-    throw const FormatException(
-      'GraphQL variables must be a valid JSON object',
-    );
-  }
-
-  if (decoded is Map<String, dynamic>) {
-    return decoded;
-  }
-
-  if (decoded is Map) {
-    return Map<String, dynamic>.from(decoded);
-  }
-
-  throw const FormatException('GraphQL variables must be a valid JSON object');
-}

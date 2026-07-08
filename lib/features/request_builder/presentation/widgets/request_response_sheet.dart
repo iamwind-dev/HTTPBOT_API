@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -8,17 +9,25 @@ import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_theme_colors.dart';
 import '../../../../core/theme/app_theme_context.dart';
+import '../../../../injection/injection.dart';
 import '../../domain/entities/executed_request_snapshot.dart';
 import '../../domain/entities/parsed_response.dart';
+import '../../domain/entities/response_filter.dart';
+import '../../domain/entities/response_filter_run_result.dart';
 import '../../domain/entities/request_execution_result.dart';
 import '../../domain/entities/request_key_value.dart';
 import '../../domain/entities/request_variable_store.dart';
+import '../../domain/helpers/response_filter_utils.dart';
+import '../../domain/usecases/apply_response_filter_use_case.dart';
+import '../../domain/usecases/get_saved_response_filters_use_case.dart';
+import '../../domain/usecases/save_saved_response_filters_use_case.dart';
 import '../bloc/request_send_bloc.dart';
 import '../bloc/request_send_event.dart';
 import '../bloc/request_send_state.dart';
 import '../cubit/request_editor_cubit.dart';
 import '../models/request_editor_response_badge_data.dart';
 import 'request_modal_sheet.dart';
+import 'saved_response_filters_sheet.dart';
 
 Future<RequestEditorResponseBadgeData?> showRequestResponseSheet(
   BuildContext context, {
@@ -72,12 +81,14 @@ class _RequestResponseSheetState extends State<_RequestResponseSheet> {
                 ),
               ),
               _ResponseActionBar(
+                state: state,
                 selectedMode: _selectedMode,
                 onModeSelected: (mode) {
                   setState(() {
                     _selectedMode = mode;
                   });
                 },
+                onFilterPressed: () => _openFilterResponse(context, state),
               ),
             ],
           ),
@@ -119,6 +130,37 @@ class _RequestResponseSheetState extends State<_RequestResponseSheet> {
     }
 
     return 'Response';
+  }
+
+  Future<void> _openFilterResponse(
+    BuildContext context,
+    RequestSendState state,
+  ) async {
+    final parsedResponse = state.parsedResponse;
+    final executionResult = state.executionResult;
+    if (parsedResponse == null || executionResult == null) {
+      _showMessage(AppStrings.settingsResponseFilterUnsupportedResponse);
+      return;
+    }
+
+    if (parsedResponse.bodyType == ParsedResponseBodyType.binary) {
+      _showMessage(AppStrings.settingsResponseFilterTextOnly);
+      return;
+    }
+
+    await showRequestModalSheet<void>(
+      context,
+      builder: (context) => _ResponseFilterSheet(
+        parsedResponse: parsedResponse,
+        executionResult: executionResult,
+      ),
+    );
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 }
 
@@ -285,12 +327,16 @@ class _ResponseContent extends StatelessWidget {
 
 class _ResponseActionBar extends StatelessWidget {
   const _ResponseActionBar({
+    required this.state,
     required this.selectedMode,
     required this.onModeSelected,
+    required this.onFilterPressed,
   });
 
+  final RequestSendState state;
   final ResponseViewMode selectedMode;
   final ValueChanged<ResponseViewMode> onModeSelected;
+  final VoidCallback onFilterPressed;
 
   @override
   Widget build(BuildContext context) => SafeArea(
@@ -309,7 +355,15 @@ class _ResponseActionBar extends StatelessWidget {
             onSelected: onModeSelected,
           ),
           const Spacer(),
-          const _CircularActionButton(icon: CupertinoIcons.list_bullet),
+          if (selectedMode == ResponseViewMode.body)
+            _ResponseFilterActionButton(
+              onPressed: onFilterPressed,
+              isEnabled:
+                  state.parsedResponse != null &&
+                  state.parsedResponse!.bodyType != ParsedResponseBodyType.binary,
+            ),
+          if (selectedMode == ResponseViewMode.body)
+            const SizedBox(width: AppSpacing.small),
           const SizedBox(width: AppSpacing.small),
           const _CircularActionButton(icon: CupertinoIcons.square_arrow_up),
           const SizedBox(width: AppSpacing.small),
@@ -376,6 +430,58 @@ class _ResponseViewSelectorButton extends StatelessWidget {
                 CupertinoIcons.chevron_down,
                 size: AppSpacing.medium,
                 color: colors.textOnPrimary,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ResponseFilterActionButton extends StatelessWidget {
+  const _ResponseFilterActionButton({
+    required this.onPressed,
+    required this.isEnabled,
+  });
+
+  final VoidCallback onPressed;
+  final bool isEnabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+
+    return Material(
+      color: isEnabled ? colors.primary : colors.surface,
+      borderRadius: const BorderRadius.all(Radius.circular(AppRadius.xxLarge)),
+      child: InkWell(
+        key: const ValueKey<String>(AppWidgetKeys.requestsResponseFilterButton),
+        onTap: isEnabled ? onPressed : null,
+        borderRadius: const BorderRadius.all(
+          Radius.circular(AppRadius.xxLarge),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.medium,
+            vertical: AppSpacing.small,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                CupertinoIcons.line_horizontal_3_decrease,
+                size: AppSpacing.medium,
+                color: isEnabled ? colors.textOnPrimary : colors.iconSecondary,
+              ),
+              const SizedBox(width: AppSpacing.xxxSmall),
+              Text(
+                AppStrings.requestResponseFilterAction,
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  color: isEnabled
+                      ? colors.textOnPrimary
+                      : colors.textSecondary,
+                ),
               ),
             ],
           ),
@@ -682,9 +788,15 @@ class _ResponseTestsView extends StatelessWidget {
 }
 
 class _JsonViewer extends StatelessWidget {
-  const _JsonViewer({required this.body});
+  const _JsonViewer({
+    required this.body,
+    this.highlightJson = true,
+    this.softWrap = false,
+  });
 
   final String body;
+  final bool highlightJson;
+  final bool softWrap;
 
   @override
   Widget build(BuildContext context) {
@@ -699,8 +811,12 @@ class _JsonViewer extends StatelessWidget {
             child: ListView.builder(
               physics: const BouncingScrollPhysics(),
               itemCount: lines.length,
-              itemBuilder: (context, index) =>
-                  _JsonLineRow(lineNumber: index + 1, content: lines[index]),
+              itemBuilder: (context, index) => _JsonLineRow(
+                lineNumber: index + 1,
+                content: lines[index],
+                highlightJson: highlightJson,
+                softWrap: softWrap,
+              ),
             ),
           ),
         ),
@@ -710,10 +826,17 @@ class _JsonViewer extends StatelessWidget {
 }
 
 class _JsonLineRow extends StatelessWidget {
-  const _JsonLineRow({required this.lineNumber, required this.content});
+  const _JsonLineRow({
+    required this.lineNumber,
+    required this.content,
+    required this.highlightJson,
+    required this.softWrap,
+  });
 
   final int lineNumber;
   final String content;
+  final bool highlightJson;
+  final bool softWrap;
 
   @override
   Widget build(BuildContext context) {
@@ -737,12 +860,19 @@ class _JsonLineRow extends StatelessWidget {
           ),
           const SizedBox(width: AppSpacing.xxxSmall),
           Expanded(
-            child: Text.rich(
-              TextSpan(
-                style: baseStyle,
-                children: _highlightJson(content, baseStyle, colors),
-              ),
-            ),
+            child: highlightJson
+                ? Text.rich(
+                    TextSpan(
+                      style: baseStyle,
+                      children: _highlightJson(content, baseStyle, colors),
+                    ),
+                    softWrap: softWrap,
+                  )
+                : Text(
+                    content,
+                    style: baseStyle,
+                    softWrap: softWrap,
+                  ),
           ),
         ],
       ),
@@ -785,6 +915,357 @@ class _JsonLineRow extends StatelessWidget {
     }
 
     return spans;
+  }
+}
+
+enum _ResponseFilterMenuAction { saveQuery, manageQueries, wrapResponse }
+
+class _ResponseFilterSheet extends StatefulWidget {
+  const _ResponseFilterSheet({
+    required this.parsedResponse,
+    required this.executionResult,
+  });
+
+  final ParsedResponse parsedResponse;
+  final RequestExecutionResult executionResult;
+
+  @override
+  State<_ResponseFilterSheet> createState() => _ResponseFilterSheetState();
+}
+
+class _ResponseFilterSheetState extends State<_ResponseFilterSheet> {
+  static const _jqQuickInsert = <String>['.', '|', '[', ']', '[]'];
+  static const _jsonPathQuickInsert = <String>['\$', '.', '[', ']', '*'];
+  static const _xPathQuickInsert = <String>['/', '//', '@', '=', '[]'];
+
+  final ApplyResponseFilterUseCase _applyResponseFilterUseCase =
+      const ApplyResponseFilterUseCase();
+  late final FocusNode _queryFocusNode;
+  late final TextEditingController _queryController;
+  late ResponseFilterType _selectedType;
+  late ResponseFilterRunResult _result;
+  Timer? _debounce;
+  bool _wrapResponse = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _queryFocusNode = FocusNode();
+    _queryController = TextEditingController();
+    _selectedType = defaultResponseFilterTypeForContentType(
+      widget.parsedResponse.contentType,
+    );
+    _result = ResponseFilterRunResult(
+      outputText: widget.parsedResponse.formattedBody,
+      isJson: widget.parsedResponse.bodyType == ParsedResponseBodyType.json,
+      usedOriginalBody: true,
+    );
+    _queryController.addListener(_onQueryChanged);
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _queryController.removeListener(_onQueryChanged);
+    _queryController.dispose();
+    _queryFocusNode.dispose();
+    super.dispose();
+  }
+
+  void _onQueryChanged() {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 250), _runFilter);
+    setState(() {});
+  }
+
+  void _runFilter() {
+    final query = _queryController.text;
+    if (query.trim().isEmpty) {
+      setState(() {
+        _result = ResponseFilterRunResult(
+          outputText: widget.parsedResponse.formattedBody,
+          isJson: widget.parsedResponse.bodyType == ParsedResponseBodyType.json,
+          usedOriginalBody: true,
+        );
+      });
+      return;
+    }
+
+    final result = _applyResponseFilterUseCase(
+      bodyText: widget.executionResult.bodyText,
+      contentType: widget.parsedResponse.contentType,
+      filterType: _selectedType,
+      query: query,
+    );
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _result = result;
+    });
+  }
+
+  Future<void> _handleMenuAction(_ResponseFilterMenuAction action) async {
+    switch (action) {
+      case _ResponseFilterMenuAction.saveQuery:
+        await _saveCurrentQuery();
+      case _ResponseFilterMenuAction.manageQueries:
+        await _manageQueries();
+      case _ResponseFilterMenuAction.wrapResponse:
+        setState(() {
+          _wrapResponse = !_wrapResponse;
+        });
+    }
+  }
+
+  Future<void> _saveCurrentQuery() async {
+    if (_queryController.text.trim().isEmpty) {
+      _showMessage(AppStrings.settingsResponseFilterQueryRequired);
+      return;
+    }
+
+    final result = await showResponseFilterEditorSheet(
+      context,
+      initialFilterType: _selectedType,
+      initialQuery: _queryController.text,
+    );
+    if (result == null || !mounted) {
+      return;
+    }
+
+    try {
+      final existing = await getIt<GetSavedResponseFiltersUseCase>()();
+      final now = DateTime.now();
+      final entry = ResponseFilter(
+        id: now.microsecondsSinceEpoch.toString(),
+        name: buildResponseFilterName(
+          proposedName: result.name,
+          query: result.query,
+        ),
+        filterType: result.filterType,
+        query: result.query,
+        createdAt: now,
+        updatedAt: now,
+      );
+      await getIt<SaveSavedResponseFiltersUseCase>()([...existing, entry]);
+      _showMessage('Response filter saved.');
+    } catch (_) {
+      _showMessage(AppStrings.settingsResponseFilterUnableToSave);
+    }
+  }
+
+  Future<void> _manageQueries() async {
+    final selected = await showSavedResponseFiltersSheet(context);
+    if (selected == null || !mounted) {
+      return;
+    }
+
+    _queryController.value = TextEditingValue(
+      text: selected.query,
+      selection: TextSelection.collapsed(offset: selected.query.length),
+    );
+    setState(() {
+      _selectedType = selected.filterType;
+    });
+    _runFilter();
+  }
+
+  void _insertQuickText(String value) {
+    final selection = _queryController.selection;
+    final text = _queryController.text;
+    final start = selection.start >= 0 ? selection.start : text.length;
+    final end = selection.end >= 0 ? selection.end : text.length;
+    final nextText = text.replaceRange(start, end, value);
+    final nextOffset = start + value.length;
+    _queryController.value = TextEditingValue(
+      text: nextText,
+      selection: TextSelection.collapsed(offset: nextOffset),
+    );
+    _queryFocusNode.requestFocus();
+  }
+
+  List<String> get _quickInsertItems => switch (_selectedType) {
+    ResponseFilterType.jq => _jqQuickInsert,
+    ResponseFilterType.jsonPath => _jsonPathQuickInsert,
+    ResponseFilterType.xPath => _xPathQuickInsert,
+  };
+
+  @override
+  Widget build(BuildContext context) => RequestModalSheetCard(
+    key: const ValueKey<String>(AppWidgetKeys.requestsResponseFilterSheet),
+    child: SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.large),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(CupertinoIcons.xmark),
+                ),
+                Expanded(
+                  child: Text(
+                    AppStrings.requestResponseFilterAction,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                PopupMenuButton<_ResponseFilterMenuAction>(
+                  key: const ValueKey<String>(
+                    AppWidgetKeys.requestsResponseFilterMenuButton,
+                  ),
+                  onSelected: _handleMenuAction,
+                  itemBuilder: (context) => [
+                    const PopupMenuItem<_ResponseFilterMenuAction>(
+                      value: _ResponseFilterMenuAction.saveQuery,
+                      child: Text(AppStrings.settingsResponseFilterSaveQuery),
+                    ),
+                    const PopupMenuItem<_ResponseFilterMenuAction>(
+                      value: _ResponseFilterMenuAction.manageQueries,
+                      child: Text(AppStrings.settingsResponseFilterManageQueries),
+                    ),
+                    PopupMenuItem<_ResponseFilterMenuAction>(
+                      value: _ResponseFilterMenuAction.wrapResponse,
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: const Text(
+                              AppStrings.settingsResponseFilterWrapResponse,
+                            ),
+                          ),
+                          if (_wrapResponse)
+                            const Icon(CupertinoIcons.check_mark, size: 16),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.medium),
+            Expanded(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: context.appColors.surface,
+                  borderRadius: const BorderRadius.all(
+                    Radius.circular(AppRadius.xxLarge),
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.small,
+                    vertical: AppSpacing.medium,
+                  ),
+                  child: _JsonViewer(
+                    body: _result.hasError
+                        ? _result.errorMessage ?? ''
+                        : _result.outputText,
+                    highlightJson: !_result.hasError && _result.isJson,
+                    softWrap: _wrapResponse,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.medium),
+            SizedBox(
+              height: 36,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: _quickInsertItems.length,
+                separatorBuilder: (_, _) => const SizedBox(width: AppSpacing.small),
+                itemBuilder: (context, index) {
+                  final item = _quickInsertItems[index];
+                  return ActionChip(
+                    label: Text(item),
+                    onPressed: () => _insertQuickText(item),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: AppSpacing.small),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: context.appColors.surface,
+                borderRadius: const BorderRadius.all(
+                  Radius.circular(AppRadius.xxLarge),
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.small,
+                  vertical: AppSpacing.xxxSmall,
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        key: const ValueKey<String>(
+                          AppWidgetKeys.requestsResponseFilterQueryField,
+                        ),
+                        controller: _queryController,
+                        focusNode: _queryFocusNode,
+                        decoration: const InputDecoration(
+                          hintText: AppStrings.settingsResponseFilterValue,
+                          border: InputBorder.none,
+                        ),
+                      ),
+                    ),
+                    PopupMenuButton<ResponseFilterType>(
+                      key: const ValueKey<String>(
+                        AppWidgetKeys.requestsResponseFilterLanguageButton,
+                      ),
+                      tooltip: _selectedType.label,
+                      onSelected: (value) {
+                        setState(() {
+                          _selectedType = value;
+                        });
+                        _runFilter();
+                      },
+                      itemBuilder: (context) => ResponseFilterType.values
+                          .map(
+                            (type) => PopupMenuItem<ResponseFilterType>(
+                              value: type,
+                              child: Text(type.label),
+                            ),
+                          )
+                          .toList(growable: false),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.small,
+                          vertical: AppSpacing.small,
+                        ),
+                        child: Row(
+                          children: [
+                            Text(
+                              _selectedType.label,
+                              style: Theme.of(context).textTheme.titleSmall,
+                            ),
+                            const SizedBox(width: AppSpacing.xxxSmall),
+                            const Icon(
+                              CupertinoIcons.chevron_up_chevron_down,
+                              size: 16,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 }
 
