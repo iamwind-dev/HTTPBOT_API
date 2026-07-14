@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'app_radius.dart';
 import 'app_theme_colors.dart';
+import '../layout/app_responsive.dart';
 
 abstract final class AppTheme {
   static ThemeData get lightTheme =>
@@ -53,6 +54,9 @@ abstract final class AppTheme {
           ),
           side: BorderSide(color: colors.border),
         ),
+      ),
+      bottomSheetTheme: const BottomSheetThemeData(
+        constraints: BoxConstraints(maxWidth: AppResponsive.maxSheetWidth),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,

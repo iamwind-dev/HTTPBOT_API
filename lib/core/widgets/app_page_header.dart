@@ -89,10 +89,15 @@ class AppPageHeader extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(
                     horizontal: _actionExtent,
                   ),
-                  child: Text(
-                    title,
-                    style: theme.textTheme.titleLarge,
-                    textAlign: TextAlign.center,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      title,
+                      style: theme.textTheme.titleLarge,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                    ),
                   ),
                 ),
                 if (trailing != null)
