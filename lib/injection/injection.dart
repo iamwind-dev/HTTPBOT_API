@@ -39,6 +39,7 @@ import '../features/request_history/domain/usecases/clear_request_history_use_ca
 import '../features/request_history/domain/usecases/get_request_history_entries_use_case.dart';
 import '../features/request_history/domain/usecases/save_request_history_entry_use_case.dart';
 import '../features/request_history/presentation/cubit/request_history_cubit.dart';
+import '../features/settings/domain/services/disk_usage_service.dart';
 import '../features/request_builder/data/repositories/request_execution_repository_impl.dart';
 import '../features/request_builder/data/repositories/http_cookie_repository_impl.dart';
 import '../features/request_builder/data/repositories/request_builder_repository_impl.dart';
@@ -236,6 +237,9 @@ void configureDependencies() {
   getIt.registerLazySingleton(
     () => SaveRequestHistoryEntryUseCase(getIt<RequestHistoryRepository>()),
   );
+  getIt.registerLazySingleton(
+    () => DiskUsageService(getIt<RequestHistoryRepository>()),
+  );
   getIt.registerLazySingleton(ResolveRequestUseCase.new);
   getIt.registerLazySingleton(ApplyRequestAuthUseCase.new);
   getIt.registerLazySingleton(ParseResponseUseCase.new);
@@ -265,7 +269,8 @@ void configureDependencies() {
     () => ExchangeOAuth2AuthorizationCodeUseCase(getIt<OAuth2Repository>()),
   );
   getIt.registerLazySingleton(
-    () => RequestOAuth2PasswordCredentialsTokenUseCase(getIt<OAuth2Repository>()),
+    () =>
+        RequestOAuth2PasswordCredentialsTokenUseCase(getIt<OAuth2Repository>()),
   );
   getIt.registerLazySingleton(
     () => RequestOAuth2ClientCredentialsTokenUseCase(getIt<OAuth2Repository>()),
@@ -313,8 +318,7 @@ void configureDependencies() {
   getIt.registerFactory(
     () => ManageResponseFiltersCubit(
       getSavedResponseFiltersUseCase: getIt<GetSavedResponseFiltersUseCase>(),
-      saveSavedResponseFiltersUseCase:
-          getIt<SaveSavedResponseFiltersUseCase>(),
+      saveSavedResponseFiltersUseCase: getIt<SaveSavedResponseFiltersUseCase>(),
     ),
   );
 }

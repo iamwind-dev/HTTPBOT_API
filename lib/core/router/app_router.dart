@@ -57,9 +57,14 @@ import '../../features/postman/presentation/cubit/postman_cubit.dart';
 import '../../features/postman/presentation/cubit/postman_state.dart';
 import '../../features/postman/presentation/screens/postman_account_screen.dart';
 import '../../features/settings/presentation/cubit/settings_cubit.dart';
+import '../../features/settings/domain/entities/disk_usage_models.dart';
+import '../../features/settings/domain/services/disk_usage_service.dart';
+import '../../features/settings/presentation/cubit/disk_usage_cubit.dart';
+import '../../features/settings/presentation/cubit/disk_usage_state.dart';
 import '../../features/settings/presentation/models/settings_catalog.dart';
 import '../../features/settings/presentation/pages/settings_cookies_page.dart';
 import '../../features/settings/presentation/pages/settings_detail_page.dart';
+import '../../features/settings/presentation/pages/settings_disk_usage_page.dart';
 import '../../features/settings/presentation/pages/settings_graphql_page.dart';
 import '../../features/settings/presentation/pages/settings_global_variables_page.dart';
 import '../../features/settings/presentation/pages/settings_page.dart';
@@ -210,6 +215,29 @@ abstract final class AppRouter {
                     path: ':itemId',
                     builder: (context, state) {
                       final itemId = state.pathParameters['itemId'] ?? '';
+                      if (itemId == 'disk-usage') {
+                        return BlocProvider(
+                          create: (_) =>
+                              DiskUsageCubit(getIt<DiskUsageService>())..load(),
+                          child: BlocBuilder<DiskUsageCubit, DiskUsageState>(
+                            builder: (context, diskUsageState) =>
+                                _SettingsDetailShell(
+                                  itemTitle: diskUsageState.selectionMode
+                                      ? '${diskUsageState.selectedCount} Selected'
+                                      : diskUsageState.selectedTab ==
+                                            DiskUsageTab.requests
+                                      ? 'Request Disk Usage'
+                                      : 'Files Disk Usage',
+                                  onBack: () => _handleSettingsBack(context),
+                                  trailing: const DiskUsageTabPicker(),
+                                  body: const SettingsDiskUsagePage(),
+                                  onTabSelected: (tab) =>
+                                      _handleShellTabSelection(context, tab),
+                                ),
+                          ),
+                        );
+                      }
+
                       final item = SettingsCatalog.findItemById(itemId);
                       final cookiesController = SettingsCookiesController();
                       final responseFiltersController =

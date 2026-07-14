@@ -38,10 +38,23 @@ class RequestHistoryRepositoryImpl implements RequestHistoryRepository {
     _entries.clear();
   }
 
+  @override
+  Future<void> deleteRequestHistoryEntries(Set<String> entryIds) async {
+    _entries.removeWhere((entry) => entryIds.contains(entry.id));
+  }
+
+  @override
+  Future<void> deleteRequestHistoryForRequest(String requestId) async {
+    _entries.removeWhere((entry) => _requestKey(entry) == requestId);
+  }
+
   bool _isSameRequestScope(
     RequestHistoryEntry left,
     RequestHistoryEntry right,
   ) =>
       left.request.method == right.request.method &&
       left.request.url == right.request.url;
+
+  String _requestKey(RequestHistoryEntry entry) =>
+      '${entry.request.method.wireName}|${entry.request.url}';
 }

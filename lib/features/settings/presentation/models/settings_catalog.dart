@@ -68,11 +68,11 @@ abstract final class SettingsCatalog {
     SettingsSection(
       title: AppStrings.settingsSectionHttpbot,
       items: <SettingsItem>[
-        SettingsItem(
-          id: 'more-settings',
-          title: AppStrings.settingsMoreSettings,
-          icon: Assets.icons.aboutIc,
-        ),
+        // SettingsItem(
+        //   id: 'more-settings',
+        //   title: AppStrings.settingsMoreSettings,
+        //   icon: Assets.icons.aboutIc,
+        // ),
         SettingsItem(
           id: 'theme-mode',
           title: AppStrings.settingsDarkMode,

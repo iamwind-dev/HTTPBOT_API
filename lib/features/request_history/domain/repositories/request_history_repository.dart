@@ -9,4 +9,10 @@ abstract class RequestHistoryRepository {
 
   /// Clears all saved history entries.
   Future<void> clearRequestHistory();
+
+  /// Deletes saved history entries by id.
+  Future<void> deleteRequestHistoryEntries(Set<String> entryIds);
+
+  /// Deletes saved response history for one request scope.
+  Future<void> deleteRequestHistoryForRequest(String requestId);
 }
