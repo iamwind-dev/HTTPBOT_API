@@ -41,6 +41,8 @@ import '../features/request_history/domain/usecases/save_request_history_entry_u
 import '../features/request_history/presentation/cubit/request_history_cubit.dart';
 import '../features/settings/domain/services/disk_usage_service.dart';
 import '../features/request_builder/data/repositories/request_execution_repository_impl.dart';
+import '../features/request_builder/data/repositories/response_filter_repository_impl.dart';
+import '../features/request_builder/domain/repositories/response_filter_repository.dart';
 import '../features/request_builder/data/repositories/http_cookie_repository_impl.dart';
 import '../features/request_builder/data/repositories/request_builder_repository_impl.dart';
 import '../features/request_builder/data/datasources/oauth2_remote_datasource.dart';
@@ -84,6 +86,11 @@ import '../features/request_builder/domain/usecases/save_request_variable_store_
 import '../features/request_builder/domain/usecases/save_saved_request_drafts_use_case.dart';
 import '../features/request_builder/domain/usecases/resolve_request_use_case.dart';
 import '../features/request_builder/presentation/bloc/request_send_bloc.dart';
+import '../features/web_sockets/data/datasources/io_web_socket_client.dart';
+import '../features/web_sockets/domain/repositories/web_socket_client.dart';
+import '../features/web_sockets/domain/repositories/web_socket_repository.dart';
+import '../features/web_sockets/data/repositories_impl/web_socket_repository_impl.dart';
+import '../features/web_sockets/presentation/cubits/web_socket_list_cubit.dart';
 
 final getIt = GetIt.instance;
 
@@ -103,6 +110,9 @@ void configureDependencies() {
     ..registerLazySingleton<ExternalUriLauncher>(
       UrlLauncherExternalUriLauncher.new,
     )
+    ..registerLazySingleton<WebSocketClient>(IoWebSocketClient.new)
+    ..registerLazySingleton<WebSocketRepository>(WebSocketRepositoryImpl.new)
+    ..registerFactory(() => WebSocketListCubit(getIt<WebSocketRepository>()))
     ..registerLazySingleton<ThemeModeStore>(SharedPreferencesThemeModeStore.new)
     ..registerFactory(() => ThemeCubit(getIt<ThemeModeStore>()))
     ..registerLazySingleton<PostmanLocalDataSource>(
@@ -190,6 +200,9 @@ void configureDependencies() {
     )
     ..registerLazySingleton<RequestHistoryRepository>(
       RequestHistoryRepositoryImpl.new,
+    )
+    ..registerLazySingleton<ResponseFilterRepository>(
+      ResponseFilterRepositoryImpl.new,
     )
     ..registerLazySingleton(
       () => GetRequestDraftUseCase(getIt<RequestBuilderRepository>()),

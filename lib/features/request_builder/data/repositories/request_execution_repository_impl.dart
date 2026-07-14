@@ -7,9 +7,12 @@ import '../../../../core/network/dio_client.dart';
 import '../../../../core/network/ntlm_http_client.dart';
 import '../helpers/request_transport_inputs.dart';
 import '../../domain/helpers/http_cookie_utils.dart';
+import '../../domain/helpers/implicit_request_headers.dart';
 import '../../domain/entities/auth_applied_request.dart';
 import '../../domain/entities/executed_request_snapshot.dart';
+import '../../domain/entities/http_exchange.dart';
 import '../../domain/entities/request_auth_draft.dart';
+import '../../domain/entities/request_draft.dart';
 import '../../domain/entities/request_execution_result.dart';
 import '../../domain/entities/request_key_value.dart';
 import '../../domain/helpers/request_auth_validator.dart';
@@ -70,10 +73,12 @@ class RequestExecutionRepositoryImpl implements RequestExecutionRepository {
     final stopwatch = Stopwatch()..start();
     final draft = request.request;
     final settings = draft.settings;
+    final connectionMetadata = ConnectionMetadata();
     final dio = _dioClient.create(
       timeout: Duration(seconds: settings.timeoutSeconds),
       followRedirects: settings.followRedirects,
       verifySsl: settings.verifySsl,
+      metadata: connectionMetadata,
     );
     final inputs = await buildRequestTransportInputs(draft);
     final headersWithUserAgent = _injectSettingsUserAgent(
@@ -88,12 +93,8 @@ class RequestExecutionRepositoryImpl implements RequestExecutionRepository {
             ),
           )
         : headersWithUserAgent;
-    final executedRequestSnapshot = ExecutedRequestSnapshot(
-      method: draft.method.wireName,
-      url: inputs.url,
-      headers: requestHeaders,
-      body: _buildRequestBodyPreview(inputs),
-    );
+    final requestBodyPreview = _buildRequestBodyPreview(inputs);
+    final startAt = DateTime.now().toUtc();
 
     try {
       final response = await dio.request<List<int>>(
@@ -107,6 +108,17 @@ class RequestExecutionRepositoryImpl implements RequestExecutionRepository {
         ),
       );
       stopwatch.stop();
+      final endAt = DateTime.now().toUtc();
+      final protocol = _resolveProtocol(response.headers.map);
+      final executedRequestSnapshot = _buildSnapshot(
+        draft: draft,
+        url: inputs.url,
+        headers: requestHeaders,
+        body: requestBodyPreview,
+        protocol: protocol,
+        startAt: startAt,
+        endAt: endAt,
+      );
 
       if (settings.storeCookies) {
         await _ingestSetCookieHeaders(
@@ -132,12 +144,33 @@ class RequestExecutionRepositoryImpl implements RequestExecutionRepository {
         bodyText: _decodeBodyBytes(bodyBytes),
         duration: stopwatch.elapsed,
         executedRequestSnapshot: executedRequestSnapshot,
+        exchanges: _buildExchanges(
+          response: response,
+          snapshot: executedRequestSnapshot,
+          metadata: connectionMetadata,
+          protocol: protocol,
+          responseBodySizeBytes: bodyBytes.length,
+          startAt: startAt,
+          endAt: endAt,
+        ),
         responseCookies: responseCookies,
         resolutionIssues: request.resolutionIssues,
         authIssues: request.authIssues,
       );
     } on DioException catch (error) {
       stopwatch.stop();
+      final endAt = DateTime.now().toUtc();
+      final errorSnapshot = _buildSnapshot(
+        draft: draft,
+        url: inputs.url,
+        headers: requestHeaders,
+        body: requestBodyPreview,
+        protocol: _resolveProtocol(
+          error.response?.headers.map ?? const <String, List<String>>{},
+        ),
+        startAt: startAt,
+        endAt: endAt,
+      );
       if (settings.storeCookies) {
         await _ingestSetCookieHeaders(
           requestUrl: inputs.url,
@@ -160,7 +193,20 @@ class RequestExecutionRepositoryImpl implements RequestExecutionRepository {
         bodyBytes: bodyBytes,
         bodyText: _decodeBodyBytes(bodyBytes),
         duration: stopwatch.elapsed,
-        executedRequestSnapshot: executedRequestSnapshot,
+        executedRequestSnapshot: errorSnapshot,
+        exchanges: _buildExchanges(
+          response: error.response,
+          snapshot: errorSnapshot,
+          metadata: connectionMetadata,
+          protocol: errorSnapshot.protocol,
+          responseBodySizeBytes: bodyBytes.length,
+          startAt: startAt,
+          endAt: endAt,
+          reasonPhrase: _resolveStatusMessage(
+            error.response?.statusCode,
+            error.response?.statusMessage,
+          ),
+        ),
         errorType: _mapErrorType(error),
         errorMessage: _buildErrorMessage(error),
         responseCookies: responseCookies,
@@ -169,11 +215,30 @@ class RequestExecutionRepositoryImpl implements RequestExecutionRepository {
       );
     } on Object catch (error) {
       stopwatch.stop();
+      final endAt = DateTime.now().toUtc();
+      final errorSnapshot = _buildSnapshot(
+        draft: draft,
+        url: inputs.url,
+        headers: requestHeaders,
+        body: requestBodyPreview,
+        protocol: null,
+        startAt: startAt,
+        endAt: endAt,
+      );
 
       return RequestExecutionResult(
         request: draft,
         duration: stopwatch.elapsed,
-        executedRequestSnapshot: executedRequestSnapshot,
+        executedRequestSnapshot: errorSnapshot,
+        exchanges: _buildExchanges(
+          response: null,
+          snapshot: errorSnapshot,
+          metadata: connectionMetadata,
+          protocol: null,
+          responseBodySizeBytes: 0,
+          startAt: startAt,
+          endAt: endAt,
+        ),
         errorType: RequestExecutionErrorType.unknown,
         errorMessage: error.toString(),
         resolutionIssues: request.resolutionIssues,
@@ -181,6 +246,96 @@ class RequestExecutionRepositoryImpl implements RequestExecutionRepository {
       );
     }
   }
+
+  /// Builds the executed request snapshot with byte sizes computed from headers and body.
+  ExecutedRequestSnapshot _buildSnapshot({
+    required RequestDraft draft,
+    required String url,
+    required Map<String, String> headers,
+    required String? body,
+    required String? protocol,
+    required DateTime startAt,
+    required DateTime endAt,
+  }) {
+    final wireHeaders = withImplicitRequestHeaders(
+      url: url,
+      headers: headers,
+      protocol: protocol,
+    );
+    return ExecutedRequestSnapshot(
+      method: draft.method.wireName,
+      url: url,
+      headers: wireHeaders,
+      body: body,
+      protocol: protocol,
+      headerSizeBytes: _headerSizeBytes(wireHeaders),
+      bodySizeBytes: body == null ? 0 : utf8.encode(body).length,
+      startAt: startAt,
+      endAt: endAt,
+    );
+  }
+
+  /// Builds the list of exchanges (one per attempt) for the Metrics tab.
+  List<HttpExchange> _buildExchanges({
+    required Response<dynamic>? response,
+    required ExecutedRequestSnapshot snapshot,
+    required ConnectionMetadata metadata,
+    required String? protocol,
+    required int responseBodySizeBytes,
+    required DateTime startAt,
+    required DateTime endAt,
+    String? reasonPhrase,
+  }) {
+    final responseHeaders = response?.headers.map;
+    final finalExchange = HttpExchange(
+      index: 1,
+      request: snapshot,
+      statusCode: response?.statusCode,
+      reasonPhrase: reasonPhrase ??
+          (response == null
+              ? null
+              : _resolveStatusMessage(
+                  response.statusCode,
+                  response.statusMessage,
+                )),
+      protocol: protocol,
+      remoteAddress: metadata.remoteAddress,
+      tlsProtocol: metadata.tlsProtocol,
+      tlsCipher: metadata.tlsCipher,
+      responseHeaderSizeBytes:
+          responseHeaders == null ? null : _responseHeaderSizeBytes(responseHeaders),
+      responseBodySizeBytes: response == null ? null : responseBodySizeBytes,
+      responseStartAt: startAt,
+      responseEndAt: endAt,
+    );
+
+    return List<HttpExchange>.unmodifiable([finalExchange]);
+  }
+
+  /// Sums the wire size of request headers as `key: value\r\n` segments.
+  int _headerSizeBytes(Map<String, String> headers) {
+    var total = 0;
+    headers.forEach((key, value) {
+      total += utf8.encode('$key: $value\r\n').length;
+    });
+    return total;
+  }
+
+  /// Sums the wire size of response headers across all values.
+  int _responseHeaderSizeBytes(Map<String, List<String>> headers) {
+    var total = 0;
+    headers.forEach((key, values) {
+      for (final value in values) {
+        total += utf8.encode('$key: $value\r\n').length;
+      }
+    });
+    return total;
+  }
+
+  /// Best-effort protocol label from a response; Dio does not expose the
+  /// negotiated HTTP version, so default to HTTP/1.1.
+  String _resolveProtocol(Map<String, List<String>> responseHeaders) =>
+      'HTTP/1.1';
 
   /// Flattens response headers into reusable key/value entities for downstream parsing and UI.
   List<KeyValueItem> _flattenHeaders(Map<String, List<String>> headers) {

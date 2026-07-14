@@ -3,6 +3,13 @@ abstract final class AppWidgetKeys {
   static const requestsFavoriteButton = 'requests_favorite_button';
   static const requestsFab = 'requests_fab';
   static const websocketsFab = 'websockets_fab';
+  static const websocketsUrlField = 'websockets_url_field';
+  static const websocketsConnectButton = 'websockets_connect_button';
+  static const websocketsMessageField = 'websockets_message_field';
+  static const websocketsSendButton = 'websockets_send_button';
+  static const websocketsBinaryButton = 'websockets_binary_button';
+  static const websocketsTimeoutField = 'websockets_timeout_field';
+  static const websocketsVerifySslSwitch = 'websockets_verify_ssl_switch';
   static const collectionsFab = 'collections_fab';
   static const collectionsDetailFab = 'collections_detail_fab';
   static const collectionsSearchField = 'collections_search_field';
@@ -61,7 +68,8 @@ abstract final class AppWidgetKeys {
   static const requestsCookiesFilterButton = 'requests_cookies_filter_button';
   static const requestsTestsSheet = 'requests_tests_sheet';
   static const requestsTestEditorSheet = 'requests_test_editor_sheet';
-  static const requestsTestValueEditorSheet = 'requests_test_value_editor_sheet';
+  static const requestsTestValueEditorSheet =
+      'requests_test_value_editor_sheet';
   static const requestsTestsAddButton = 'requests_tests_add_button';
   static const requestsTestsCloseButton = 'requests_tests_close_button';
   static const requestsSettingsSheet = 'requests_settings_sheet';
@@ -74,14 +82,41 @@ abstract final class AppWidgetKeys {
   static const requestsResponseCloseButton = 'requests_response_close_button';
   static const requestsResponseSendButton = 'requests_response_send_button';
   static const requestsResponseSummaryBadge = 'requests_response_summary_badge';
-  static const requestsResponseFilterButton = 'requests_response_filter_button';
-  static const requestsResponseFilterSheet = 'requests_response_filter_sheet';
-  static const requestsResponseFilterMenuButton =
-      'requests_response_filter_menu_button';
-  static const requestsResponseFilterQueryField =
-      'requests_response_filter_query_field';
-  static const requestsResponseFilterLanguageButton =
-      'requests_response_filter_language_button';
+static const requestsResponseRawRequestCard =
+    'requests_response_raw_request_card';
+static const requestsResponseShareButton = 'requests_response_share_button';
+static const requestsResponseFilterButton = 'requests_response_filter_button';
+
+static const filterResponseSheet = 'filter_response_sheet';
+static const filterResponseCloseButton = 'filter_response_close_button';
+static const filterResponseMoreButton = 'filter_response_more_button';
+static const filterResponseQueryField = 'filter_response_query_field';
+static const filterResponseModePicker = 'filter_response_mode_picker';
+
+static String filterResponseModeOption(String mode) =>
+    'filter_response_mode_option_$mode';
+
+static String filterResponseToken(String token) =>
+    'filter_response_token_$token';
+
+static const responseFiltersSheet = 'response_filters_sheet';
+static const responseFiltersAddButton = 'response_filters_add_button';
+static const responseFilterEditorSheet = 'response_filter_editor_sheet';
+static const responseFilterEditorNameField =
+    'response_filter_editor_name_field';
+static const responseFilterEditorQueryField =
+    'response_filter_editor_query_field';
+static const responseFilterEditorSaveButton =
+    'response_filter_editor_save_button';
+
+static String responseFilterListItemAt(int index) =>
+    'response_filter_item_$index';
+
+static const requestHistorySheet = 'request_history_sheet';
+static const requestHistoryCloseButton = 'request_history_close_button';
+
+static String requestHistoryItemAt(int index) =>
+    'request_history_item_$index';
   static const viewCurlSheet = 'view_curl_sheet';
   static const viewCurlCloseButton = 'view_curl_close_button';
   static const viewCurlShareButton = 'view_curl_share_button';
@@ -179,6 +214,9 @@ abstract final class AppWidgetKeys {
 
   static String settingsResponseFilterListItemAt(int index) =>
       'settings_response_filter_item_$index';
+
+  static String requestsResponseMetricsExchangeAt(int index) =>
+      'requests_response_metrics_exchange_$index';
 
   static const requestsEditorManageCredentialsButton =
       'requests_editor_manage_credentials_button';

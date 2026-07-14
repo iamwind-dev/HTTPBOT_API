@@ -49,7 +49,10 @@ class RequestModalSheetCard extends StatelessWidget {
               ),
             ],
           ),
-          child: SafeArea(top: false, child: child),
+          child: Material(
+            color: Colors.transparent,
+            child: SafeArea(top: false, child: child),
+          ),
         ),
       ),
     );
