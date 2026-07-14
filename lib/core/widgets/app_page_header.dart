@@ -13,6 +13,7 @@ class AppPageHeader extends StatelessWidget {
     this.bottomSlot,
     this.height,
     this.horizontalPadding = AppSpacing.xSmall,
+    this.centerTitle = true,
   });
 
   static const defaultHeight =
@@ -29,6 +30,7 @@ class AppPageHeader extends StatelessWidget {
   final Widget? bottomSlot;
   final double? height;
   final double horizontalPadding;
+  final bool centerTitle;
 
   /// Resolves the fixed shell header height for pages with and without a bottom slot.
   static double heightFor({
@@ -40,7 +42,6 @@ class AppPageHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.appColors;
-    final theme = Theme.of(context);
     final resolvedHeight =
         height ?? heightFor(hasBottomSlot: bottomSlot != null);
     final titleBottomSpacing = bottomSlot == null
@@ -69,52 +70,40 @@ class AppPageHeader extends StatelessWidget {
           SizedBox(
             width: double.infinity,
             height: _actionExtent,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                if (leading != null)
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: colors.headerActionSurface,
-                        borderRadius: const BorderRadius.all(
-                          Radius.circular(AppRadius.large),
+            child: centerTitle
+                ? Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      if (leading != null)
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: _HeaderAction(child: leading!),
                         ),
-                      ),
-                      child: leading,
-                    ),
-                  ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: _actionExtent,
-                  ),
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      title,
-                      style: theme.textTheme.titleLarge,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ),
-                if (trailing != null)
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: colors.headerActionSurface,
-                        borderRadius: const BorderRadius.all(
-                          Radius.circular(AppRadius.large),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: _actionExtent,
                         ),
+                        child: _HeaderTitle(title: title, centered: true),
                       ),
-                      child: trailing,
-                    ),
+                      if (trailing != null)
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: _HeaderAction(child: trailing!),
+                        ),
+                    ],
+                  )
+                : Row(
+                    children: [
+                      if (leading != null) _HeaderAction(child: leading!),
+                      if (leading != null)
+                        const SizedBox(width: AppSpacing.xxxSmall),
+                      Expanded(child: _HeaderTitle(title: title)),
+                      if (trailing != null) ...[
+                        const SizedBox(width: AppSpacing.xxxSmall),
+                        _HeaderAction(child: trailing!),
+                      ],
+                    ],
                   ),
-              ],
-            ),
           ),
           SizedBox(height: titleBottomSpacing),
           if (bottomSlot != null) ...[bottomSlot!],
@@ -122,4 +111,42 @@ class AppPageHeader extends StatelessWidget {
       ),
     );
   }
+}
+
+class _HeaderTitle extends StatelessWidget {
+  const _HeaderTitle({required this.title, this.centered = false});
+
+  final String title;
+  final bool centered;
+
+  @override
+  Widget build(BuildContext context) => Align(
+    alignment: centered ? Alignment.center : Alignment.centerLeft,
+    child: FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: centered ? Alignment.center : Alignment.centerLeft,
+      child: Text(
+        title,
+        style: Theme.of(context).textTheme.titleLarge,
+        maxLines: 1,
+        softWrap: false,
+        textAlign: centered ? TextAlign.center : TextAlign.left,
+      ),
+    ),
+  );
+}
+
+class _HeaderAction extends StatelessWidget {
+  const _HeaderAction({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: BoxDecoration(
+      color: context.appColors.headerActionSurface,
+      borderRadius: const BorderRadius.all(Radius.circular(AppRadius.large)),
+    ),
+    child: child,
+  );
 }

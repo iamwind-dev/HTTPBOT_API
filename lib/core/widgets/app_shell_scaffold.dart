@@ -20,6 +20,7 @@ class AppShellScaffold extends StatelessWidget {
     this.floatingActionButton,
     this.floatingActionButtonLocation = FloatingActionButtonLocation.endFloat,
     this.bodyHorizontalPadding = AppSpacing.medium,
+    this.centerTitle = true,
   });
 
   final AppShellTab currentTab;
@@ -32,6 +33,7 @@ class AppShellScaffold extends StatelessWidget {
   final Widget? floatingActionButton;
   final FloatingActionButtonLocation floatingActionButtonLocation;
   final double bodyHorizontalPadding;
+  final bool centerTitle;
 
   // Compose the global app shell around a route-specific body.
   @override
@@ -60,6 +62,7 @@ class AppShellScaffold extends StatelessWidget {
           leading: leading,
           trailing: trailing,
           bottomSlot: bottomSlot,
+          centerTitle: centerTitle,
           body: body,
         );
 
@@ -106,6 +109,7 @@ class _ShellBody extends StatelessWidget {
     required this.leading,
     required this.trailing,
     required this.bottomSlot,
+    required this.centerTitle,
     required this.body,
   });
 
@@ -115,6 +119,7 @@ class _ShellBody extends StatelessWidget {
   final Widget? leading;
   final Widget? trailing;
   final Widget? bottomSlot;
+  final bool centerTitle;
   final Widget body;
 
   @override
@@ -132,6 +137,7 @@ class _ShellBody extends StatelessWidget {
             leading: leading,
             trailing: trailing,
             bottomSlot: bottomSlot,
+            centerTitle: centerTitle,
           ),
         ],
       ),

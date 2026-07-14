@@ -33,10 +33,13 @@ class ResponsiveContent extends StatelessWidget {
   final double maxWidth;
 
   @override
-  Widget build(BuildContext context) => Center(
-    child: ConstrainedBox(
-      constraints: BoxConstraints(maxWidth: maxWidth),
-      child: SizedBox(width: double.infinity, child: child),
+  Widget build(BuildContext context) => SizedBox.expand(
+    child: Align(
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxWidth),
+        child: SizedBox.expand(child: child),
+      ),
     ),
   );
 }

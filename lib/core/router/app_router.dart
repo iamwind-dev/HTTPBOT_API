@@ -230,6 +230,7 @@ abstract final class AppRouter {
                                       : 'Files Disk Usage',
                                   onBack: () => _handleSettingsBack(context),
                                   trailing: const DiskUsageTabPicker(),
+                                  centerTitle: false,
                                   body: const SettingsDiskUsagePage(),
                                   onTabSelected: (tab) =>
                                       _handleShellTabSelection(context, tab),
@@ -576,6 +577,7 @@ class _SettingsDetailShell extends StatelessWidget {
     required this.body,
     required this.onTabSelected,
     this.trailing,
+    this.centerTitle = true,
   });
 
   final String itemTitle;
@@ -583,6 +585,7 @@ class _SettingsDetailShell extends StatelessWidget {
   final Widget body;
   final ValueChanged<AppShellTab> onTabSelected;
   final Widget? trailing;
+  final bool centerTitle;
 
   // Keep placeholder settings destinations inside the shared shell and preserve back navigation.
   @override
@@ -591,6 +594,7 @@ class _SettingsDetailShell extends StatelessWidget {
     title: itemTitle,
     leading: _SettingsBackButton(onPressed: onBack),
     trailing: trailing,
+    centerTitle: centerTitle,
     body: body,
     onTabSelected: onTabSelected,
   );

@@ -61,7 +61,10 @@ class DiskUsageTabPicker extends StatelessWidget {
           PopupMenuItem(value: DiskUsageTab.files, child: Text('Files')),
         ],
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.xSmall,
+            vertical: 6,
+          ),
           decoration: BoxDecoration(
             color: context.appColors.headerActionSurface,
             borderRadius: BorderRadius.circular(28),
@@ -76,14 +79,14 @@ class DiskUsageTabPicker extends StatelessWidget {
                     : 'Files',
                 style: TextStyle(
                   color: context.appColors.textPrimary,
-                  fontSize: 18,
+                  fontSize: 12,
                   fontWeight: FontWeight.w500,
                 ),
               ),
-              const SizedBox(width: 4),
+              const SizedBox(width: AppSpacing.xxxSmall),
               Icon(
                 CupertinoIcons.chevron_up_chevron_down,
-                size: 18,
+                size: 12,
                 color: context.appColors.iconPrimary,
               ),
             ],
