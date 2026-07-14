@@ -15,6 +15,7 @@ import '../../domain/entities/saved_graphql_variable_entity.dart';
 import '../../domain/repositories/graphql_repository.dart';
 import '../../domain/usecases/apply_request_auth_use_case.dart';
 import '../../domain/usecases/resolve_request_use_case.dart';
+import '../mappers/graphql_schema_mapper.dart';
 import '../mappers/request_body_mapper.dart';
 import '../models/saved_graphql_query_model.dart';
 import '../models/saved_graphql_variable_model.dart';
@@ -173,10 +174,12 @@ query IntrospectionQuery {
       final rawMap = _normalizeResponseBody(response.data);
       final prettyJson = const JsonEncoder.withIndent('  ').convert(rawMap);
       final serverErrors = _extractGraphQlErrors(rawMap);
+      final schema = parseGraphQlSchemaFromResponse(rawMap);
 
       return GraphQlSchemaViewEntity(
         rawJson: prettyJson,
         formattedSchema: _formatSchema(rawMap),
+        schema: schema,
         errorMessage: serverErrors,
       );
     } on DioException catch (error) {

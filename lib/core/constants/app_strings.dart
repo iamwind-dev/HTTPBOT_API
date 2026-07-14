@@ -288,7 +288,57 @@ abstract final class AppStrings {
   static const settingsGlobalVariables = 'Global Variables';
   static const settingsSavedAuth = 'Saved Auth';
   static const settingsResponseFilters = 'Response Filters';
+  static const settingsResponseFiltersEmpty = 'No Saved Filters';
+  static const settingsResponseFilterTitle = 'Response Filter';
+  static const settingsResponseFilterNameHint = 'Enter a Name (Optional)';
+  static const settingsResponseFilterType = 'Filter Type';
+  static const settingsResponseFilterValue = 'Value';
+  static const settingsResponseFilterDeleteAll = 'Delete All';
+  static const settingsResponseFilterSaveQuery = 'Save Query';
+  static const settingsResponseFilterManageQueries = 'Manage Queries';
+  static const settingsResponseFilterWrapResponse = 'Wrap Response';
+  static const settingsResponseFilterQueryRequired = 'Filter query is required.';
+  static const settingsResponseFilterUnableToSave = 'Unable to save filter.';
+  static const settingsResponseFilterUnableToLoad = 'Unable to load filters.';
+  static const settingsResponseFilterUnableToDelete = 'Unable to delete filter.';
+  static const settingsResponseFilterInvalidQuery = 'Invalid filter query.';
+  static const settingsResponseFilterTextOnly =
+      'Filtering only works on text responses.';
+  static const settingsResponseFilterUnsupportedResponse =
+      'This response cannot be filtered.';
+  static const settingsResponseFilterUnsupportedType =
+      'Unsupported filter type.';
+  static const settingsResponseFilterDeleteTitle = 'Delete Filter';
+  static const settingsResponseFilterDeleteMessage =
+      'Are you sure you want to delete this filter?';
+  static const settingsResponseFilterDeleteNote =
+      'This saved filter will be removed.';
+  static const settingsResponseFilterCancel = 'Cancel';
+  static const settingsResponseFilterDelete = 'Delete';
+  static const requestResponseFilterAction = 'Filter Response';
   static const settingsGraphql = 'GraphQL';
+  static const settingsGraphqlQueries = 'Queries';
+  static const settingsGraphqlVariables = 'Variables';
+  static const settingsGraphqlSavedQueries = 'Saved Queries';
+  static const settingsGraphqlSavedVariables = 'Saved Variables';
+  static const settingsGraphqlNoSavedQueries = 'No Saved GraphQL Queries';
+  static const settingsGraphqlNoSavedVariables =
+      'No Saved GraphQL Variables';
+  static const settingsGraphqlQueryRequired = 'Query is required.';
+  static const settingsGraphqlVariablesJsonInvalid =
+      'Variables must be a valid JSON object.';
+  static const settingsGraphqlVariablesJsonObject =
+      'Variables must be a JSON object.';
+  static const settingsGraphqlOperationName = 'Operation Name';
+  static const settingsGraphqlViewSchema = 'View Schema';
+  static const settingsGraphqlSaveQuery = 'Save Query';
+  static const settingsGraphqlLoadQuery = 'Load Query';
+  static const settingsGraphqlSaveVariables = 'Save Variables';
+  static const settingsGraphqlLoadVariables = 'Load Variables';
+  static const settingsGraphqlUnableToFetchSchema = 'Unable to fetch schema.';
+  static const settingsGraphqlSchemaUnavailable =
+      'Schema is not available for this endpoint.';
+  static const settingsGraphqlHelp = 'GraphQL Help';
   static const settingsPostmanAccount = 'Postman Account';
   static const settingsDarkMode = 'Dark Mode';
   static const settingsMoreSettings = 'More Settings';

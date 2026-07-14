@@ -46,6 +46,17 @@ void main() {
       robot.expectTextVisible(AppStrings.cookiesNoCookiesTitle);
     });
 
+    testWidgets('should show Manage Credentials in auth menu', (tester) async {
+      final robot = RequestEditorSheetRobot(tester);
+
+      await robot.pumpScreen();
+      await robot.openEditor();
+      await robot.openAuthMenu();
+
+      robot.expectTextVisible('Manage Credentials');
+      robot.expectTextVisible('Save Current Auth as Credential');
+    });
+
     testWidgets('should open tests sheet from more menu', (tester) async {
       final robot = RequestEditorSheetRobot(tester);
 
@@ -160,6 +171,7 @@ void main() {
 
         robot.expectTextVisible('Query');
         robot.expectTextVisible('Variables');
+        robot.expectTextVisible('Operation Name');
         robot.expectHeaderValue(
           section: 'headers',
           index: 0,
@@ -1085,6 +1097,15 @@ class RequestEditorSheetRobot {
     await tester.tap(moreButton);
     await tester.pumpAndSettle();
     await tester.tap(find.text(label).last);
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> openAuthMenu() async {
+    final moreButton = find.byKey(
+      const ValueKey<String>(AppWidgetKeys.requestsEditorManageCredentialsButton),
+    );
+    await tester.ensureVisible(moreButton);
+    await tester.tap(moreButton);
     await tester.pumpAndSettle();
   }
 

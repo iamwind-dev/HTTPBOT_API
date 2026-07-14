@@ -38,8 +38,14 @@ class ManageCredentialsCubit extends Cubit<ManageCredentialsState> {
   }
 
   /// Appends a new API Key credential and persists the full list.
-  Future<void> createApiKeyCredential(SavedCredential credential) async {
-    final next = <SavedCredential>[...state.credentials, credential];
+  Future<void> saveCredential(SavedCredential credential) async {
+    final next = List<SavedCredential>.from(state.credentials);
+    final existingIndex = next.indexWhere((item) => item.id == credential.id);
+    if (existingIndex >= 0) {
+      next[existingIndex] = credential;
+    } else {
+      next.insert(0, credential);
+    }
     await _persist(next);
   }
 

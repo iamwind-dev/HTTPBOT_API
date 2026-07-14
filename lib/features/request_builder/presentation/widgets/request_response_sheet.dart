@@ -1,7 +1,7 @@
+import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../../../../core/constants/app_strings.dart';
 import '../../../../core/keys/widget_keys.dart';
@@ -9,23 +9,25 @@ import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_theme_colors.dart';
 import '../../../../core/theme/app_theme_context.dart';
+import '../../../../injection/injection.dart';
 import '../../domain/entities/executed_request_snapshot.dart';
-import '../../domain/entities/http_exchange.dart';
 import '../../domain/entities/parsed_response.dart';
+import '../../domain/entities/response_filter.dart';
+import '../../domain/entities/response_filter_run_result.dart';
 import '../../domain/entities/request_execution_result.dart';
 import '../../domain/entities/request_key_value.dart';
-import '../../domain/entities/request_test_result.dart';
 import '../../domain/entities/request_variable_store.dart';
-import '../../domain/helpers/request_snapshot_formatter.dart';
-import '../../domain/helpers/response_metrics_formatter.dart';
+import '../../domain/helpers/response_filter_utils.dart';
+import '../../domain/usecases/apply_response_filter_use_case.dart';
+import '../../domain/usecases/get_saved_response_filters_use_case.dart';
+import '../../domain/usecases/save_saved_response_filters_use_case.dart';
 import '../bloc/request_send_bloc.dart';
 import '../bloc/request_send_event.dart';
 import '../bloc/request_send_state.dart';
 import '../cubit/request_editor_cubit.dart';
 import '../models/request_editor_response_badge_data.dart';
-import 'filter_response_sheet.dart';
-import 'request_history_sheet.dart';
 import 'request_modal_sheet.dart';
+import 'saved_response_filters_sheet.dart';
 
 Future<RequestEditorResponseBadgeData?> showRequestResponseSheet(
   BuildContext context, {
@@ -56,7 +58,6 @@ class _RequestResponseSheet extends StatefulWidget {
 
 class _RequestResponseSheetState extends State<_RequestResponseSheet> {
   ResponseViewMode _selectedMode = ResponseViewMode.body;
-  bool _wrapResponse = true;
 
   @override
   Widget build(BuildContext context) =>
@@ -70,7 +71,6 @@ class _RequestResponseSheetState extends State<_RequestResponseSheet> {
                 summaryLabel: _summaryLabel(state),
                 onClose: () => _close(context, state),
                 onResend: () => _resend(context),
-                onTapStatus: () => showRequestHistorySheet(context),
                 isSending: state.status == RequestSendStatus.sending,
               ),
               const SizedBox(height: AppSpacing.small),
@@ -78,24 +78,17 @@ class _RequestResponseSheetState extends State<_RequestResponseSheet> {
                 child: _ResponseContent(
                   state: state,
                   selectedMode: _selectedMode,
-                  wrapResponse: _wrapResponse,
                 ),
               ),
               _ResponseActionBar(
+                state: state,
                 selectedMode: _selectedMode,
-                executionResult: state.executionResult,
-                parsedResponse: state.parsedResponse,
-                wrapResponse: _wrapResponse,
                 onModeSelected: (mode) {
                   setState(() {
                     _selectedMode = mode;
                   });
                 },
-                onToggleWrap: () {
-                  setState(() {
-                    _wrapResponse = !_wrapResponse;
-                  });
-                },
+                onFilterPressed: () => _openFilterResponse(context, state),
               ),
             ],
           ),
@@ -138,6 +131,37 @@ class _RequestResponseSheetState extends State<_RequestResponseSheet> {
 
     return 'Response';
   }
+
+  Future<void> _openFilterResponse(
+    BuildContext context,
+    RequestSendState state,
+  ) async {
+    final parsedResponse = state.parsedResponse;
+    final executionResult = state.executionResult;
+    if (parsedResponse == null || executionResult == null) {
+      _showMessage(AppStrings.settingsResponseFilterUnsupportedResponse);
+      return;
+    }
+
+    if (parsedResponse.bodyType == ParsedResponseBodyType.binary) {
+      _showMessage(AppStrings.settingsResponseFilterTextOnly);
+      return;
+    }
+
+    await showRequestModalSheet<void>(
+      context,
+      builder: (context) => _ResponseFilterSheet(
+        parsedResponse: parsedResponse,
+        executionResult: executionResult,
+      ),
+    );
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
 }
 
 class _ResponseHeader extends StatelessWidget {
@@ -145,14 +169,12 @@ class _ResponseHeader extends StatelessWidget {
     required this.summaryLabel,
     required this.onClose,
     required this.onResend,
-    required this.onTapStatus,
     required this.isSending,
   });
 
   final String summaryLabel;
   final VoidCallback onClose;
   final VoidCallback onResend;
-  final VoidCallback onTapStatus;
   final bool isSending;
 
   @override
@@ -177,15 +199,7 @@ class _ResponseHeader extends StatelessWidget {
             icon: const Icon(CupertinoIcons.xmark, size: AppSpacing.large),
           ),
           const SizedBox(width: AppSpacing.medium),
-          Expanded(
-            child: InkWell(
-              onTap: onTapStatus,
-              borderRadius: const BorderRadius.all(
-                Radius.circular(AppRadius.xxLarge),
-              ),
-              child: _ResponseSummaryBadge(label: summaryLabel),
-            ),
-          ),
+          Expanded(child: _ResponseSummaryBadge(label: summaryLabel)),
           const SizedBox(width: AppSpacing.medium),
           _SheetSendButton(
             key: const ValueKey<String>(
@@ -250,12 +264,10 @@ class _ResponseContent extends StatelessWidget {
   const _ResponseContent({
     required this.state,
     required this.selectedMode,
-    required this.wrapResponse,
   });
 
   final RequestSendState state;
   final ResponseViewMode selectedMode;
-  final bool wrapResponse;
 
   @override
   Widget build(BuildContext context) {
@@ -265,42 +277,66 @@ class _ResponseContent extends StatelessWidget {
       ResponseViewMode.request => _RequestSnapshotView(
         executionResult: executionResult,
       ),
-      ResponseViewMode.metrics => _MetricsView(
-        executionResult: executionResult,
-      ),
-      ResponseViewMode.tests => _ResponseTestsView(
-        executionResult: executionResult,
-      ),
-      ResponseViewMode.cookies => _CookiesView(
-        executionResult: executionResult,
-      ),
-      ResponseViewMode.headers => _HeadersView(
-        executionResult: executionResult,
-      ),
-      ResponseViewMode.body => _JsonViewer(
-        body: buildResponseBodyText(state),
-        wrap: wrapResponse,
-      ),
+      ResponseViewMode.metrics => _MetricsView(executionResult: executionResult),
+      ResponseViewMode.tests => _ResponseTestsView(executionResult: executionResult),
+      ResponseViewMode.cookies => _CookiesView(executionResult: executionResult),
+      ResponseViewMode.headers => _HeadersView(executionResult: executionResult),
+      ResponseViewMode.body => _JsonViewer(body: _buildBodyText()),
     };
   }
+
+  String _buildBodyText() {
+    if (state.status == RequestSendStatus.sending) {
+      return 'Sending request...';
+    }
+
+    final parsedResponse = state.parsedResponse;
+    if (parsedResponse != null &&
+        parsedResponse.formattedBody.trim().isNotEmpty) {
+      return parsedResponse.formattedBody;
+    }
+
+    final issueLines = <String>[
+      if (state.errorMessage.trim().isNotEmpty) state.errorMessage.trim(),
+      ...state.resolutionIssues.map(
+        (issue) =>
+            'Resolution issue: ${issue.placeholder} (${issue.type.name})',
+      ),
+      ...state.authIssues.map((issue) => 'Auth issue: ${issue.message}'),
+    ];
+
+    if (issueLines.isNotEmpty) {
+      return issueLines.join('\n');
+    }
+
+    if (parsedResponse != null) {
+      return _fallbackBodyForParsedResponse(parsedResponse);
+    }
+
+    return 'No response body.';
+  }
+
+  String _fallbackBodyForParsedResponse(ParsedResponse parsedResponse) =>
+      switch (parsedResponse.bodyType) {
+        ParsedResponseBodyType.empty => 'No response body.',
+        ParsedResponseBodyType.binary => 'Binary response received.',
+        ParsedResponseBodyType.error => parsedResponse.execution.errorMessage,
+        _ => parsedResponse.execution.bodyText,
+      };
 }
 
 class _ResponseActionBar extends StatelessWidget {
   const _ResponseActionBar({
+    required this.state,
     required this.selectedMode,
-    required this.executionResult,
-    required this.parsedResponse,
-    required this.wrapResponse,
     required this.onModeSelected,
-    required this.onToggleWrap,
+    required this.onFilterPressed,
   });
 
+  final RequestSendState state;
   final ResponseViewMode selectedMode;
-  final RequestExecutionResult? executionResult;
-  final ParsedResponse? parsedResponse;
-  final bool wrapResponse;
   final ValueChanged<ResponseViewMode> onModeSelected;
-  final VoidCallback onToggleWrap;
+  final VoidCallback onFilterPressed;
 
   @override
   Widget build(BuildContext context) => SafeArea(
@@ -319,132 +355,23 @@ class _ResponseActionBar extends StatelessWidget {
             onSelected: onModeSelected,
           ),
           const Spacer(),
-          _CircularActionButton(
-            key: const ValueKey<String>(
-              AppWidgetKeys.requestsResponseFilterButton,
+          if (selectedMode == ResponseViewMode.body)
+            _ResponseFilterActionButton(
+              onPressed: onFilterPressed,
+              isEnabled:
+                  state.parsedResponse != null &&
+                  state.parsedResponse!.bodyType != ParsedResponseBodyType.binary,
             ),
-            icon: CupertinoIcons.list_bullet,
-            onTap: () => _openFilter(context),
-          ),
+          if (selectedMode == ResponseViewMode.body)
+            const SizedBox(width: AppSpacing.small),
           const SizedBox(width: AppSpacing.small),
-          _CircularActionButton(
-            key: const ValueKey<String>(
-              AppWidgetKeys.requestsResponseShareButton,
-            ),
-            icon: CupertinoIcons.square_arrow_up,
-            onTap: _shareText == null ? null : () => _share(context),
-          ),
+          const _CircularActionButton(icon: CupertinoIcons.square_arrow_up),
           const SizedBox(width: AppSpacing.small),
-          _ResponseMoreButton(
-            wrapResponse: wrapResponse,
-            onToggleWrap: onToggleWrap,
-          ),
+          const _CircularActionButton(icon: CupertinoIcons.ellipsis),
         ],
       ),
     ),
   );
-
-  String? get _shareText => buildResponseShareText(
-    selectedMode: selectedMode,
-    executionResult: executionResult,
-    parsedResponse: parsedResponse,
-  );
-
-  /// Opens the platform share sheet with the text represented by the active response tab.
-  Future<void> _share(BuildContext context) async {
-    final text = _shareText;
-    if (text == null) {
-      return;
-    }
-
-    final renderObject = context.findRenderObject();
-    final origin = renderObject is RenderBox
-        ? renderObject.localToGlobal(Offset.zero) & renderObject.size
-        : null;
-
-    await SharePlus.instance.share(
-      ShareParams(
-        text: text,
-        subject: 'HTTPBot ${selectedMode.label}',
-        sharePositionOrigin: origin,
-      ),
-    );
-  }
-
-  /// Opens the Filter Response sheet against the raw response body, regardless
-  /// of which response tab is currently selected.
-  void _openFilter(BuildContext context) {
-    showFilterResponseSheet(
-      context,
-      body: executionResult?.bodyText ?? '',
-      contentType: parsedResponse?.contentType,
-    );
-  }
-}
-
-enum _ResponseMoreAction { help, wrap }
-
-class _ResponseMoreButton extends StatelessWidget {
-  const _ResponseMoreButton({
-    required this.wrapResponse,
-    required this.onToggleWrap,
-  });
-
-  final bool wrapResponse;
-  final VoidCallback onToggleWrap;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.appColors;
-
-    return PopupMenuButton<_ResponseMoreAction>(
-      color: colors.surface,
-      onSelected: (action) => _onSelected(context, action),
-      itemBuilder: (context) => [
-        const PopupMenuItem<_ResponseMoreAction>(
-          value: _ResponseMoreAction.help,
-          child: Text(AppStrings.filterResponseHelp),
-        ),
-        CheckedPopupMenuItem<_ResponseMoreAction>(
-          value: _ResponseMoreAction.wrap,
-          checked: wrapResponse,
-          child: const Text(AppStrings.filterResponseWrap),
-        ),
-      ],
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: colors.surface,
-          shape: BoxShape.circle,
-        ),
-        child: SizedBox(
-          width: AppSpacing.xLarge + AppSpacing.small,
-          height: AppSpacing.xLarge + AppSpacing.small,
-          child: Icon(CupertinoIcons.ellipsis, color: colors.iconPrimary),
-        ),
-      ),
-    );
-  }
-
-  void _onSelected(BuildContext context, _ResponseMoreAction action) {
-    switch (action) {
-      case _ResponseMoreAction.help:
-        showDialog<void>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text(AppStrings.filterResponseHelpTitle),
-            content: const Text(AppStrings.filterResponseHelpBody),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('OK'),
-              ),
-            ],
-          ),
-        );
-      case _ResponseMoreAction.wrap:
-        onToggleWrap();
-    }
-  }
 }
 
 class _ResponseViewSelectorButton extends StatelessWidget {
@@ -494,15 +421,67 @@ class _ResponseViewSelectorButton extends StatelessWidget {
             children: [
               Text(
                 selectedMode.label,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleSmall?.copyWith(color: colors.textOnPrimary),
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  color: colors.textOnPrimary,
+                ),
               ),
               const SizedBox(width: AppSpacing.xxxSmall),
               Icon(
                 CupertinoIcons.chevron_down,
                 size: AppSpacing.medium,
                 color: colors.textOnPrimary,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ResponseFilterActionButton extends StatelessWidget {
+  const _ResponseFilterActionButton({
+    required this.onPressed,
+    required this.isEnabled,
+  });
+
+  final VoidCallback onPressed;
+  final bool isEnabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+
+    return Material(
+      color: isEnabled ? colors.primary : colors.surface,
+      borderRadius: const BorderRadius.all(Radius.circular(AppRadius.xxLarge)),
+      child: InkWell(
+        key: const ValueKey<String>(AppWidgetKeys.requestsResponseFilterButton),
+        onTap: isEnabled ? onPressed : null,
+        borderRadius: const BorderRadius.all(
+          Radius.circular(AppRadius.xxLarge),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.medium,
+            vertical: AppSpacing.small,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                CupertinoIcons.line_horizontal_3_decrease,
+                size: AppSpacing.medium,
+                color: isEnabled ? colors.textOnPrimary : colors.iconSecondary,
+              ),
+              const SizedBox(width: AppSpacing.xxxSmall),
+              Text(
+                AppStrings.requestResponseFilterAction,
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  color: isEnabled
+                      ? colors.textOnPrimary
+                      : colors.textSecondary,
+                ),
               ),
             ],
           ),
@@ -522,9 +501,12 @@ class _RequestSnapshotView extends StatelessWidget {
     final snapshot = executionResult?.executedRequestSnapshot;
     if (snapshot == null) {
       return const _CenteredEmptyState(
-        title: AppStrings.requestResponseNoRequestData,
+        title: AppStrings.requestResponseViewRequest,
+        message: 'No request snapshot available.',
       );
     }
+
+    final requestHeaders = snapshot.headers.entries.toList(growable: false);
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(
@@ -535,82 +517,37 @@ class _RequestSnapshotView extends StatelessWidget {
       ),
       children: [
         _InfoCard(
-          key: const ValueKey<String>(
-            AppWidgetKeys.requestsResponseRawRequestCard,
-          ),
-          child: _RawRequestRichText(rawRequest: buildRawRequest(snapshot)),
-        ),
-      ],
-    );
-  }
-}
-
-/// Renders the raw HTTP request with primary header keys and secondary values.
-class _RawRequestRichText extends StatelessWidget {
-  const _RawRequestRichText({required this.rawRequest});
-
-  final String rawRequest;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.appColors;
-    final baseStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
-      fontFamily: 'monospace',
-      color: colors.textPrimary,
-    );
-    final secondaryStyle = baseStyle?.copyWith(color: colors.textSecondary);
-    final lines = rawRequest.split('\n');
-
-    return SelectionArea(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          for (var i = 0; i < lines.length; i++)
-            Text.rich(
-              _buildLineSpan(
-                line: lines[i],
-                isFirstLine: i == 0,
-                baseStyle: baseStyle,
-                secondaryStyle: secondaryStyle,
-              ),
+          child: Text(
+            '${snapshot.method} ${snapshot.url}',
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+              fontFamily: 'monospace',
             ),
-        ],
-      ),
-    );
-  }
-
-  TextSpan _buildLineSpan({
-    required String line,
-    required bool isFirstLine,
-    required TextStyle? baseStyle,
-    required TextStyle? secondaryStyle,
-  }) {
-    if (isFirstLine) {
-      // METHOD path PROTOCOL — protocol (last token) is secondary.
-      final lastSpace = line.lastIndexOf(' ');
-      if (lastSpace <= 0) {
-        return TextSpan(text: line, style: baseStyle);
-      }
-      return TextSpan(
-        style: baseStyle,
-        children: [
-          TextSpan(text: line.substring(0, lastSpace + 1)),
-          TextSpan(text: line.substring(lastSpace + 1), style: secondaryStyle),
-        ],
-      );
-    }
-
-    final separator = line.indexOf(':');
-    if (separator <= 0) {
-      // Body or blank lines render as secondary text.
-      return TextSpan(text: line, style: secondaryStyle);
-    }
-
-    return TextSpan(
-      style: baseStyle,
-      children: [
-        TextSpan(text: line.substring(0, separator + 1)),
-        TextSpan(text: line.substring(separator + 1), style: secondaryStyle),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _SectionCard(
+          title: AppStrings.requestResponseRequestHeaders,
+          child: requestHeaders.isEmpty
+              ? const Text(AppStrings.requestResponseNoHeaders)
+              : Column(
+                  children: [
+                    for (final header in requestHeaders) ...[
+                      _NameValueRow(name: header.key, value: header.value),
+                      if (header != requestHeaders.last)
+                        const SizedBox(height: AppSpacing.small),
+                    ],
+                  ],
+                ),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        _SectionCard(
+          title: AppStrings.requestResponseRequestBody,
+          child: _BodyPreviewText(
+            text: snapshot.body?.trim().isNotEmpty == true
+                ? snapshot.body!
+                : AppStrings.requestResponseRequestBodyEmpty,
+          ),
+        ),
       ],
     );
   }
@@ -623,18 +560,31 @@ class _MetricsView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final result = executionResult;
-    final exchanges = result == null
-        ? const <HttpExchange>[]
-        : resolveExchanges(result);
-    if (exchanges.isEmpty) {
+    if (executionResult == null) {
       return const _CenteredEmptyState(
         title: AppStrings.requestResponseNoMetrics,
       );
     }
 
-    // Newest request first, mirroring the screenshots (Request #2 above #1).
-    final ordered = exchanges.reversed.toList(growable: false);
+    final snapshot = executionResult!.executedRequestSnapshot;
+    final metrics = <MapEntry<String, String>>[
+      MapEntry(
+        AppStrings.requestResponseStatus,
+        executionResult!.statusCode?.toString() ?? 'Unknown',
+      ),
+      MapEntry(
+        AppStrings.requestResponseSize,
+        '${executionResult!.payloadSizeBytes} B',
+      ),
+      MapEntry(
+        AppStrings.requestResponseDuration,
+        '${executionResult!.duration.inMilliseconds} ms',
+      ),
+      if (snapshot != null)
+        MapEntry(AppStrings.requestResponseMethod, snapshot.method),
+      if (snapshot != null)
+        MapEntry(AppStrings.requestResponseUrl, snapshot.url),
+    ];
 
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(
@@ -643,83 +593,14 @@ class _MetricsView extends StatelessWidget {
         AppSpacing.large,
         AppSpacing.large,
       ),
-      itemCount: ordered.length,
-      separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.medium),
+      itemCount: metrics.length,
+      separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.small),
       itemBuilder: (context, index) {
-        final exchange = ordered[index];
-        return Column(
-          key: ValueKey<String>(
-            AppWidgetKeys.requestsResponseMetricsExchangeAt(exchange.index),
-          ),
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(bottom: AppSpacing.small),
-              child: Text(
-                AppStrings.requestResponseExchangeTitle(exchange.index),
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: context.appColors.textSecondary,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-            _MetricsRequestCard(exchange: exchange),
-          ],
-        );
+        final metric = metrics[index];
+        return _InfoCard(child: _NameValueRow(name: metric.key, value: metric.value));
       },
     );
   }
-}
-
-/// One card of labeled metric rows for a single exchange, separated by dividers.
-class _MetricsRequestCard extends StatelessWidget {
-  const _MetricsRequestCard({required this.exchange});
-
-  final HttpExchange exchange;
-
-  @override
-  Widget build(BuildContext context) {
-    final rows = buildMetricRows(exchange);
-
-    return _InfoCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          for (var i = 0; i < rows.length; i++) ...[
-            _MetricRow(label: rows[i].key, value: rows[i].value),
-            if (i != rows.length - 1) const Divider(height: AppSpacing.large),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _MetricRow extends StatelessWidget {
-  const _MetricRow({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text(
-        label,
-        style: Theme.of(
-          context,
-        ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-      ),
-      const SizedBox(height: AppSpacing.xxxSmall),
-      Text(
-        value,
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-          color: context.appColors.textSecondary,
-        ),
-      ),
-    ],
-  );
 }
 
 class _HeadersView extends StatelessWidget {
@@ -731,37 +612,29 @@ class _HeadersView extends StatelessWidget {
   Widget build(BuildContext context) {
     final headers = executionResult?.headers ?? const <KeyValueItem>[];
     if (headers.isEmpty) {
-      return const _CenteredEmptyState(
-        title: AppStrings.requestResponseNoHeaders,
-      );
+      return const _CenteredEmptyState(title: AppStrings.requestResponseNoHeaders);
     }
 
     final groupedHeaders = _groupHeaders(headers);
 
-    return ListView(
+    return ListView.separated(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.large,
         0,
         AppSpacing.large,
         AppSpacing.large,
       ),
-      children: [
-        _InfoCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              for (var i = 0; i < groupedHeaders.length; i++) ...[
-                _MetricRow(
-                  label: groupedHeaders[i].key,
-                  value: groupedHeaders[i].value.join('\n'),
-                ),
-                if (i != groupedHeaders.length - 1)
-                  const Divider(height: AppSpacing.large),
-              ],
-            ],
+      itemCount: groupedHeaders.length,
+      separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.small),
+      itemBuilder: (context, index) {
+        final header = groupedHeaders[index];
+        return _InfoCard(
+          child: _NameValueRow(
+            name: header.key,
+            value: header.value.join('\n'),
           ),
-        ),
-      ],
+        );
+      },
     );
   }
 }
@@ -778,9 +651,7 @@ class _CookiesView extends StatelessWidget {
     final receivedCookies = _parseReceivedCookies(executionResult);
 
     if (sentCookies.isEmpty && receivedCookies.isEmpty) {
-      return const _CenteredEmptyState(
-        title: AppStrings.requestResponseNoCookies,
-      );
+      return const _CenteredEmptyState(title: AppStrings.requestResponseNoCookies);
     }
 
     return ListView(
@@ -917,10 +788,15 @@ class _ResponseTestsView extends StatelessWidget {
 }
 
 class _JsonViewer extends StatelessWidget {
-  const _JsonViewer({required this.body, this.wrap = true});
+  const _JsonViewer({
+    required this.body,
+    this.highlightJson = true,
+    this.softWrap = false,
+  });
 
   final String body;
-  final bool wrap;
+  final bool highlightJson;
+  final bool softWrap;
 
   @override
   Widget build(BuildContext context) {
@@ -938,7 +814,8 @@ class _JsonViewer extends StatelessWidget {
               itemBuilder: (context, index) => _JsonLineRow(
                 lineNumber: index + 1,
                 content: lines[index],
-                wrap: wrap,
+                highlightJson: highlightJson,
+                softWrap: softWrap,
               ),
             ),
           ),
@@ -952,12 +829,14 @@ class _JsonLineRow extends StatelessWidget {
   const _JsonLineRow({
     required this.lineNumber,
     required this.content,
-    this.wrap = true,
+    required this.highlightJson,
+    required this.softWrap,
   });
 
   final int lineNumber;
   final String content;
-  final bool wrap;
+  final bool highlightJson;
+  final bool softWrap;
 
   @override
   Widget build(BuildContext context) {
@@ -965,13 +844,6 @@ class _JsonLineRow extends StatelessWidget {
     final baseStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
       fontFamily: 'monospace',
       color: colors.textPrimary,
-    );
-
-    final richText = Text.rich(
-      TextSpan(
-        style: baseStyle,
-        children: _highlightJson(content, baseStyle, colors),
-      ),
     );
 
     return Padding(
@@ -988,11 +860,18 @@ class _JsonLineRow extends StatelessWidget {
           ),
           const SizedBox(width: AppSpacing.xxxSmall),
           Expanded(
-            child: wrap
-                ? richText
-                : SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: richText,
+            child: highlightJson
+                ? Text.rich(
+                    TextSpan(
+                      style: baseStyle,
+                      children: _highlightJson(content, baseStyle, colors),
+                    ),
+                    softWrap: softWrap,
+                  )
+                : Text(
+                    content,
+                    style: baseStyle,
+                    softWrap: softWrap,
                   ),
           ),
         ],
@@ -1026,10 +905,7 @@ class _JsonLineRow extends StatelessWidget {
       };
 
       spans.add(
-        TextSpan(
-          text: token,
-          style: baseStyle?.copyWith(color: color),
-        ),
+        TextSpan(text: token, style: baseStyle?.copyWith(color: color)),
       );
       currentIndex = match.end;
     }
@@ -1039,6 +915,357 @@ class _JsonLineRow extends StatelessWidget {
     }
 
     return spans;
+  }
+}
+
+enum _ResponseFilterMenuAction { saveQuery, manageQueries, wrapResponse }
+
+class _ResponseFilterSheet extends StatefulWidget {
+  const _ResponseFilterSheet({
+    required this.parsedResponse,
+    required this.executionResult,
+  });
+
+  final ParsedResponse parsedResponse;
+  final RequestExecutionResult executionResult;
+
+  @override
+  State<_ResponseFilterSheet> createState() => _ResponseFilterSheetState();
+}
+
+class _ResponseFilterSheetState extends State<_ResponseFilterSheet> {
+  static const _jqQuickInsert = <String>['.', '|', '[', ']', '[]'];
+  static const _jsonPathQuickInsert = <String>['\$', '.', '[', ']', '*'];
+  static const _xPathQuickInsert = <String>['/', '//', '@', '=', '[]'];
+
+  final ApplyResponseFilterUseCase _applyResponseFilterUseCase =
+      const ApplyResponseFilterUseCase();
+  late final FocusNode _queryFocusNode;
+  late final TextEditingController _queryController;
+  late ResponseFilterType _selectedType;
+  late ResponseFilterRunResult _result;
+  Timer? _debounce;
+  bool _wrapResponse = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _queryFocusNode = FocusNode();
+    _queryController = TextEditingController();
+    _selectedType = defaultResponseFilterTypeForContentType(
+      widget.parsedResponse.contentType,
+    );
+    _result = ResponseFilterRunResult(
+      outputText: widget.parsedResponse.formattedBody,
+      isJson: widget.parsedResponse.bodyType == ParsedResponseBodyType.json,
+      usedOriginalBody: true,
+    );
+    _queryController.addListener(_onQueryChanged);
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _queryController.removeListener(_onQueryChanged);
+    _queryController.dispose();
+    _queryFocusNode.dispose();
+    super.dispose();
+  }
+
+  void _onQueryChanged() {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 250), _runFilter);
+    setState(() {});
+  }
+
+  void _runFilter() {
+    final query = _queryController.text;
+    if (query.trim().isEmpty) {
+      setState(() {
+        _result = ResponseFilterRunResult(
+          outputText: widget.parsedResponse.formattedBody,
+          isJson: widget.parsedResponse.bodyType == ParsedResponseBodyType.json,
+          usedOriginalBody: true,
+        );
+      });
+      return;
+    }
+
+    final result = _applyResponseFilterUseCase(
+      bodyText: widget.executionResult.bodyText,
+      contentType: widget.parsedResponse.contentType,
+      filterType: _selectedType,
+      query: query,
+    );
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _result = result;
+    });
+  }
+
+  Future<void> _handleMenuAction(_ResponseFilterMenuAction action) async {
+    switch (action) {
+      case _ResponseFilterMenuAction.saveQuery:
+        await _saveCurrentQuery();
+      case _ResponseFilterMenuAction.manageQueries:
+        await _manageQueries();
+      case _ResponseFilterMenuAction.wrapResponse:
+        setState(() {
+          _wrapResponse = !_wrapResponse;
+        });
+    }
+  }
+
+  Future<void> _saveCurrentQuery() async {
+    if (_queryController.text.trim().isEmpty) {
+      _showMessage(AppStrings.settingsResponseFilterQueryRequired);
+      return;
+    }
+
+    final result = await showResponseFilterEditorSheet(
+      context,
+      initialFilterType: _selectedType,
+      initialQuery: _queryController.text,
+    );
+    if (result == null || !mounted) {
+      return;
+    }
+
+    try {
+      final existing = await getIt<GetSavedResponseFiltersUseCase>()();
+      final now = DateTime.now();
+      final entry = ResponseFilter(
+        id: now.microsecondsSinceEpoch.toString(),
+        name: buildResponseFilterName(
+          proposedName: result.name,
+          query: result.query,
+        ),
+        filterType: result.filterType,
+        query: result.query,
+        createdAt: now,
+        updatedAt: now,
+      );
+      await getIt<SaveSavedResponseFiltersUseCase>()([...existing, entry]);
+      _showMessage('Response filter saved.');
+    } catch (_) {
+      _showMessage(AppStrings.settingsResponseFilterUnableToSave);
+    }
+  }
+
+  Future<void> _manageQueries() async {
+    final selected = await showSavedResponseFiltersSheet(context);
+    if (selected == null || !mounted) {
+      return;
+    }
+
+    _queryController.value = TextEditingValue(
+      text: selected.query,
+      selection: TextSelection.collapsed(offset: selected.query.length),
+    );
+    setState(() {
+      _selectedType = selected.filterType;
+    });
+    _runFilter();
+  }
+
+  void _insertQuickText(String value) {
+    final selection = _queryController.selection;
+    final text = _queryController.text;
+    final start = selection.start >= 0 ? selection.start : text.length;
+    final end = selection.end >= 0 ? selection.end : text.length;
+    final nextText = text.replaceRange(start, end, value);
+    final nextOffset = start + value.length;
+    _queryController.value = TextEditingValue(
+      text: nextText,
+      selection: TextSelection.collapsed(offset: nextOffset),
+    );
+    _queryFocusNode.requestFocus();
+  }
+
+  List<String> get _quickInsertItems => switch (_selectedType) {
+    ResponseFilterType.jq => _jqQuickInsert,
+    ResponseFilterType.jsonPath => _jsonPathQuickInsert,
+    ResponseFilterType.xPath => _xPathQuickInsert,
+  };
+
+  @override
+  Widget build(BuildContext context) => RequestModalSheetCard(
+    key: const ValueKey<String>(AppWidgetKeys.requestsResponseFilterSheet),
+    child: SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.large),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(CupertinoIcons.xmark),
+                ),
+                Expanded(
+                  child: Text(
+                    AppStrings.requestResponseFilterAction,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                PopupMenuButton<_ResponseFilterMenuAction>(
+                  key: const ValueKey<String>(
+                    AppWidgetKeys.requestsResponseFilterMenuButton,
+                  ),
+                  onSelected: _handleMenuAction,
+                  itemBuilder: (context) => [
+                    const PopupMenuItem<_ResponseFilterMenuAction>(
+                      value: _ResponseFilterMenuAction.saveQuery,
+                      child: Text(AppStrings.settingsResponseFilterSaveQuery),
+                    ),
+                    const PopupMenuItem<_ResponseFilterMenuAction>(
+                      value: _ResponseFilterMenuAction.manageQueries,
+                      child: Text(AppStrings.settingsResponseFilterManageQueries),
+                    ),
+                    PopupMenuItem<_ResponseFilterMenuAction>(
+                      value: _ResponseFilterMenuAction.wrapResponse,
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: const Text(
+                              AppStrings.settingsResponseFilterWrapResponse,
+                            ),
+                          ),
+                          if (_wrapResponse)
+                            const Icon(CupertinoIcons.check_mark, size: 16),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.medium),
+            Expanded(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: context.appColors.surface,
+                  borderRadius: const BorderRadius.all(
+                    Radius.circular(AppRadius.xxLarge),
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.small,
+                    vertical: AppSpacing.medium,
+                  ),
+                  child: _JsonViewer(
+                    body: _result.hasError
+                        ? _result.errorMessage ?? ''
+                        : _result.outputText,
+                    highlightJson: !_result.hasError && _result.isJson,
+                    softWrap: _wrapResponse,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.medium),
+            SizedBox(
+              height: 36,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: _quickInsertItems.length,
+                separatorBuilder: (_, _) => const SizedBox(width: AppSpacing.small),
+                itemBuilder: (context, index) {
+                  final item = _quickInsertItems[index];
+                  return ActionChip(
+                    label: Text(item),
+                    onPressed: () => _insertQuickText(item),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: AppSpacing.small),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: context.appColors.surface,
+                borderRadius: const BorderRadius.all(
+                  Radius.circular(AppRadius.xxLarge),
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.small,
+                  vertical: AppSpacing.xxxSmall,
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        key: const ValueKey<String>(
+                          AppWidgetKeys.requestsResponseFilterQueryField,
+                        ),
+                        controller: _queryController,
+                        focusNode: _queryFocusNode,
+                        decoration: const InputDecoration(
+                          hintText: AppStrings.settingsResponseFilterValue,
+                          border: InputBorder.none,
+                        ),
+                      ),
+                    ),
+                    PopupMenuButton<ResponseFilterType>(
+                      key: const ValueKey<String>(
+                        AppWidgetKeys.requestsResponseFilterLanguageButton,
+                      ),
+                      tooltip: _selectedType.label,
+                      onSelected: (value) {
+                        setState(() {
+                          _selectedType = value;
+                        });
+                        _runFilter();
+                      },
+                      itemBuilder: (context) => ResponseFilterType.values
+                          .map(
+                            (type) => PopupMenuItem<ResponseFilterType>(
+                              value: type,
+                              child: Text(type.label),
+                            ),
+                          )
+                          .toList(growable: false),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.small,
+                          vertical: AppSpacing.small,
+                        ),
+                        child: Row(
+                          children: [
+                            Text(
+                              _selectedType.label,
+                              style: Theme.of(context).textTheme.titleSmall,
+                            ),
+                            const SizedBox(width: AppSpacing.xxxSmall),
+                            const Icon(
+                              CupertinoIcons.chevron_up_chevron_down,
+                              size: 16,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 }
 
@@ -1062,7 +1289,7 @@ class _SectionCard extends StatelessWidget {
 }
 
 class _InfoCard extends StatelessWidget {
-  const _InfoCard({super.key, required this.child});
+  const _InfoCard({required this.child});
 
   final Widget child;
 
@@ -1109,6 +1336,42 @@ class _CenteredEmptyState extends StatelessWidget {
   );
 }
 
+class _NameValueRow extends StatelessWidget {
+  const _NameValueRow({required this.name, required this.value});
+
+  final String name;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(name, style: Theme.of(context).textTheme.labelLarge),
+      const SizedBox(height: AppSpacing.xxxSmall),
+      Text(
+        value,
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+          fontFamily: 'monospace',
+        ),
+      ),
+    ],
+  );
+}
+
+class _BodyPreviewText extends StatelessWidget {
+  const _BodyPreviewText({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => SelectableText(
+    text,
+    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+      fontFamily: 'monospace',
+    ),
+  );
+}
+
 class _CookieDisplayTile extends StatelessWidget {
   const _CookieDisplayTile({required this.cookie});
 
@@ -1120,9 +1383,9 @@ class _CookieDisplayTile extends StatelessWidget {
     children: [
       Text(
         '${cookie.name} = ${cookie.value}',
-        style: Theme.of(
-          context,
-        ).textTheme.bodyMedium?.copyWith(fontFamily: 'monospace'),
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+          fontFamily: 'monospace',
+        ),
       ),
       if (cookie.attributes.isNotEmpty) ...[
         const SizedBox(height: AppSpacing.xxxSmall),
@@ -1148,27 +1411,20 @@ class _CookieDisplayTile extends StatelessWidget {
 }
 
 class _CircularActionButton extends StatelessWidget {
-  const _CircularActionButton({super.key, required this.icon, this.onTap});
+  const _CircularActionButton({required this.icon});
 
   final IconData icon;
-  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.appColors;
-    final size = AppSpacing.xLarge + AppSpacing.small;
 
-    return Material(
-      color: colors.surface,
-      shape: const CircleBorder(),
-      child: InkWell(
-        onTap: onTap,
-        customBorder: const CircleBorder(),
-        child: SizedBox(
-          width: size,
-          height: size,
-          child: Icon(icon, color: colors.iconPrimary),
-        ),
+    return DecoratedBox(
+      decoration: BoxDecoration(color: colors.surface, shape: BoxShape.circle),
+      child: SizedBox(
+        width: AppSpacing.xLarge + AppSpacing.small,
+        height: AppSpacing.xLarge + AppSpacing.small,
+        child: Icon(icon, color: colors.iconPrimary),
       ),
     );
   }
@@ -1242,308 +1498,6 @@ extension on ResponseViewMode {
   };
 }
 
-/// Returns the recorded exchanges, synthesizing one from the legacy single
-/// snapshot when an older result carries no exchange list.
-List<HttpExchange> resolveExchanges(RequestExecutionResult result) {
-  if (result.exchanges.isNotEmpty) {
-    return result.exchanges;
-  }
-
-  final snapshot = result.executedRequestSnapshot;
-  if (snapshot == null) {
-    return const <HttpExchange>[];
-  }
-
-  return [
-    HttpExchange(
-      index: 1,
-      request: snapshot,
-      statusCode: result.statusCode,
-      reasonPhrase: result.statusMessage,
-      protocol: snapshot.protocol,
-      responseBodySizeBytes: result.payloadSizeBytes,
-      responseStartAt: snapshot.startAt,
-      responseEndAt: snapshot.endAt,
-    ),
-  ];
-}
-
-/// Builds the ordered label/value rows shown in a Metrics card.
-List<MapEntry<String, String>> buildMetricRows(HttpExchange exchange) {
-  final request = exchange.request;
-  return <MapEntry<String, String>>[
-    MapEntry(AppStrings.requestMetricUrl, formatText(request.url)),
-    MapEntry(AppStrings.requestMetricMethod, formatText(request.method)),
-    MapEntry(
-      AppStrings.requestMetricResponseCode,
-      formatStatus(exchange.statusCode, exchange.reasonPhrase),
-    ),
-    MapEntry(
-      AppStrings.requestMetricProtocol,
-      formatProtocol(exchange.protocol ?? request.protocol),
-    ),
-    MapEntry(
-      AppStrings.requestMetricRemoteAddress,
-      formatText(exchange.remoteAddress),
-    ),
-    MapEntry(AppStrings.requestMetricTls, _formatTls(exchange)),
-    MapEntry(AppStrings.requestMetricKeptAlive, formatBool(exchange.keptAlive)),
-    MapEntry(
-      AppStrings.requestMetricRequestHeaderSize,
-      formatBytes(request.headerSizeBytes),
-    ),
-    MapEntry(
-      AppStrings.requestMetricRequestSize,
-      formatBytes(request.bodySizeBytes),
-    ),
-    MapEntry(
-      AppStrings.requestMetricResponseHeaderSize,
-      formatBytes(exchange.responseHeaderSizeBytes),
-    ),
-    MapEntry(
-      AppStrings.requestMetricResponseSize,
-      formatBytes(exchange.responseBodySizeBytes),
-    ),
-    MapEntry(
-      AppStrings.requestMetricRequestStart,
-      formatDateUtc(request.startAt),
-    ),
-    MapEntry(AppStrings.requestMetricRequestEnd, formatDateUtc(request.endAt)),
-    MapEntry(
-      AppStrings.requestMetricResponseStart,
-      formatDateUtc(exchange.responseStartAt),
-    ),
-    MapEntry(
-      AppStrings.requestMetricResponseEnd,
-      formatDateUtc(exchange.responseEndAt),
-    ),
-    MapEntry(
-      AppStrings.requestMetricDnsLookupDuration,
-      formatDuration(exchange.dnsLookupDuration),
-    ),
-    MapEntry(
-      AppStrings.requestMetricConnectDuration,
-      formatDuration(exchange.connectDuration),
-    ),
-    MapEntry(
-      AppStrings.requestMetricTlsHandshake,
-      formatDuration(exchange.tlsHandshakeDuration),
-    ),
-    MapEntry(
-      AppStrings.requestMetricRequestDuration,
-      formatDuration(exchange.requestDuration),
-    ),
-    MapEntry(
-      AppStrings.requestMetricResponseDuration,
-      formatDuration(exchange.responseDuration),
-    ),
-  ];
-}
-
-String _formatTls(HttpExchange exchange) {
-  final protocol = exchange.tlsProtocol?.trim();
-  final cipher = exchange.tlsCipher?.trim();
-  if ((protocol == null || protocol.isEmpty) &&
-      (cipher == null || cipher.isEmpty)) {
-    return metricsEmptyValue;
-  }
-  return [
-    if (protocol != null && protocol.isNotEmpty) protocol,
-    if (cipher != null && cipher.isNotEmpty) cipher,
-  ].join('\n');
-}
-
-/// Builds a plain-text metrics summary used by the share action.
-String buildMetricsSummary(List<HttpExchange> exchanges) {
-  final buffer = StringBuffer();
-  for (final exchange in exchanges.reversed) {
-    buffer.writeln(AppStrings.requestResponseExchangeTitle(exchange.index));
-    for (final row in buildMetricRows(exchange)) {
-      buffer.writeln('${row.key}: ${row.value}');
-    }
-    buffer.writeln();
-  }
-  return buffer.toString().trimRight();
-}
-
-/// Builds the response body text shared by the visible body tab and share action.
-String buildResponseBodyText(RequestSendState state) {
-  if (state.status == RequestSendStatus.sending) {
-    return 'Sending request...';
-  }
-
-  final parsedResponse = state.parsedResponse;
-  if (parsedResponse != null &&
-      parsedResponse.formattedBody.trim().isNotEmpty) {
-    return parsedResponse.formattedBody;
-  }
-
-  final issueLines = <String>[
-    if (state.errorMessage.trim().isNotEmpty) state.errorMessage.trim(),
-    ...state.resolutionIssues.map(
-      (issue) => 'Resolution issue: ${issue.placeholder} (${issue.type.name})',
-    ),
-    ...state.authIssues.map((issue) => 'Auth issue: ${issue.message}'),
-  ];
-
-  if (issueLines.isNotEmpty) {
-    return issueLines.join('\n');
-  }
-
-  if (parsedResponse != null) {
-    return _fallbackBodyForParsedResponse(parsedResponse);
-  }
-
-  return 'No response body.';
-}
-
-/// Builds the plain text payload for sharing the currently selected response tab.
-String? buildResponseShareText({
-  required ResponseViewMode selectedMode,
-  required RequestExecutionResult? executionResult,
-  required ParsedResponse? parsedResponse,
-}) {
-  final result = executionResult;
-  if (result == null) {
-    return null;
-  }
-
-  return switch (selectedMode) {
-    ResponseViewMode.request => _buildRequestShareText(result),
-    ResponseViewMode.metrics => _buildMetricsShareText(result),
-    ResponseViewMode.tests => _buildTestsShareText(result),
-    ResponseViewMode.cookies => _buildCookiesShareText(result),
-    ResponseViewMode.headers => _buildHeadersShareText(result),
-    ResponseViewMode.body => _buildBodyShareText(result, parsedResponse),
-  };
-}
-
-/// Builds raw request share text when the transport captured an executed snapshot.
-String? _buildRequestShareText(RequestExecutionResult result) {
-  final snapshot = result.executedRequestSnapshot;
-  return snapshot == null ? null : buildRawRequest(snapshot);
-}
-
-/// Builds metric share text from all recorded HTTP exchanges.
-String? _buildMetricsShareText(RequestExecutionResult result) {
-  final exchanges = resolveExchanges(result);
-  return exchanges.isEmpty ? null : buildMetricsSummary(exchanges);
-}
-
-/// Builds a readable test result list with status, expected, actual, and failure details.
-String? _buildTestsShareText(RequestExecutionResult result) {
-  if (result.testResults.isEmpty) {
-    return null;
-  }
-
-  final buffer = StringBuffer();
-  for (final testResult in result.testResults) {
-    buffer.writeln(
-      '${_formatTestStatus(testResult.status)} ${testResult.label}',
-    );
-    if (testResult.expected?.trim().isNotEmpty ?? false) {
-      buffer.writeln('Expected: ${testResult.expected}');
-    }
-    if (testResult.actual?.trim().isNotEmpty ?? false) {
-      buffer.writeln('Actual: ${testResult.actual}');
-    }
-    if (testResult.message?.trim().isNotEmpty ?? false) {
-      buffer.writeln(testResult.message);
-    }
-    buffer.writeln();
-  }
-
-  return buffer.toString().trimRight();
-}
-
-/// Builds sent and received cookie share text while preserving section labels.
-String? _buildCookiesShareText(RequestExecutionResult result) {
-  final sentCookies = _parseSentCookies(result.executedRequestSnapshot);
-  final receivedCookies = _parseReceivedCookies(result);
-  if (sentCookies.isEmpty && receivedCookies.isEmpty) {
-    return null;
-  }
-
-  final buffer = StringBuffer();
-  if (sentCookies.isNotEmpty) {
-    buffer.writeln(AppStrings.requestResponseSentCookies);
-    for (final cookie in sentCookies) {
-      buffer.writeln(_formatCookie(cookie));
-    }
-  }
-
-  if (sentCookies.isNotEmpty && receivedCookies.isNotEmpty) {
-    buffer.writeln();
-  }
-
-  if (receivedCookies.isNotEmpty) {
-    buffer.writeln(AppStrings.requestResponseReceivedCookies);
-    for (final cookie in receivedCookies) {
-      buffer.writeln(_formatCookie(cookie));
-    }
-  }
-
-  return buffer.toString().trimRight();
-}
-
-/// Builds grouped response header share text.
-String? _buildHeadersShareText(RequestExecutionResult result) {
-  final groupedHeaders = _groupHeaders(result.headers);
-  if (groupedHeaders.isEmpty) {
-    return null;
-  }
-
-  return groupedHeaders
-      .map((entry) => '${entry.key}: ${entry.value.join(', ')}')
-      .join('\n');
-}
-
-/// Builds body share text using the same fallback rules as the visible body tab.
-String? _buildBodyShareText(
-  RequestExecutionResult result,
-  ParsedResponse? parsedResponse,
-) {
-  final state = RequestSendState(
-    status: RequestSendStatus.completed,
-    draft: result.request,
-    executionResult: result,
-    parsedResponse: parsedResponse,
-    errorMessage: result.errorMessage,
-  );
-  final body = buildResponseBodyText(state).trim();
-  return body.isEmpty ? null : body;
-}
-
-/// Returns the visible fallback text for parsed response types without formatted bodies.
-String _fallbackBodyForParsedResponse(ParsedResponse parsedResponse) =>
-    switch (parsedResponse.bodyType) {
-      ParsedResponseBodyType.empty => 'No response body.',
-      ParsedResponseBodyType.binary => 'Binary response received.',
-      ParsedResponseBodyType.error => parsedResponse.execution.errorMessage,
-      _ => parsedResponse.execution.bodyText,
-    };
-
-/// Formats one cookie row for plain-text sharing.
-String _formatCookie(_CookieDisplay cookie) {
-  final buffer = StringBuffer('${cookie.name}=${cookie.value}');
-  if (cookie.attributes.isNotEmpty) {
-    for (final attribute in cookie.attributes.entries) {
-      buffer.write('; ${attribute.key}=${attribute.value}');
-    }
-  } else if (cookie.rawValue?.trim().isNotEmpty ?? false) {
-    return cookie.rawValue!;
-  }
-
-  return buffer.toString();
-}
-
-/// Converts test statuses into compact labels for shared plain text.
-String _formatTestStatus(RequestTestResultStatus status) => switch (status) {
-  RequestTestResultStatus.passed => 'PASS',
-  RequestTestResultStatus.failed => 'FAIL',
-  RequestTestResultStatus.error => 'ERROR',
-};
-
 List<MapEntry<String, List<String>>> _groupHeaders(List<KeyValueItem> headers) {
   final grouped = <String, List<String>>{};
   final orderedKeys = <String>[];
@@ -1593,7 +1547,9 @@ List<_CookieDisplay> _parseSentCookies(ExecutedRequestSnapshot? snapshot) {
     }
     final separatorIndex = trimmed.indexOf('=');
     if (separatorIndex <= 0) {
-      cookies.add(_CookieDisplay(name: trimmed, value: '', rawValue: trimmed));
+      cookies.add(
+        _CookieDisplay(name: trimmed, value: '', rawValue: trimmed),
+      );
       continue;
     }
 
@@ -1623,7 +1579,10 @@ List<_CookieDisplay> _parseReceivedCookies(RequestExecutionResult? result) {
           (cookie) => _CookieDisplay(
             name: cookie.name,
             value: cookie.value,
-            attributes: {'Domain': cookie.domain, 'Path': cookie.path},
+            attributes: {
+              'Domain': cookie.domain,
+              'Path': cookie.path,
+            },
           ),
         )
         .toList(growable: false);
@@ -1645,7 +1604,11 @@ _CookieDisplay _parseSetCookieHeader(String rawHeader) {
   final firstSegment = segments.first;
   final separatorIndex = firstSegment.indexOf('=');
   if (separatorIndex <= 0) {
-    return _CookieDisplay(name: firstSegment, value: '', rawValue: rawHeader);
+    return _CookieDisplay(
+      name: firstSegment,
+      value: '',
+      rawValue: rawHeader,
+    );
   }
 
   final attributes = <String, String>{};
@@ -1655,9 +1618,8 @@ _CookieDisplay _parseSetCookieHeader(String rawHeader) {
       attributes[segment] = 'true';
       continue;
     }
-    attributes[segment.substring(0, attributeSeparatorIndex).trim()] = segment
-        .substring(attributeSeparatorIndex + 1)
-        .trim();
+    attributes[segment.substring(0, attributeSeparatorIndex).trim()] =
+        segment.substring(attributeSeparatorIndex + 1).trim();
   }
 
   return _CookieDisplay(
