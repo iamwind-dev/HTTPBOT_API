@@ -417,9 +417,9 @@ class _TopBar extends StatelessWidget {
     final colors = context.appColors;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(
+      padding: EdgeInsets.fromLTRB(
         AppSpacing.medium,
-        AppSpacing.medium,
+        onClose == null ? 0 : AppSpacing.medium,
         AppSpacing.medium,
         AppSpacing.small,
       ),

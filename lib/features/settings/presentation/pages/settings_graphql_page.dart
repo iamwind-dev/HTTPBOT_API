@@ -56,7 +56,7 @@ class _SettingsGraphQlPageState extends State<SettingsGraphQlPage> {
           builder: (context, state) => Padding(
             padding: const EdgeInsets.fromLTRB(
               0,
-              AppSpacing.medium,
+              0,
               0,
               AppSpacing.xxxLarge,
             ),

@@ -21,6 +21,7 @@ class AppShellScaffold extends StatelessWidget {
     this.floatingActionButtonLocation = FloatingActionButtonLocation.endFloat,
     this.bodyHorizontalPadding = AppSpacing.medium,
     this.centerTitle = true,
+    this.headerHeight,
   });
 
   final AppShellTab currentTab;
@@ -34,12 +35,14 @@ class AppShellScaffold extends StatelessWidget {
   final FloatingActionButtonLocation floatingActionButtonLocation;
   final double bodyHorizontalPadding;
   final bool centerTitle;
+  final double? headerHeight;
 
   // Compose the global app shell around a route-specific body.
   @override
   Widget build(BuildContext context) {
     final headerHeight = AppPageHeader.heightFor(
       hasBottomSlot: bottomSlot != null,
+      customHeight: this.headerHeight,
     );
     final navigationItems = AppShellTab.values
         .map(
@@ -138,6 +141,7 @@ class _ShellBody extends StatelessWidget {
             trailing: trailing,
             bottomSlot: bottomSlot,
             centerTitle: centerTitle,
+            height: headerHeight,
           ),
         ],
       ),

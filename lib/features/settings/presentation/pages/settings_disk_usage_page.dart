@@ -79,7 +79,7 @@ class DiskUsageTabPicker extends StatelessWidget {
                     : 'Files',
                 style: TextStyle(
                   color: context.appColors.textPrimary,
-                  fontSize: 12,
+                  fontSize: 18,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -146,9 +146,9 @@ class _DiskUsageContent extends StatelessWidget {
             onSelectButtonPressed: () {
               state.selectionMode
                   ? context.read<DiskUsageCubit>().clearSelection()
-                  : context.read<DiskUsageCubit>().selectAll();
+                  : context.read<DiskUsageCubit>().enterSelectionMode();
             },
-            onDeletePressed: state.selectionMode
+            onDeletePressed: state.selectedCount > 0
                 ? () => _confirmDelete(
                     context,
                     context.read<DiskUsageCubit>().deleteSelected,
@@ -375,9 +375,11 @@ class RequestHistoryDiskUsagePage extends StatelessWidget {
                   onSelectButtonPressed: () {
                     state.selectionMode
                         ? context.read<HistoryDiskUsageCubit>().clearSelection()
-                        : context.read<HistoryDiskUsageCubit>().selectAll();
+                        : context
+                              .read<HistoryDiskUsageCubit>()
+                              .enterSelectionMode();
                   },
-                  onDeletePressed: state.selectionMode
+                  onDeletePressed: state.selectedCount > 0
                       ? () => _confirmDelete(
                           context,
                           context.read<HistoryDiskUsageCubit>().deleteSelected,

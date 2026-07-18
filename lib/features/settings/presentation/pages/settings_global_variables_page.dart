@@ -9,7 +9,9 @@ import '../../../request_builder/presentation/cubit/environment_menu_state.dart'
 import '../../../request_builder/presentation/widgets/global_variables_sheet.dart';
 
 class SettingsGlobalVariablesPage extends StatefulWidget {
-  const SettingsGlobalVariablesPage({super.key});
+  const SettingsGlobalVariablesPage({super.key, required this.controller});
+
+  final GlobalVariablesController controller;
 
   @override
   State<SettingsGlobalVariablesPage> createState() =>
@@ -18,7 +20,10 @@ class SettingsGlobalVariablesPage extends StatefulWidget {
 
 class _SettingsGlobalVariablesPageState
     extends State<SettingsGlobalVariablesPage> {
-  late final EnvironmentMenuCubit _cubit = EnvironmentMenuCubit(getIt(), getIt());
+  late final EnvironmentMenuCubit _cubit = EnvironmentMenuCubit(
+    getIt(),
+    getIt(),
+  );
 
   @override
   void initState() {
@@ -44,6 +49,7 @@ class _SettingsGlobalVariablesPageState
           return GlobalVariablesView(
             variables: state.store.globalVariables,
             onSave: _cubit.saveGlobalVariables,
+            controller: widget.controller,
           );
         },
       );

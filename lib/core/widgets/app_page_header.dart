@@ -23,6 +23,7 @@ class AppPageHeader extends StatelessWidget {
   static const _topInset = AppSpacing.xxSmall;
   static const _titleBottomInset = AppSpacing.xxSmall;
   static const _bottomSlotSpacing = AppSpacing.xSmall;
+  static const tightHeight = _topInset + _actionExtent + _titleBottomInset;
 
   final String title;
   final Widget? leading;

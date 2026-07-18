@@ -17,6 +17,7 @@ import 'package:httpbot_api/features/web_sockets/presentation/widget/websocket_s
 import '../../core/constants/app_strings.dart';
 import '../../core/keys/widget_keys.dart';
 import '../../core/theme/app_theme_context.dart';
+import '../../core/widgets/app_page_header.dart';
 import '../../core/widgets/app_shell_scaffold.dart';
 import '../../features/request_builder/domain/entities/request_draft.dart';
 import '../../features/request_builder/domain/entities/request_variable_store.dart';
@@ -30,6 +31,7 @@ import '../../features/request_builder/domain/usecases/save_saved_request_drafts
 import '../../features/request_builder/presentation/cubit/request_builder_cubit.dart';
 import '../../features/request_builder/presentation/pages/request_builder_page.dart';
 import '../../features/request_builder/presentation/widgets/manage_environments_sheet.dart';
+import '../../features/request_builder/presentation/widgets/global_variables_sheet.dart';
 import '../../features/request_builder/presentation/widgets/request_cookies_sheet.dart';
 import '../../features/request_builder/presentation/widgets/request_editor_sheet.dart';
 import '../../features/request_builder/presentation/widgets/request_search_field.dart';
@@ -243,20 +245,27 @@ abstract final class AppRouter {
                       final cookiesController = SettingsCookiesController();
                       final responseFiltersController =
                           SavedResponseFiltersController();
+                      final globalVariablesController =
+                          GlobalVariablesController();
 
                       return _SettingsDetailShell(
                         itemTitle: item?.title ?? AppStrings.settingsTitle,
                         onBack: () => _handleSettingsBack(context),
+                        headerHeight: _usesTightSettingsLayout(itemId)
+                            ? AppPageHeader.tightHeight
+                            : null,
                         trailing: _buildSettingsDetailTrailing(
                           context: context,
                           itemId: itemId,
                           cookiesController: cookiesController,
                           responseFiltersController: responseFiltersController,
+                          globalVariablesController: globalVariablesController,
                         ),
                         body: _buildSettingsDetailBody(
                           itemId: itemId,
                           cookiesController: cookiesController,
                           responseFiltersController: responseFiltersController,
+                          globalVariablesController: globalVariablesController,
                           loadPostmanApiKeyUseCase: loadPostmanApiKeyUseCase,
                           loadPostmanAccountUseCase: loadPostmanAccountUseCase,
                           clearPostmanApiKeyUseCase: clearPostmanApiKeyUseCase,
@@ -337,6 +346,7 @@ abstract final class AppRouter {
     required String itemId,
     required SettingsCookiesController cookiesController,
     required SavedResponseFiltersController responseFiltersController,
+    required GlobalVariablesController globalVariablesController,
     required LoadPostmanApiKeyUseCase loadPostmanApiKeyUseCase,
     required LoadPostmanAccountUseCase loadPostmanAccountUseCase,
     required ClearPostmanApiKeyUseCase clearPostmanApiKeyUseCase,
@@ -359,7 +369,7 @@ abstract final class AppRouter {
     }
 
     if (itemId == 'global-variables') {
-      return const SettingsGlobalVariablesPage();
+      return SettingsGlobalVariablesPage(controller: globalVariablesController);
     }
 
     if (itemId == 'saved-auth') {
@@ -393,11 +403,19 @@ abstract final class AppRouter {
     return const SettingsDetailPage();
   }
 
+  static bool _usesTightSettingsLayout(String itemId) => const {
+    'graphql',
+    'saved-auth',
+    'environments',
+    'global-variables',
+  }.contains(itemId);
+
   static Widget? _buildSettingsDetailTrailing({
     required BuildContext context,
     required String itemId,
     required SettingsCookiesController cookiesController,
     required SavedResponseFiltersController responseFiltersController,
+    required GlobalVariablesController globalVariablesController,
   }) {
     if (itemId == 'cookies') {
       return IconButton(
@@ -418,6 +436,15 @@ abstract final class AppRouter {
     if (itemId == 'response-filters') {
       return SettingsResponseFiltersActions(
         controller: responseFiltersController,
+      );
+    }
+
+    if (itemId == 'global-variables') {
+      return IconButton(
+        key: const ValueKey<String>(AppWidgetKeys.globalVariablesSaveButton),
+        tooltip: 'Save global variables',
+        onPressed: () => globalVariablesController.save?.call(),
+        icon: const Icon(CupertinoIcons.check_mark),
       );
     }
 
@@ -578,6 +605,7 @@ class _SettingsDetailShell extends StatelessWidget {
     required this.onTabSelected,
     this.trailing,
     this.centerTitle = true,
+    this.headerHeight,
   });
 
   final String itemTitle;
@@ -586,6 +614,7 @@ class _SettingsDetailShell extends StatelessWidget {
   final ValueChanged<AppShellTab> onTabSelected;
   final Widget? trailing;
   final bool centerTitle;
+  final double? headerHeight;
 
   // Keep placeholder settings destinations inside the shared shell and preserve back navigation.
   @override
@@ -595,6 +624,7 @@ class _SettingsDetailShell extends StatelessWidget {
     leading: _SettingsBackButton(onPressed: onBack),
     trailing: trailing,
     centerTitle: centerTitle,
+    headerHeight: headerHeight,
     body: body,
     onTabSelected: onTabSelected,
   );

@@ -71,7 +71,12 @@ class SavedCredentialsView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final content = Padding(
-      padding: const EdgeInsets.all(AppSpacing.large),
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.large,
+        useSheetScaffold ? AppSpacing.large : 0,
+        AppSpacing.large,
+        AppSpacing.large,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
