@@ -54,6 +54,7 @@ JwtAuthSyncResult syncJwtAuthToRequestFields({
   if (auth.jwt.sendAsHeader) {
     final hasUserDefinedAuthorization = sanitizedHeaders.any(
       (item) =>
+          item.isComplete &&
           item.key.trim().toLowerCase() == 'authorization' &&
           !item.isSystemGeneratedAuthorizationHeader,
     );
@@ -78,6 +79,8 @@ JwtAuthSyncResult syncJwtAuthToRequestFields({
           key: 'Authorization',
           value: auth.jwt.authorizationValueForToken(buildResult.token),
           description: jwtAuthSystemGeneratedHeaderDescription,
+          source: RequestHeaderSource.systemAuth,
+          systemTag: 'jwtAuth',
         ),
       ]),
       generatedToken: buildResult.token,
@@ -86,7 +89,9 @@ JwtAuthSyncResult syncJwtAuthToRequestFields({
 
   final hasUserDefinedTokenParameter = sanitizedQueryParameters.any(
     (item) =>
-        item.key.trim() == 'token' && !item.isSystemGeneratedJwtQueryParameter,
+        item.isComplete &&
+        item.key.trim() == 'token' &&
+        !item.isSystemGeneratedJwtQueryParameter,
   );
   if (hasUserDefinedTokenParameter) {
     return JwtAuthSyncResult(
@@ -106,6 +111,8 @@ JwtAuthSyncResult syncJwtAuthToRequestFields({
         key: 'token',
         value: buildResult.token,
         description: jwtAuthSystemGeneratedQueryParameterDescription,
+        source: RequestHeaderSource.systemAuth,
+        systemTag: 'jwtAuth',
       ),
     ]),
     headers: List<KeyValueItem>.unmodifiable(sanitizedHeaders),

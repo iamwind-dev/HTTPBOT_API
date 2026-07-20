@@ -59,6 +59,7 @@ Map<String, Object?> requestAuthDraftToJson(RequestAuthDraft auth) => {
     'region': auth.aws.region,
     'service': auth.aws.service,
     'sessionToken': auth.aws.sessionToken,
+    'asHeader': auth.aws.asHeader,
   },
   'oauth1': {
     'consumerKey': auth.oauth1.consumerKey,
@@ -158,19 +159,18 @@ DigestAuthDraft digestAuthDraftFromJson(Map<String, dynamic> json) =>
       opaque: json['opaque'] as String? ?? '',
     );
 
-HawkAuthDraft hawkAuthDraftFromJson(Map<String, dynamic> json) =>
-    HawkAuthDraft(
-      identifier: json['identifier'] as String? ?? '',
-      key: json['key'] as String? ?? '',
-      algorithm: json['algorithm'] as String? ?? 'sha256',
-      user: json['user'] as String? ?? '',
-      nonce: json['nonce'] as String? ?? '',
-      ext: json['ext'] as String? ?? '',
-      app: json['app'] as String? ?? '',
-      delegation: json['delegation'] as String? ?? '',
-      timestamp: json['timestamp'] as String? ?? '',
-      includePayloadHash: json['includePayloadHash'] as bool? ?? false,
-    );
+HawkAuthDraft hawkAuthDraftFromJson(Map<String, dynamic> json) => HawkAuthDraft(
+  identifier: json['identifier'] as String? ?? '',
+  key: json['key'] as String? ?? '',
+  algorithm: json['algorithm'] as String? ?? 'sha256',
+  user: json['user'] as String? ?? '',
+  nonce: json['nonce'] as String? ?? '',
+  ext: json['ext'] as String? ?? '',
+  app: json['app'] as String? ?? '',
+  delegation: json['delegation'] as String? ?? '',
+  timestamp: json['timestamp'] as String? ?? '',
+  includePayloadHash: json['includePayloadHash'] as bool? ?? false,
+);
 
 JwtAuthDraft jwtAuthDraftFromJson(Map<String, dynamic> json) => JwtAuthDraft(
   token: json['token'] as String? ?? '',
@@ -184,13 +184,12 @@ JwtAuthDraft jwtAuthDraftFromJson(Map<String, dynamic> json) => JwtAuthDraft(
   prefix: json['prefix'] as String? ?? 'Bearer',
 );
 
-NtlmAuthDraft ntlmAuthDraftFromJson(Map<String, dynamic> json) =>
-    NtlmAuthDraft(
-      username: json['username'] as String? ?? '',
-      password: json['password'] as String? ?? '',
-      domain: json['domain'] as String? ?? '',
-      workstation: json['workstation'] as String? ?? '',
-    );
+NtlmAuthDraft ntlmAuthDraftFromJson(Map<String, dynamic> json) => NtlmAuthDraft(
+  username: json['username'] as String? ?? '',
+  password: json['password'] as String? ?? '',
+  domain: json['domain'] as String? ?? '',
+  workstation: json['workstation'] as String? ?? '',
+);
 
 AwsAuthDraft awsAuthDraftFromJson(Map<String, dynamic> json) => AwsAuthDraft(
   accessKey: json['accessKey'] as String? ?? '',
@@ -198,6 +197,7 @@ AwsAuthDraft awsAuthDraftFromJson(Map<String, dynamic> json) => AwsAuthDraft(
   region: json['region'] as String? ?? '',
   service: json['service'] as String? ?? '',
   sessionToken: json['sessionToken'] as String? ?? '',
+  asHeader: json['asHeader'] as bool? ?? true,
 );
 
 OAuth1AuthDraft oAuth1AuthDraftFromJson(Map<String, dynamic> json) =>
@@ -280,18 +280,13 @@ ApiKeyLocation apiKeyLocationFromName(String? value) =>
     enumValueOrFallback(ApiKeyLocation.values, value, ApiKeyLocation.header);
 
 OAuth2GrantType oAuth2GrantTypeFromName(String? value) =>
-    enumValueOrFallback(
-      OAuth2GrantType.values,
-      value,
-      OAuth2GrantType.manual,
-    );
+    enumValueOrFallback(OAuth2GrantType.values, value, OAuth2GrantType.manual);
 
-OAuth2PkceMethod oAuth2PkceMethodFromName(String? value) =>
-    enumValueOrFallback(
-      OAuth2PkceMethod.values,
-      value,
-      OAuth2PkceMethod.sha256,
-    );
+OAuth2PkceMethod oAuth2PkceMethodFromName(String? value) => enumValueOrFallback(
+  OAuth2PkceMethod.values,
+  value,
+  OAuth2PkceMethod.sha256,
+);
 
 OAuth2ClientAuthentication oAuth2ClientAuthenticationFromName(String? value) =>
     enumValueOrFallback(
@@ -301,11 +296,7 @@ OAuth2ClientAuthentication oAuth2ClientAuthenticationFromName(String? value) =>
     );
 
 KeyValueItemType keyValueItemTypeFromName(String? value) =>
-    enumValueOrFallback(
-      KeyValueItemType.values,
-      value,
-      KeyValueItemType.text,
-    );
+    enumValueOrFallback(KeyValueItemType.values, value, KeyValueItemType.text);
 
 List<T> listFromJson<T>(
   Object? value,
@@ -341,7 +332,11 @@ Map<String, dynamic> mapFromJson(Object? value) {
   return const <String, dynamic>{};
 }
 
-T enumValueOrFallback<T extends Enum>(List<T> values, String? name, T fallback) {
+T enumValueOrFallback<T extends Enum>(
+  List<T> values,
+  String? name,
+  T fallback,
+) {
   if (name == null || name.trim().isEmpty) {
     return fallback;
   }

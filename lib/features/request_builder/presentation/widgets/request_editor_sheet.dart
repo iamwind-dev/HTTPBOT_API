@@ -14,6 +14,7 @@ import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_theme_context.dart';
 import '../../../../injection/injection.dart';
 import '../../domain/entities/request_auth_draft.dart';
+import '../../domain/entities/api_key_auth_options.dart';
 import '../../domain/entities/oauth2_token_details_entity.dart';
 import '../../domain/entities/request_body_draft.dart';
 import '../../domain/entities/request_draft.dart';
@@ -49,7 +50,6 @@ import '../cubit/request_editor_cubit.dart';
 import '../cubit/request_editor_state.dart';
 import '../models/request_editor_response_badge_data.dart';
 import '../models/request_editor_result.dart';
-import 'api_key_presets.dart';
 import 'create_auth_sheet.dart';
 import 'global_variables_sheet.dart';
 import 'manage_environments_sheet.dart';
@@ -3994,7 +3994,9 @@ class _AuthSection extends StatelessWidget {
                 itemBuilder: (context) => [
                   const PopupMenuItem<String>(
                     value: 'manage_credentials',
-                    child: Text(AppStrings.requestEditorApiKeyManageCredentials),
+                    child: Text(
+                      AppStrings.requestEditorApiKeyManageCredentials,
+                    ),
                   ),
                   const PopupMenuItem<String>(
                     value: 'save_current_auth',
@@ -4412,15 +4414,7 @@ class _AwsAuthFields extends StatelessWidget {
           fieldKey: AppWidgetKeys.requestsEditorAuthField('aws_access_key'),
           value: aws.accessKey,
           label: 'Access Key',
-          onChanged: (value) => updateAws(
-            AwsAuthDraft(
-              accessKey: value,
-              secretKey: aws.secretKey,
-              region: aws.region,
-              service: aws.service,
-              sessionToken: aws.sessionToken,
-            ),
-          ),
+          onChanged: (value) => updateAws(aws.copyWith(accessKey: value)),
         ),
         const SizedBox(height: AppSpacing.small),
         _EditorTextField(
@@ -4428,60 +4422,28 @@ class _AwsAuthFields extends StatelessWidget {
           value: aws.secretKey,
           label: 'Secret Key',
           obscureText: true,
-          onChanged: (value) => updateAws(
-            AwsAuthDraft(
-              accessKey: aws.accessKey,
-              secretKey: value,
-              region: aws.region,
-              service: aws.service,
-              sessionToken: aws.sessionToken,
-            ),
-          ),
+          onChanged: (value) => updateAws(aws.copyWith(secretKey: value)),
         ),
         const SizedBox(height: AppSpacing.small),
         _EditorTextField(
           fieldKey: AppWidgetKeys.requestsEditorAuthField('aws_region'),
           value: aws.region,
           label: 'Region',
-          onChanged: (value) => updateAws(
-            AwsAuthDraft(
-              accessKey: aws.accessKey,
-              secretKey: aws.secretKey,
-              region: value,
-              service: aws.service,
-              sessionToken: aws.sessionToken,
-            ),
-          ),
+          onChanged: (value) => updateAws(aws.copyWith(region: value)),
         ),
         const SizedBox(height: AppSpacing.small),
         _EditorTextField(
           fieldKey: AppWidgetKeys.requestsEditorAuthField('aws_service'),
           value: aws.service,
           label: 'Service',
-          onChanged: (value) => updateAws(
-            AwsAuthDraft(
-              accessKey: aws.accessKey,
-              secretKey: aws.secretKey,
-              region: aws.region,
-              service: value,
-              sessionToken: aws.sessionToken,
-            ),
-          ),
+          onChanged: (value) => updateAws(aws.copyWith(service: value)),
         ),
         const SizedBox(height: AppSpacing.small),
         _EditorTextField(
           fieldKey: AppWidgetKeys.requestsEditorAuthField('aws_session_token'),
           value: aws.sessionToken,
           label: 'Session Token',
-          onChanged: (value) => updateAws(
-            AwsAuthDraft(
-              accessKey: aws.accessKey,
-              secretKey: aws.secretKey,
-              region: aws.region,
-              service: aws.service,
-              sessionToken: value,
-            ),
-          ),
+          onChanged: (value) => updateAws(aws.copyWith(sessionToken: value)),
         ),
       ],
     );
@@ -4763,7 +4725,8 @@ class _ApiKeyAuthFields extends StatelessWidget {
   final ApiKeyAuthDraft apiKey;
 
   /// Whether the configured key name uses the custom entry instead of a preset.
-  bool get _isCustom => !apiKeyNamePresets.contains(apiKey.name);
+  bool get _isCustom =>
+      apiKey.isCustomName || !apiKeyNamePresets.contains(apiKey.name);
 
   /// Builds the key-name selector, value field, location switch, and manage-credentials action.
   @override
@@ -4804,11 +4767,13 @@ class _ApiKeyAuthFields extends StatelessWidget {
                 final nextName = selected == apiKeyCustomNameSentinel
                     ? ''
                     : selected;
+                final isCustomName = selected == apiKeyCustomNameSentinel;
                 updateApiKey(
                   ApiKeyAuthDraft(
                     name: nextName,
                     value: apiKey.value,
                     location: apiKey.location,
+                    isCustomName: isCustomName,
                   ),
                 );
               },
@@ -4828,6 +4793,7 @@ class _ApiKeyAuthFields extends StatelessWidget {
                 name: value,
                 value: apiKey.value,
                 location: apiKey.location,
+                isCustomName: true,
               ),
             ),
           ),
@@ -4842,6 +4808,7 @@ class _ApiKeyAuthFields extends StatelessWidget {
               name: apiKey.name,
               value: value,
               location: apiKey.location,
+              isCustomName: apiKey.isCustomName,
             ),
           ),
         ),
@@ -4873,6 +4840,7 @@ class _ApiKeyAuthFields extends StatelessWidget {
                       location: sendAsHeader
                           ? ApiKeyLocation.header
                           : ApiKeyLocation.query,
+                      isCustomName: apiKey.isCustomName,
                     ),
                   ),
                 ),
@@ -5155,12 +5123,10 @@ class _OAuth2AuthFields extends StatelessWidget {
 
   /// Opens the OAuth2 configuration sheet and persists the returned configuration.
   Future<void> _openConfigurationSheet(BuildContext context) async {
-    final configurationResult =
-        await showRequestModalSheet<_OAuth2ConfigurationResult?>(
-          context,
-          builder: (context) =>
-              _OAuth2ConfigurationSheet(initialOauth2: oauth2),
-        );
+    final configurationResult = await showOAuth2ConfigurationSheet(
+      context,
+      initialOauth2: oauth2,
+    );
 
     if (!context.mounted || configurationResult == null) {
       return;
@@ -5306,12 +5272,22 @@ class _OAuth2ConfigurationSheet extends StatefulWidget {
       _OAuth2ConfigurationSheetState();
 }
 
-class _OAuth2ConfigurationResult {
-  const _OAuth2ConfigurationResult({required this.oauth2, this.tokenDetails});
+/// Carries an OAuth2 configuration and optional token exchange details.
+class OAuth2ConfigurationResult {
+  const OAuth2ConfigurationResult({required this.oauth2, this.tokenDetails});
 
   final OAuth2AuthDraft oauth2;
   final OAuth2TokenDetailsEntity? tokenDetails;
 }
+
+/// Opens the shared OAuth2 configuration flow for HTTP and WebSocket editors.
+Future<OAuth2ConfigurationResult?> showOAuth2ConfigurationSheet(
+  BuildContext context, {
+  required OAuth2AuthDraft initialOauth2,
+}) => showRequestModalSheet<OAuth2ConfigurationResult?>(
+  context,
+  builder: (context) => _OAuth2ConfigurationSheet(initialOauth2: initialOauth2),
+);
 
 class _OAuth2ConfigurationSheetState extends State<_OAuth2ConfigurationSheet> {
   late OAuth2AuthDraft _oauth2;
@@ -5433,7 +5409,7 @@ class _OAuth2ConfigurationSheetState extends State<_OAuth2ConfigurationSheet> {
         : tokenType;
 
     Navigator.of(context).pop(
-      _OAuth2ConfigurationResult(
+      OAuth2ConfigurationResult(
         oauth2: preparedOauth2.copyWith(
           accessToken: resolvedTokenDetails.accessToken,
           refreshToken:
@@ -5589,7 +5565,7 @@ class _OAuth2ConfigurationSheetState extends State<_OAuth2ConfigurationSheet> {
     );
 
     Navigator.of(context).pop(
-      _OAuth2ConfigurationResult(
+      OAuth2ConfigurationResult(
         oauth2: preparedOauth2.copyWith(
           accessToken: callbackData.accessToken,
           headerPrefix: nextPrefix,
@@ -5755,7 +5731,7 @@ class _OAuth2ConfigurationSheetState extends State<_OAuth2ConfigurationSheet> {
       final nextPrefix = tokenType.isEmpty ? _oauth2.headerPrefix : tokenType;
 
       Navigator.of(context).pop(
-        _OAuth2ConfigurationResult(
+        OAuth2ConfigurationResult(
           oauth2: _oauth2.copyWith(
             accessToken: resolvedTokenDetails.accessToken,
             refreshToken:
@@ -5791,7 +5767,7 @@ class _OAuth2ConfigurationSheetState extends State<_OAuth2ConfigurationSheet> {
 
   /// Builds the updated OAuth2 draft and closes the configuration sheet.
   void _handleDone() {
-    Navigator.of(context).pop(_OAuth2ConfigurationResult(oauth2: _oauth2));
+    Navigator.of(context).pop(OAuth2ConfigurationResult(oauth2: _oauth2));
   }
 
   @override

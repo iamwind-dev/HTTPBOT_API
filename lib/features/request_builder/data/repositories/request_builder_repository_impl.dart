@@ -486,6 +486,7 @@ class RequestBuilderRepositoryImpl implements RequestBuilderRepository {
       'region': auth.aws.region,
       'service': auth.aws.service,
       'sessionToken': auth.aws.sessionToken,
+      'asHeader': auth.aws.asHeader,
     },
     'oauth1': {
       'consumerKey': auth.oauth1.consumerKey,
@@ -624,6 +625,7 @@ class RequestBuilderRepositoryImpl implements RequestBuilderRepository {
     region: json['region'] as String? ?? '',
     service: json['service'] as String? ?? '',
     sessionToken: json['sessionToken'] as String? ?? '',
+    asHeader: json['asHeader'] as bool? ?? true,
   );
 
   OAuth1AuthDraft _oAuth1AuthDraftFromJson(Map<String, dynamic> json) =>

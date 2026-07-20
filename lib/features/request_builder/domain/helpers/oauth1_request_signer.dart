@@ -79,6 +79,8 @@ class OAuth1RequestSigner {
         queryParameters: queryParameters,
       ),
     );
+    final baseUrlWithEmbeddedQuery = SyncRequestQueryParametersUseCase()
+        .extractBaseUrl(url: url, queryParameters: queryParameters);
     if (normalizedBaseUrl.isEmpty) {
       return const OAuth1SigningResult(
         isValid: false,
@@ -99,6 +101,10 @@ class OAuth1RequestSigner {
       body: body,
     );
     final signingParameters = <MapEntry<String, String>>[
+      ..._collectUrlQueryParameters(
+        baseUrlWithEmbeddedQuery,
+        includeEmptyParameters: auth.includeEmptyParameters,
+      ),
       ..._collectQueryParameters(
         queryParameters,
         includeEmptyParameters: auth.includeEmptyParameters,
@@ -225,6 +231,38 @@ List<MapEntry<String, String>> _collectQueryParameters(
             (includeEmptyParameters || item.value.isNotEmpty),
       )
       .map((item) => MapEntry(item.key, item.value))
+      .toList(growable: false);
+}
+
+List<MapEntry<String, String>> _collectUrlQueryParameters(
+  String url, {
+  required bool includeEmptyParameters,
+}) {
+  final uri = Uri.tryParse(url.trim());
+  final query = uri?.query ?? '';
+  if (query.isEmpty) {
+    return const <MapEntry<String, String>>[];
+  }
+
+  return query
+      .split('&')
+      .where((part) => part.isNotEmpty)
+      .map((part) {
+        final separatorIndex = part.indexOf('=');
+        if (separatorIndex == -1) {
+          return MapEntry(Uri.decodeQueryComponent(part), '');
+        }
+
+        return MapEntry(
+          Uri.decodeQueryComponent(part.substring(0, separatorIndex)),
+          Uri.decodeQueryComponent(part.substring(separatorIndex + 1)),
+        );
+      })
+      .where(
+        (entry) =>
+            entry.key.trim().isNotEmpty &&
+            (includeEmptyParameters || entry.value.isNotEmpty),
+      )
       .toList(growable: false);
 }
 

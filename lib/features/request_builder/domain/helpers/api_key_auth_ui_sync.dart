@@ -36,7 +36,7 @@ ApiKeyAuthSyncResult syncApiKeyAuthToRequestFields({
   final key = auth.apiKey.name.trim();
   final value = auth.apiKey.value;
 
-  if (key.isEmpty || value.isEmpty) {
+  if (key.isEmpty || value.trim().isEmpty) {
     return ApiKeyAuthSyncResult(
       queryParameters: List<KeyValueItem>.unmodifiable(
         sanitizedQueryParameters,
@@ -76,7 +76,8 @@ List<KeyValueItem> _withApiKeyHeader(
   required String value,
 }) {
   final hasUserDefinedMatch = headers.any(
-    (item) => item.key.trim().toLowerCase() == key.toLowerCase(),
+    (item) =>
+        item.isEnabled && item.key.trim().toLowerCase() == key.toLowerCase(),
   );
 
   if (hasUserDefinedMatch) {
@@ -99,7 +100,9 @@ List<KeyValueItem> _withApiKeyQueryParameter(
   required String key,
   required String value,
 }) {
-  final hasUserDefinedMatch = queryParameters.any((item) => item.key == key);
+  final hasUserDefinedMatch = queryParameters.any(
+    (item) => item.isEnabled && item.key == key,
+  );
 
   if (hasUserDefinedMatch) {
     return List<KeyValueItem>.unmodifiable(queryParameters);

@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
+import 'package:dart_jsonwebtoken/dart_jsonwebtoken.dart' as jwt;
 
 import '../entities/request_auth_draft.dart';
 
@@ -20,9 +21,15 @@ class JwtBuildResult {
 class JwtTokenBuilder {
   const JwtTokenBuilder();
 
-  /// Builds a JWT token from the auth draft using supported HMAC algorithms.
+  /// Builds a JWT token from the auth draft using its selected signing algorithm.
   JwtBuildResult build(JwtAuthDraft auth) {
-    final algorithm = auth.selectedAlgorithm;
+    final algorithm = auth.parsedAlgorithm;
+    if (algorithm == null) {
+      return JwtBuildResult(
+        isValid: false,
+        errorMessage: 'Unsupported JWT algorithm: ${auth.algorithm}.',
+      );
+    }
     final header = _parseJsonObject(
       auth.header,
       emptyFallback: <String, Object?>{'typ': 'JWT', 'alg': algorithm.label},
@@ -53,9 +60,11 @@ class JwtTokenBuilder {
         );
       }
 
-      return JwtBuildResult(
-        isValid: false,
-        errorMessage: '${algorithm.label} signing is not implemented yet.',
+      return _buildAsymmetricToken(
+        algorithm: algorithm,
+        header: resolvedHeader,
+        payload: payload.value,
+        privateKey: auth.privateKey,
       );
     }
 
@@ -92,6 +101,53 @@ class JwtTokenBuilder {
       token: '$signingInput.${_base64UrlNoPadding(signature)}',
     );
   }
+
+  /// Signs an asymmetric JWT through the JOSE-aware package implementation.
+  JwtBuildResult _buildAsymmetricToken({
+    required JwtAlgorithm algorithm,
+    required Map<String, Object?> header,
+    required Map<String, Object?> payload,
+    required String privateKey,
+  }) {
+    try {
+      final key = switch (algorithm) {
+        JwtAlgorithm.rs256 ||
+        JwtAlgorithm.rs384 ||
+        JwtAlgorithm.rs512 ||
+        JwtAlgorithm.ps256 ||
+        JwtAlgorithm.ps384 ||
+        JwtAlgorithm.ps512 => jwt.RSAPrivateKey(privateKey),
+        JwtAlgorithm.es256 ||
+        JwtAlgorithm.es384 ||
+        JwtAlgorithm.es512 => jwt.ECPrivateKey(privateKey),
+        _ => throw StateError('Unsupported asymmetric JWT algorithm.'),
+      };
+      final token = jwt
+          .JWT(payload, header: Map<String, dynamic>.from(header))
+          .sign(key, algorithm: _toJoseAlgorithm(algorithm), noIssueAt: true);
+      return JwtBuildResult(isValid: true, token: token);
+    } on Object {
+      return const JwtBuildResult(
+        isValid: false,
+        errorMessage: 'Invalid Private Key for JWT.',
+      );
+    }
+  }
+
+  /// Maps the app's persisted JWT algorithm to the signing package enum.
+  jwt.JWTAlgorithm _toJoseAlgorithm(JwtAlgorithm algorithm) =>
+      switch (algorithm) {
+        JwtAlgorithm.rs256 => jwt.JWTAlgorithm.RS256,
+        JwtAlgorithm.rs384 => jwt.JWTAlgorithm.RS384,
+        JwtAlgorithm.rs512 => jwt.JWTAlgorithm.RS512,
+        JwtAlgorithm.ps256 => jwt.JWTAlgorithm.PS256,
+        JwtAlgorithm.ps384 => jwt.JWTAlgorithm.PS384,
+        JwtAlgorithm.ps512 => jwt.JWTAlgorithm.PS512,
+        JwtAlgorithm.es256 => jwt.JWTAlgorithm.ES256,
+        JwtAlgorithm.es384 => jwt.JWTAlgorithm.ES384,
+        JwtAlgorithm.es512 => jwt.JWTAlgorithm.ES512,
+        _ => throw StateError('Unsupported asymmetric JWT algorithm.'),
+      };
 
   _JsonObjectParseResult _parseJsonObject(
     String input, {

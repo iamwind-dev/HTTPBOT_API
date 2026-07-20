@@ -74,18 +74,25 @@ class BasicAuthDraft extends Equatable {
 }
 
 class ApiKeyAuthDraft extends Equatable {
+  /// Creates immutable API Key credentials and remembers Custom selection.
   const ApiKeyAuthDraft({
     this.name = '',
     this.value = '',
     this.location = ApiKeyLocation.header,
+    this.isCustomName = false,
   });
 
   final String name;
   final String value;
   final ApiKeyLocation location;
+  final bool isCustomName;
+
+  /// Keeps the API key value out of Equatable debug output.
+  @override
+  bool get stringify => false;
 
   @override
-  List<Object> get props => [name, value, location];
+  List<Object> get props => [name, value, location, isCustomName];
 }
 
 class BearerTokenAuthDraft extends Equatable {
@@ -332,15 +339,20 @@ class JwtAuthDraft extends Equatable {
   final bool sendAsHeader;
   final String prefix;
 
-  /// Returns the selected algorithm enum, defaulting to HS256 for unknown persisted values.
-  JwtAlgorithm get selectedAlgorithm {
+  /// Returns the stored algorithm when it is one the JWT signer supports.
+  JwtAlgorithm? get parsedAlgorithm {
     for (final candidate in JwtAlgorithm.values) {
       if (candidate.label == algorithm) {
         return candidate;
       }
     }
 
-    return JwtAlgorithm.hs256;
+    return null;
+  }
+
+  /// Returns the selected algorithm for display controls with a stable fallback.
+  JwtAlgorithm get selectedAlgorithm {
+    return parsedAlgorithm ?? JwtAlgorithm.hs256;
   }
 
   /// Returns true when the selected JWT algorithm uses an HMAC shared secret.
@@ -395,6 +407,9 @@ class JwtAuthDraft extends Equatable {
     sendAsHeader,
     prefix,
   ];
+
+  @override
+  bool? get stringify => false;
 }
 
 class NtlmAuthDraft extends Equatable {
@@ -428,6 +443,11 @@ class NtlmAuthDraft extends Equatable {
 
   @override
   List<Object> get props => [username, password, domain, workstation];
+
+  /// Prevents NTLM credentials from appearing in diagnostic string output.
+
+  @override
+  bool? get stringify => false;
 }
 
 class AwsAuthDraft extends Equatable {
@@ -437,6 +457,7 @@ class AwsAuthDraft extends Equatable {
     this.region = '',
     this.service = '',
     this.sessionToken = '',
+    this.asHeader = true,
   });
 
   final String accessKey;
@@ -444,6 +465,24 @@ class AwsAuthDraft extends Equatable {
   final String region;
   final String service;
   final String sessionToken;
+  final bool asHeader;
+
+  /// Creates a new AWS draft with any updated signing fields applied.
+  AwsAuthDraft copyWith({
+    String? accessKey,
+    String? secretKey,
+    String? region,
+    String? service,
+    String? sessionToken,
+    bool? asHeader,
+  }) => AwsAuthDraft(
+    accessKey: accessKey ?? this.accessKey,
+    secretKey: secretKey ?? this.secretKey,
+    region: region ?? this.region,
+    service: service ?? this.service,
+    sessionToken: sessionToken ?? this.sessionToken,
+    asHeader: asHeader ?? this.asHeader,
+  );
 
   @override
   List<Object> get props => [
@@ -452,7 +491,11 @@ class AwsAuthDraft extends Equatable {
     region,
     service,
     sessionToken,
+    asHeader,
   ];
+
+  @override
+  bool? get stringify => false;
 }
 
 class OAuth1AuthDraft extends Equatable {
@@ -661,14 +704,11 @@ class OAuth2AuthDraft extends Equatable {
     return resolvedAccessTokenUrl;
   }
 
-  /// Returns the Authorization value while avoiding duplicate header prefixes.
+  /// Returns the Authorization value with a Bearer fallback and no duplicate prefix.
   String get resolvedAuthorizationValue {
     final token = accessToken.trim();
-    final prefix = headerPrefix.trim();
-
-    if (prefix.isEmpty) {
-      return token;
-    }
+    final configuredPrefix = headerPrefix.trim();
+    final prefix = configuredPrefix.isEmpty ? 'Bearer' : configuredPrefix;
 
     if (token.toLowerCase().startsWith('${prefix.toLowerCase()} ')) {
       return token;

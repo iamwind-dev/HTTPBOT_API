@@ -19,6 +19,7 @@ HawkAuthSyncResult syncHawkAuthToRequestFields({
   required String url,
   required RequestBodyDraft body,
   HawkAuthorizationHeaderBuilder? builder,
+  HawkSigningContext? signingContext,
 }) {
   final sanitizedHeaders = headers
       .where((item) => !item.isSystemGeneratedHawkHeader)
@@ -48,6 +49,7 @@ HawkAuthSyncResult syncHawkAuthToRequestFields({
     url: url,
     body: body,
     hawk: auth.hawk,
+    signingContext: signingContext,
   );
   if (!signingResult.isValid) {
     return HawkAuthSyncResult(
@@ -63,6 +65,8 @@ HawkAuthSyncResult syncHawkAuthToRequestFields({
         key: 'Authorization',
         value: signingResult.authorizationHeader,
         description: hawkSystemGeneratedHeaderDescription,
+        source: RequestHeaderSource.systemAuth,
+        systemTag: 'hawkAuth',
       ),
     ]),
   );

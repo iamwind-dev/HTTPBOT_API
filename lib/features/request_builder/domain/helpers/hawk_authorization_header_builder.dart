@@ -44,6 +44,13 @@ class HawkSigningResult {
   final String? errorMessage;
 }
 
+class HawkSigningContext {
+  const HawkSigningContext({required this.timestamp, required this.nonce});
+
+  final int timestamp;
+  final String nonce;
+}
+
 class HawkAuthorizationHeaderBuilder {
   HawkAuthorizationHeaderBuilder({
     DateTime Function()? now,
@@ -53,6 +60,19 @@ class HawkAuthorizationHeaderBuilder {
 
   final DateTime Function() _now;
   final String Function() _nonceGenerator;
+
+  /// Resolves manual or generated values once for a single signing attempt.
+  HawkSigningContext createSigningContext(HawkAuthDraft hawk) {
+    final manualTimestamp = hawk.timestamp.trim();
+    return HawkSigningContext(
+      timestamp: manualTimestamp.isEmpty
+          ? _now().millisecondsSinceEpoch ~/ 1000
+          : int.parse(manualTimestamp),
+      nonce: hawk.nonce.trim().isEmpty
+          ? _nonceGenerator()
+          : hawk.nonce.trim(),
+    );
+  }
 
   /// Builds the Hawk Authorization header for the request pieces.
   ///
@@ -64,6 +84,7 @@ class HawkAuthorizationHeaderBuilder {
     required String url,
     required RequestBodyDraft body,
     required HawkAuthDraft hawk,
+    HawkSigningContext? signingContext,
   }) {
     final identifier = hawk.identifier.trim();
     if (identifier.isEmpty) {
@@ -71,6 +92,11 @@ class HawkAuthorizationHeaderBuilder {
     }
     if (hawk.key.isEmpty) {
       return const HawkSigningResult.invalid('Auth Key is required for Hawk.');
+    }
+
+    final manualTimestamp = hawk.timestamp.trim();
+    if (manualTimestamp.isNotEmpty && int.tryParse(manualTimestamp) == null) {
+      return const HawkSigningResult.invalid('Invalid Hawk timestamp.');
     }
 
     final uri = Uri.tryParse(url.trim());
@@ -82,12 +108,12 @@ class HawkAuthorizationHeaderBuilder {
       );
     }
 
-    final timestamp = hawk.timestamp.trim().isNotEmpty
-        ? hawk.timestamp.trim()
-        : (_now().millisecondsSinceEpoch ~/ 1000).toString();
-    final nonce = hawk.nonce.trim().isNotEmpty
-        ? hawk.nonce.trim()
-        : _nonceGenerator();
+    final timestamp = signingContext?.timestamp.toString() ??
+        (manualTimestamp.isNotEmpty
+            ? manualTimestamp
+            : (_now().millisecondsSinceEpoch ~/ 1000).toString());
+    final nonce = signingContext?.nonce ??
+        (hawk.nonce.trim().isNotEmpty ? hawk.nonce.trim() : _nonceGenerator());
     final algorithm = hawk.selectedAlgorithm;
 
     String? payloadHash;

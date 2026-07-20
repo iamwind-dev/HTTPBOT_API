@@ -1,3 +1,7 @@
+import '../../../request_builder/domain/entities/request_auth_draft.dart';
+
+enum WebSocketNtlmStage { negotiating, authenticating }
+
 abstract class WebSocketClient {
   /// Opens a WebSocket connection with resolved URL, headers, and settings.
   Future<WebSocketConnection> connect({
@@ -5,6 +9,8 @@ abstract class WebSocketClient {
     required Map<String, String> headers,
     required Duration timeout,
     required bool verifySsl,
+    NtlmAuthDraft? ntlmAuth,
+    void Function(WebSocketNtlmStage stage)? onNtlmStage,
   });
 }
 
@@ -29,6 +35,23 @@ abstract class WebSocketConnection {
 
   /// Closes the socket with an optional close code and reason.
   Future<void> close([int? code, String? reason]);
+}
+
+class WebSocketHandshakeException implements Exception {
+  const WebSocketHandshakeException({
+    required this.statusCode,
+    required this.reasonPhrase,
+    required this.headers,
+    required this.uri,
+  });
+
+  final int statusCode;
+  final String reasonPhrase;
+  final Map<String, String> headers;
+  final Uri uri;
+
+  @override
+  String toString() => 'WebSocket upgrade failed: $statusCode $reasonPhrase';
 }
 
 class WebSocketFrameEntity {
