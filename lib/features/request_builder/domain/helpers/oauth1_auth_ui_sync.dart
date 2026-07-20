@@ -64,6 +64,7 @@ OAuth1AuthSyncResult syncOAuth1AuthToRequestFields({
   if (auth.oauth1.asHeader) {
     final hasUserDefinedAuthorization = sanitizedHeaders.any(
       (item) =>
+          item.isEnabled &&
           item.key.trim().toLowerCase() == 'authorization' &&
           !item.isSystemGeneratedAuthorizationHeader &&
           !item.isSystemGeneratedAwsHeader,
@@ -101,6 +102,21 @@ OAuth1AuthSyncResult syncOAuth1AuthToRequestFields({
       description: oauth1SystemGeneratedQueryParameterDescription,
     ),
   );
+  final hasUserDefinedOAuthQuery = sanitizedQueryParameters.any(
+    (item) =>
+        item.isEnabled &&
+        !item.isSystemGeneratedOAuth1QueryParameter &&
+        signingResult.oauthParameters.containsKey(item.key.trim()),
+  );
+  if (hasUserDefinedOAuthQuery) {
+    return OAuth1AuthSyncResult(
+      queryParameters: List<KeyValueItem>.unmodifiable(
+        sanitizedQueryParameters,
+      ),
+      headers: List<KeyValueItem>.unmodifiable(sanitizedHeaders),
+      errorMessage: 'OAuth query parameter already exists as user-defined.',
+    );
+  }
 
   return OAuth1AuthSyncResult(
     queryParameters: List<KeyValueItem>.unmodifiable(<KeyValueItem>[

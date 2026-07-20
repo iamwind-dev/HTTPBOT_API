@@ -5,7 +5,9 @@ import 'dart:math';
 
 import 'package:crypto/crypto.dart';
 
+import '../../../request_builder/domain/entities/request_auth_draft.dart';
 import '../../domain/repositories/web_socket_client.dart';
+import 'web_socket_ntlm_handshake_coordinator.dart';
 
 class IoWebSocketClient implements WebSocketClient {
   const IoWebSocketClient();
@@ -17,7 +19,26 @@ class IoWebSocketClient implements WebSocketClient {
     required Map<String, String> headers,
     required Duration timeout,
     required bool verifySsl,
+    NtlmAuthDraft? ntlmAuth,
+    void Function(WebSocketNtlmStage stage)? onNtlmStage,
   }) async {
+    if (ntlmAuth != null) {
+      final result = await const WebSocketNtlmHandshakeCoordinator().connect(
+        uri: uri,
+        headers: headers,
+        timeout: timeout,
+        verifySsl: verifySsl,
+        credentials: NtlmHandshakeCredentials(
+          username: ntlmAuth.username,
+          password: ntlmAuth.password,
+          domain: ntlmAuth.domain,
+          workstation: ntlmAuth.workstation,
+        ),
+        onStage: onNtlmStage,
+      );
+      return IoWebSocketConnection(result.webSocket, result.responseHeaders);
+    }
+
     final client = HttpClient();
     if (!verifySsl) {
       client.badCertificateCallback = (_, __, ___) => true;
@@ -40,8 +61,10 @@ class IoWebSocketClient implements WebSocketClient {
     final responseHeaders = _responseHeaders(response.headers);
     if (response.statusCode != HttpStatus.switchingProtocols) {
       await response.drain<void>();
-      throw HttpException(
-        'WebSocket upgrade failed: ${response.statusCode} ${response.reasonPhrase}',
+      throw WebSocketHandshakeException(
+        statusCode: response.statusCode,
+        reasonPhrase: response.reasonPhrase,
+        headers: responseHeaders,
         uri: uri,
       );
     }

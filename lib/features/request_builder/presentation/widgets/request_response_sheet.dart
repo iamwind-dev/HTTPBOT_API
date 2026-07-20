@@ -1092,7 +1092,7 @@ class _ResponseFilterSheetState extends State<_ResponseFilterSheet> {
 
   @override
   Widget build(BuildContext context) => RequestModalSheetCard(
-    key: const ValueKey<String>(AppWidgetKeys.requestsResponseFilterSheet),
+    key: const ValueKey<String>(AppWidgetKeys.filterResponseSheet),
     child: SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.large),
@@ -1115,7 +1115,7 @@ class _ResponseFilterSheetState extends State<_ResponseFilterSheet> {
                 ),
                 PopupMenuButton<_ResponseFilterMenuAction>(
                   key: const ValueKey<String>(
-                    AppWidgetKeys.requestsResponseFilterMenuButton,
+                    AppWidgetKeys.filterResponseMoreButton,
                   ),
                   onSelected: _handleMenuAction,
                   itemBuilder: (context) => [
@@ -1203,7 +1203,7 @@ class _ResponseFilterSheetState extends State<_ResponseFilterSheet> {
                     Expanded(
                       child: TextField(
                         key: const ValueKey<String>(
-                          AppWidgetKeys.requestsResponseFilterQueryField,
+                          AppWidgetKeys.filterResponseQueryField,
                         ),
                         controller: _queryController,
                         focusNode: _queryFocusNode,
@@ -1215,7 +1215,7 @@ class _ResponseFilterSheetState extends State<_ResponseFilterSheet> {
                     ),
                     PopupMenuButton<ResponseFilterType>(
                       key: const ValueKey<String>(
-                        AppWidgetKeys.requestsResponseFilterLanguageButton,
+                        AppWidgetKeys.filterResponseModePicker,
                       ),
                       tooltip: _selectedType.label,
                       onSelected: (value) {

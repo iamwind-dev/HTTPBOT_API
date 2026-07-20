@@ -1,5 +1,6 @@
 import '../entities/request_auth_draft.dart';
 import '../entities/request_body_draft.dart';
+import '../usecases/build_bearer_authorization_header_use_case.dart';
 import 'digest_authorization_header_builder.dart';
 import 'jwt_token_builder.dart';
 
@@ -51,9 +52,30 @@ RequestValidationResult validateAuthBeforeSend(
         );
       }
 
+      if (!_isSupportedOAuth1SignatureMethod(auth.oauth1.signatureMethod)) {
+        return const RequestValidationResult.invalid(
+          'OAuth 1.0a signature method is unsupported.',
+        );
+      }
+
       if (auth.oauth1.consumerSecret.isEmpty) {
         return const RequestValidationResult.invalid(
-          'Consumer Secret is required for OAuth 1.0a.',
+          'Consumer Secret is required for this signature method.',
+        );
+      }
+
+      if (auth.oauth1.token.trim().isNotEmpty &&
+          auth.oauth1.tokenSecret.isEmpty) {
+        return const RequestValidationResult.invalid(
+          'Token Secret is required when Token is provided.',
+        );
+      }
+
+      final timestamp = auth.oauth1.timestamp.trim();
+      if (timestamp.isNotEmpty &&
+          (int.tryParse(timestamp) == null || int.parse(timestamp) <= 0)) {
+        return const RequestValidationResult.invalid(
+          'Timestamp must be a positive integer.',
         );
       }
 
@@ -142,11 +164,64 @@ RequestValidationResult validateAuthBeforeSend(
       }
 
       return const RequestValidationResult.valid();
-    case AuthType.none:
     case AuthType.basic:
-    case AuthType.apiKey:
-    case AuthType.bearerToken:
-    case AuthType.oauth2:
+      if (auth.basic.username.trim().isEmpty) {
+        return const RequestValidationResult.invalid(
+          'Username is required for Basic Auth.',
+        );
+      }
+
       return const RequestValidationResult.valid();
+    case AuthType.oauth2:
+      if (auth.oauth2.accessToken.trim().isEmpty) {
+        return const RequestValidationResult.invalid(
+          'Access token is required for OAuth 2.0.',
+        );
+      }
+
+      return const RequestValidationResult.valid();
+    case AuthType.apiKey:
+      if (auth.apiKey.isCustomName && auth.apiKey.name.trim().isEmpty) {
+        return const RequestValidationResult.invalid(
+          'Custom key name is required.',
+        );
+      }
+
+      if (auth.apiKey.name.trim().isEmpty) {
+        return const RequestValidationResult.invalid(
+          'API key name is required.',
+        );
+      }
+
+      if (auth.apiKey.value.trim().isEmpty) {
+        return const RequestValidationResult.invalid(
+          'API key value is required.',
+        );
+      }
+
+      return const RequestValidationResult.valid();
+    case AuthType.bearerToken:
+      if (normalizeBearerToken(auth.bearerToken.token).isEmpty) {
+        return const RequestValidationResult.invalid(
+          'Bearer token is required.',
+        );
+      }
+
+      return const RequestValidationResult.valid();
+    case AuthType.none:
+      return const RequestValidationResult.valid();
+  }
+}
+
+/// Returns true when the OAuth1 signer can build the selected method.
+bool _isSupportedOAuth1SignatureMethod(String signatureMethod) {
+  switch (signatureMethod.trim()) {
+    case 'HMAC-SHA1':
+    case 'HMAC-SHA256':
+    case 'HMAC-SHA512':
+    case 'PLAINTEXT':
+      return true;
+    default:
+      return false;
   }
 }

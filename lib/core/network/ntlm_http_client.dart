@@ -30,7 +30,7 @@ class _RawHttpResponse {
 
 class NtlmHttpClient {
   NtlmHttpClient({HttpClientFactory? httpClientFactory})
-      : _httpClientFactory = httpClientFactory ?? HttpClient.new;
+    : _httpClientFactory = httpClientFactory ?? HttpClient.new;
 
   final HttpClientFactory _httpClientFactory;
 
@@ -92,7 +92,7 @@ class NtlmHttpClient {
 
       // Read www-authenticate BEFORE draining so the header is available.
       final challengeHeader = type1Response.headers['www-authenticate'];
-      final challengeToken = _extractNtlmChallenge(challengeHeader);
+      final challengeToken = selectNtlmChallenge(challengeHeader ?? const []);
 
       if (challengeToken == null) {
         await type1Response.drain<void>();
@@ -277,8 +277,7 @@ class NtlmHttpClient {
     final isDefaultPort =
         (uri.scheme == 'http' && uri.port == 80) ||
         (uri.scheme == 'https' && uri.port == 443);
-    final hostHeader =
-        isDefaultPort ? uri.host : '${uri.host}:${uri.port}';
+    final hostHeader = isDefaultPort ? uri.host : '${uri.host}:${uri.port}';
 
     // Forbidden headers that we manage ourselves.
     const forbidden = {'host', 'content-length', 'authorization'};
@@ -323,8 +322,10 @@ class NtlmHttpClient {
       throw const FormatException('HTTP response missing header terminator');
     }
 
-    final headerSection =
-        ascii.decode(bytes.sublist(0, boundaryIndex), allowInvalid: true);
+    final headerSection = ascii.decode(
+      bytes.sublist(0, boundaryIndex),
+      allowInvalid: true,
+    );
     final bodyBytes = bytes.sublist(boundaryIndex + separator.length);
 
     final lines = headerSection.split('\r\n');
@@ -360,8 +361,8 @@ class NtlmHttpClient {
 
     // De-chunk if necessary — Connection: close avoids this in most cases, but
     // some servers always chunk.
-    final finalBody = (transferEncoding != null &&
-            transferEncoding.contains('chunked'))
+    final finalBody =
+        (transferEncoding != null && transferEncoding.contains('chunked'))
         ? _dechunk(bodyBytes)
         : bodyBytes;
 
@@ -388,8 +389,9 @@ class NtlmHttpClient {
           !(bytes[lineEnd] == 13 && bytes[lineEnd + 1] == 10)) {
         lineEnd++;
       }
-      final sizeLine =
-          ascii.decode(bytes.sublist(pos, lineEnd), allowInvalid: true).trim();
+      final sizeLine = ascii
+          .decode(bytes.sublist(pos, lineEnd), allowInvalid: true)
+          .trim();
       // Strip chunk extensions (anything after ';').
       final semi = sizeLine.indexOf(';');
       final hexStr = semi == -1 ? sizeLine : sizeLine.substring(0, semi);
@@ -429,20 +431,6 @@ class NtlmHttpClient {
     return utf8.encode(data.toString());
   }
 
-  String? _extractNtlmChallenge(List<String>? headerValues) {
-    if (headerValues == null) {
-      return null;
-    }
-    for (final value in headerValues) {
-      final trimmed = value.trim();
-      // toUpperCase normalises casing; 'NTLM ' is always exactly 5 ASCII bytes,
-      // so substring(5) is safe regardless of the original casing.
-      if (trimmed.toUpperCase().startsWith('NTLM ')) {
-        return trimmed.substring(5).trim();
-      }
-    }
-    return null;
-  }
 
   /// Stops [stopwatch] and returns a typed error [RequestExecutionResult].
   RequestExecutionResult _errorResult({

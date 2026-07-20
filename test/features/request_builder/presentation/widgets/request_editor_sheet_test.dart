@@ -32,6 +32,50 @@ void main() {
   });
 
   group('request editor auth header UI sync', () {
+    testWidgets('should return draft through reusable OAuth2 configuration', (
+      tester,
+    ) async {
+      OAuth2ConfigurationResult? result;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.lightTheme,
+          home: Builder(
+            builder: (context) => TextButton(
+              onPressed: () async {
+                result = await showOAuth2ConfigurationSheet(
+                  context,
+                  initialOauth2: const OAuth2AuthDraft(accessToken: 'abc123'),
+                );
+              },
+              child: const Text('Configure OAuth2'),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Configure OAuth2'));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(
+          const ValueKey<String>(
+            AppWidgetKeys.requestsEditorOAuth2ConfigDoneButton,
+          ),
+        ),
+        findsOneWidget,
+      );
+
+      await tester.tap(
+        find.byKey(
+          const ValueKey<String>(
+            AppWidgetKeys.requestsEditorOAuth2ConfigDoneButton,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(result?.oauth2.accessToken, 'abc123');
+    });
+
     testWidgets('should open cookies sheet from more menu', (tester) async {
       final robot = RequestEditorSheetRobot(tester);
 
@@ -132,33 +176,32 @@ void main() {
       robot.expectSwitchValue('send_cookies', false);
     });
 
-    testWidgets(
-      'should auto fill cookie domain from current request url',
-      (tester) async {
-        final robot = RequestEditorSheetRobot(tester);
+    testWidgets('should auto fill cookie domain from current request url', (
+      tester,
+    ) async {
+      final robot = RequestEditorSheetRobot(tester);
 
-        await robot.pumpScreen(
-          initialDraft: const RequestDraft(
-            url: 'https://jsonplaceholder.typicode.com/posts/1',
-          ),
-        );
-        await robot.openEditor();
-        await robot.selectMoreAction('Cookies');
-        await tester.tap(
-          find.byKey(
-            const ValueKey<String>(AppWidgetKeys.requestsCookiesAddButton),
-          ),
-        );
-        await tester.pumpAndSettle();
+      await robot.pumpScreen(
+        initialDraft: const RequestDraft(
+          url: 'https://jsonplaceholder.typicode.com/posts/1',
+        ),
+      );
+      await robot.openEditor();
+      await robot.selectMoreAction('Cookies');
+      await tester.tap(
+        find.byKey(
+          const ValueKey<String>(AppWidgetKeys.requestsCookiesAddButton),
+        ),
+      );
+      await tester.pumpAndSettle();
 
-        final domainField = tester.widget<TextFormField>(
-          find.byKey(
-            ValueKey<String>(AppWidgetKeys.requestsCookieField('domain')),
-          ),
-        );
-        expect(domainField.controller?.text, 'jsonplaceholder.typicode.com');
-      },
-    );
+      final domainField = tester.widget<TextFormField>(
+        find.byKey(
+          ValueKey<String>(AppWidgetKeys.requestsCookieField('domain')),
+        ),
+      );
+      expect(domainField.controller?.text, 'jsonplaceholder.typicode.com');
+    });
 
     testWidgets(
       'should switch current request into GraphQL mode from more menu',
@@ -994,7 +1037,10 @@ void main() {
           ),
         ),
       );
-      expect(headerField.controller?.text, startsWith('Hawk id="dh37fgj492je"'));
+      expect(
+        headerField.controller?.text,
+        startsWith('Hawk id="dh37fgj492je"'),
+      );
       expect(headerField.controller?.text, isNot(contains('hawk-key')));
     });
 
@@ -1102,7 +1148,9 @@ class RequestEditorSheetRobot {
 
   Future<void> openAuthMenu() async {
     final moreButton = find.byKey(
-      const ValueKey<String>(AppWidgetKeys.requestsEditorManageCredentialsButton),
+      const ValueKey<String>(
+        AppWidgetKeys.requestsEditorManageCredentialsButton,
+      ),
     );
     await tester.ensureVisible(moreButton);
     await tester.tap(moreButton);

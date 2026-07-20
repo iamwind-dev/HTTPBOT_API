@@ -249,7 +249,11 @@ class RequestEditorCubit extends Cubit<RequestEditorState> {
         existingHeader.isAnySystemGeneratedHeader &&
             (existingHeader.key != header.key ||
                 existingHeader.value != header.value)
-        ? header.copyWith(description: '')
+        ? header.copyWith(
+            description: '',
+            source: RequestHeaderSource.user,
+            systemTag: '',
+          )
         : header;
     updateHeaders(updatedHeaders);
   }

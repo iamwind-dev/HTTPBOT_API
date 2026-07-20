@@ -36,6 +36,7 @@ OAuth2AuthSyncResult syncOAuth2AuthToRequestFields({
   if (auth.oauth2.sendsTokenAsHeader) {
     final hasUserDefinedAuthorization = sanitizedHeaders.any(
       (item) =>
+          item.isEnabled &&
           item.key.trim().toLowerCase() == 'authorization' &&
           !item.isSystemGeneratedAuthorizationHeader &&
           !item.isSystemGeneratedAwsHeader,
@@ -66,7 +67,7 @@ OAuth2AuthSyncResult syncOAuth2AuthToRequestFields({
   }
 
   final hasUserDefinedAccessToken = sanitizedQueryParameters.any(
-    (item) => item.key.trim() == 'access_token',
+    (item) => item.isEnabled && item.key.trim() == 'access_token',
   );
 
   if (hasUserDefinedAccessToken) {

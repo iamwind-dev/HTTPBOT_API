@@ -5,7 +5,9 @@ import '../entities/request_draft.dart';
 import '../entities/request_key_value.dart';
 import '../entities/resolved_request.dart';
 import '../helpers/api_key_auth_ui_sync.dart';
+import '../helpers/aws_headers_updater.dart';
 import '../helpers/hawk_auth_ui_sync.dart';
+import '../helpers/hawk_authorization_header_builder.dart';
 import '../helpers/jwt_auth_ui_sync.dart';
 import '../helpers/oauth1_auth_ui_sync.dart';
 import '../helpers/oauth2_auth_ui_sync.dart';
@@ -20,10 +22,14 @@ class ApplyRequestAuthUseCase {
   final SyncRequestAuthHeadersUseCase _syncRequestAuthHeadersUseCase;
 
   /// Applies supported auth modes to request headers or query parameters after variable resolution.
-  AuthAppliedRequest call({required ResolvedRequest resolvedRequest}) {
+  AuthAppliedRequest call({
+    required ResolvedRequest resolvedRequest,
+    HawkSigningContext? hawkSigningContext,
+  }) {
     final applier = _RequestAuthApplier(
       resolvedRequest: resolvedRequest,
       syncRequestAuthHeadersUseCase: _syncRequestAuthHeadersUseCase,
+      hawkSigningContext: hawkSigningContext,
     );
 
     return applier.apply();
@@ -34,10 +40,12 @@ class _RequestAuthApplier {
   const _RequestAuthApplier({
     required this.resolvedRequest,
     required this.syncRequestAuthHeadersUseCase,
+    this.hawkSigningContext,
   });
 
   final ResolvedRequest resolvedRequest;
   final SyncRequestAuthHeadersUseCase syncRequestAuthHeadersUseCase;
+  final HawkSigningContext? hawkSigningContext;
 
   /// Produces the request shape expected by the executor after auth mutations have been applied.
   AuthAppliedRequest apply() {
@@ -47,8 +55,9 @@ class _RequestAuthApplier {
       case AuthType.none:
       case AuthType.basic:
       case AuthType.bearerToken:
-      case AuthType.awsSignature:
         return _applyHeaderDrivenAuth();
+      case AuthType.awsSignature:
+        return _applyAwsAuth();
       case AuthType.jwt:
         return _applyJwtAuth();
       case AuthType.apiKey:
@@ -79,6 +88,26 @@ class _RequestAuthApplier {
     return _buildResult(
       request: _rebuildRequest(
         headers: nextHeaders,
+        auth: const RequestAuthDraft.none(),
+      ),
+    );
+  }
+
+  /// Applies AWS SigV4 headers or presigned query parameters after resolution.
+  AuthAppliedRequest _applyAwsAuth() {
+    final syncedFields = syncAwsAuthToRequestFields(
+      queryParameters: resolvedRequest.request.queryParameters,
+      headers: resolvedRequest.request.headers,
+      auth: resolvedRequest.request.auth,
+      method: resolvedRequest.request.method,
+      url: resolvedRequest.request.url,
+      body: resolvedRequest.request.body,
+    );
+
+    return _buildResult(
+      request: _rebuildRequest(
+        headers: syncedFields.headers,
+        queryParameters: syncedFields.queryParameters,
         auth: const RequestAuthDraft.none(),
       ),
     );
@@ -341,6 +370,7 @@ class _RequestAuthApplier {
       method: resolvedRequest.request.method,
       url: resolvedRequest.request.url,
       body: resolvedRequest.request.body,
+      signingContext: hawkSigningContext,
     );
 
     if (syncedFields.errorMessage != null) {

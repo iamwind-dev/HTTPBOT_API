@@ -9,15 +9,13 @@ void main() {
   group('MD4', () {
     test('hashes the empty string to the known RFC 1320 vector', () {
       final digest = md4(const <int>[]);
-      final hex =
-          digest.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+      final hex = digest.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
       expect(hex, '31d6cfe0d16ae931b73c59d7e0c089c0');
     });
 
     test('hashes "abc" to the known RFC 1320 vector', () {
       final digest = md4('abc'.codeUnits);
-      final hex =
-          digest.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+      final hex = digest.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
       expect(hex, 'a448017aaf21d8525fc10ae87aa6729d');
     });
   });
@@ -37,8 +35,66 @@ void main() {
   group('NTLM Type-2 parsing', () {
     test('extracts the 8-byte server challenge and target info', () {
       final parsed = parseType2Message(_minimalType2());
-      expect(parsed.serverChallenge, Uint8List.fromList([1, 2, 3, 4, 5, 6, 7, 8]));
+      expect(
+        parsed.serverChallenge,
+        Uint8List.fromList([1, 2, 3, 4, 5, 6, 7, 8]),
+      );
       expect(parsed.targetInfo, isEmpty);
+    });
+
+    test(
+      'rejects malformed base64 and messages shorter than the fixed header',
+      () {
+        expect(() => parseType2Message('%%%'), throwsFormatException);
+        expect(
+          () => parseType2Message(base64Encode(List<int>.filled(31, 0))),
+          throwsFormatException,
+        );
+      },
+    );
+
+    test('rejects invalid signatures and non-Type-2 messages', () {
+      expect(
+        () => parseType2Message(_type2WithByte(0, 'X'.codeUnitAt(0))),
+        throwsFormatException,
+      );
+      expect(
+        () => parseType2Message(_type2WithByte(8, 3)),
+        throwsFormatException,
+      );
+    });
+
+    test('rejects out-of-bounds target-name and target-info buffers', () {
+      expect(
+        () => parseType2Message(_type2WithUint32(16, 4096)),
+        throwsFormatException,
+      );
+      expect(
+        () => parseType2Message(_type2WithUint32(44, 4096, lengthOffset: 40)),
+        throwsFormatException,
+      );
+    });
+  });
+
+  group('NTLM challenge selection', () {
+    test('selects NTLM case-insensitively across values and schemes', () {
+      final token = _minimalType2();
+      expect(
+        selectNtlmChallenge([
+          'Negotiate, Basic realm="test"',
+          'nTlM $token, Bearer realm="api"',
+        ]),
+        token,
+      );
+    });
+
+    test('returns null for missing, bare, and malformed NTLM challenges', () {
+      expect(selectNtlmChallenge(const <String>[]), isNull);
+      expect(
+        selectNtlmChallenge(const ['Negotiate', 'Basic realm="test"']),
+        isNull,
+      );
+      expect(selectNtlmChallenge(const ['NTLM', 'NTLM %%%']), isNull);
     });
   });
 
@@ -66,8 +122,31 @@ void main() {
 }
 
 List<int> _uint16le(int value) => [value & 0xFF, (value >> 8) & 0xFF];
-List<int> _uint32le(int value) =>
-    [value & 0xFF, (value >> 8) & 0xFF, (value >> 16) & 0xFF, (value >> 24) & 0xFF];
+List<int> _uint32le(int value) => [
+  value & 0xFF,
+  (value >> 8) & 0xFF,
+  (value >> 16) & 0xFF,
+  (value >> 24) & 0xFF,
+];
+
+/// Returns a Type 2 fixture with one byte replaced.
+String _type2WithByte(int offset, int value) {
+  final bytes = base64Decode(_minimalType2());
+  bytes[offset] = value;
+  return base64Encode(bytes);
+}
+
+/// Returns a Type 2 fixture with a non-empty security buffer at an offset.
+String _type2WithUint32(int offset, int value, {int lengthOffset = 12}) {
+  final bytes = base64Decode(_minimalType2());
+  bytes[lengthOffset] = 4;
+  bytes[lengthOffset + 1] = 0;
+  bytes[lengthOffset + 2] = 4;
+  bytes[lengthOffset + 3] = 0;
+  final encoded = _uint32le(value);
+  bytes.setRange(offset, offset + encoded.length, encoded);
+  return base64Encode(bytes);
+}
 
 String _minimalType2() {
   final builder = BytesBuilder();

@@ -8,20 +8,34 @@ import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_theme_context.dart';
 import '../../../../injection/injection.dart';
+import '../../../request_builder/domain/entities/api_key_auth_options.dart';
 import '../../../request_builder/domain/entities/request_auth_draft.dart';
+import '../../../request_builder/domain/entities/request_body_draft.dart';
 import '../../../request_builder/domain/entities/request_environment.dart';
+import '../../../request_builder/domain/entities/request_draft.dart';
 import '../../../request_builder/domain/entities/request_key_value.dart';
 import '../../../request_builder/domain/entities/request_variable_store.dart';
 import '../../../request_builder/domain/entities/saved_credential.dart';
+import '../../../request_builder/domain/helpers/auth_headers_updater.dart';
+import '../../../request_builder/domain/helpers/api_key_auth_ui_sync.dart';
+import '../../../request_builder/domain/helpers/aws_headers_updater.dart';
+import '../../../request_builder/domain/helpers/oauth1_auth_ui_sync.dart';
+import '../../../request_builder/domain/helpers/oauth2_auth_ui_sync.dart';
+import '../../../request_builder/domain/helpers/jwt_auth_ui_sync.dart';
+import '../../../request_builder/domain/helpers/request_auth_validator.dart';
+import '../../../request_builder/domain/entities/requests_method.dart';
 import '../../../request_builder/domain/usecases/apply_api_key_credential_to_auth_use_case.dart';
 import '../../../request_builder/domain/usecases/get_request_variable_store_use_case.dart';
+import '../../../request_builder/domain/usecases/resolve_request_use_case.dart';
 import '../../../request_builder/domain/usecases/save_request_variable_store_use_case.dart';
 import '../../../request_builder/presentation/cubit/environment_menu_cubit.dart';
 import '../../../request_builder/presentation/cubit/manage_credentials_cubit.dart';
 import '../../../request_builder/presentation/cubit/manage_credentials_state.dart';
 import '../../../request_builder/presentation/widgets/global_variables_sheet.dart';
 import '../../../request_builder/presentation/widgets/manage_environments_sheet.dart';
+import '../../../request_builder/presentation/widgets/oauth2_token_details_sheet.dart';
 import '../../../request_builder/presentation/widgets/request_environment_menu.dart';
+import '../../../request_builder/presentation/widgets/request_editor_sheet.dart';
 import '../../../request_builder/presentation/widgets/request_modal_sheet.dart';
 import '../../domain/entities/web_socket_request_entity.dart';
 import '../../domain/entities/web_socket_settings_entity.dart';
@@ -92,6 +106,7 @@ class _WebSocketEditorSheetState extends State<_WebSocketEditorSheet> {
     super.dispose();
   }
 
+  /// Renders the editor from the current Cubit state and derived auth previews.
   @override
   Widget build(BuildContext context) {
     final colors = context.appColors;
@@ -105,6 +120,45 @@ class _WebSocketEditorSheetState extends State<_WebSocketEditorSheet> {
 
         final isConnecting =
             state.status == WebSocketConnectionStatus.connecting;
+        final displayedHeaders = syncAuthorizationHeaderWithAuth(
+          headers: state.request.headers,
+          auth: state.request.auth,
+        );
+        final apiKeyPreview = syncApiKeyAuthToRequestFields(
+          queryParameters: state.request.queryParameters,
+          headers: displayedHeaders,
+          auth: state.request.auth,
+        );
+        final oauth1Preview = syncOAuth1AuthToRequestFields(
+          queryParameters: apiKeyPreview.queryParameters,
+          headers: apiKeyPreview.headers,
+          auth: _authWithoutWebSocketBodyHash(state.request.auth),
+          method: HttpMethod.get,
+          url: _webSocketOAuthPreviewUrl(state.request.url),
+          body: const RequestBodyDraft.none(),
+        );
+        final oauth2Preview = syncOAuth2AuthToRequestFields(
+          queryParameters: oauth1Preview.queryParameters,
+          headers: oauth1Preview.headers,
+          auth: state.request.auth,
+        );
+        final jwtPreview = syncJwtAuthToRequestFields(
+          queryParameters: oauth2Preview.queryParameters,
+          headers: oauth2Preview.headers,
+          auth: state.request.auth,
+        );
+        final awsPreview = syncAwsAuthToRequestFields(
+          queryParameters: jwtPreview.queryParameters,
+          headers: jwtPreview.headers,
+          auth: state.request.auth,
+          method: HttpMethod.get,
+          url: _webSocketOAuthPreviewUrl(state.request.url),
+          body: const RequestBodyDraft.none(),
+        );
+        final hasAuthorizationOverride = _hasAuthorizationOverride(
+          state.request.headers,
+          state.request.auth,
+        );
 
         return RequestModalSheetCard(
           child: Column(
@@ -123,9 +177,11 @@ class _WebSocketEditorSheetState extends State<_WebSocketEditorSheet> {
               Expanded(
                 child: ListView(
                   physics: const ClampingScrollPhysics(),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.medium,
-                    vertical: AppSpacing.small,
+                  padding: const EdgeInsets.only(
+                    left: AppSpacing.medium,
+                    right: AppSpacing.medium,
+                    top: AppSpacing.small,
+                    bottom: AppSpacing.medium,
                   ),
                   children: [
                     _EditorCard(
@@ -148,7 +204,7 @@ class _WebSocketEditorSheetState extends State<_WebSocketEditorSheet> {
                     const SizedBox(height: AppSpacing.medium),
                     _SectionHeader(title: 'Query Params'),
                     _ParamsHeadersListCard(
-                      items: state.request.queryParameters,
+                      items: awsPreview.queryParameters,
                       onChanged: context
                           .read<WebSocketCubit>()
                           .updateQueryParameters,
@@ -158,11 +214,20 @@ class _WebSocketEditorSheetState extends State<_WebSocketEditorSheet> {
                     const SizedBox(height: AppSpacing.medium),
                     _SectionHeader(title: 'Headers'),
                     _ParamsHeadersListCard(
-                      items: state.request.headers,
+                      items: awsPreview.headers,
                       onChanged: context.read<WebSocketCubit>().updateHeaders,
                       hintKey: 'Header Key',
                       hintVal: 'Header Value',
                     ),
+                    if (hasAuthorizationOverride) ...[
+                      const SizedBox(height: AppSpacing.xSmall),
+                      Text(
+                        'Explicit Authorization header overrides generated auth.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colors.textSecondary,
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: AppSpacing.medium),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -180,6 +245,9 @@ class _WebSocketEditorSheetState extends State<_WebSocketEditorSheet> {
                     ),
                     _EditorCard(
                       child: ListTile(
+                        key: const ValueKey<String>(
+                          AppWidgetKeys.websocketsAuthTypeField,
+                        ),
                         contentPadding: EdgeInsets.zero,
                         title: Text('Auth', style: theme.textTheme.titleMedium),
                         trailing: Row(
@@ -207,8 +275,19 @@ class _WebSocketEditorSheetState extends State<_WebSocketEditorSheet> {
                     if (state.request.auth.type != AuthType.none) ...[
                       const SizedBox(height: AppSpacing.small),
                       _AuthFieldsCard(
+                        key: ValueKey<String>(
+                          AppWidgetKeys.websocketsAuthFields(
+                            state.request.auth.type.name,
+                          ),
+                        ),
                         auth: state.request.auth,
                         onChanged: context.read<WebSocketCubit>().updateAuth,
+                        onConfigureOAuth2: () => unawaited(
+                          _openOAuth2Configuration(
+                            context,
+                            state.request.auth.oauth2,
+                          ),
+                        ),
                       ),
                     ],
                     const SizedBox(height: AppSpacing.xxLarge),
@@ -257,6 +336,7 @@ class _WebSocketEditorSheetState extends State<_WebSocketEditorSheet> {
     );
   }
 
+  /// Validates the visible draft before opening the auto-connect session sheet.
   Future<void> _openSession(BuildContext context) async {
     final error = _validateUrl(
       context.read<WebSocketCubit>().state.request.url,
@@ -268,10 +348,107 @@ class _WebSocketEditorSheetState extends State<_WebSocketEditorSheet> {
       return;
     }
 
+    final draftAuth = context.read<WebSocketCubit>().state.request.auth;
+    final authValidation = draftAuth.type == AuthType.jwt
+        ? const RequestValidationResult.valid()
+        : validateAuthBeforeSend(draftAuth);
+    if (!authValidation.isValid) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            authValidation.errorMessage ?? 'Invalid authentication.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    await _environmentMenuCubit.loadAvailableEnvironments();
+    if (!context.mounted) {
+      return;
+    }
+
+    final resolvedAuthValidation = _validateResolvedAuth(
+      context.read<WebSocketCubit>().state.request,
+    );
+    if (!resolvedAuthValidation.isValid) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            resolvedAuthValidation.errorMessage ?? 'Invalid authentication.',
+          ),
+        ),
+      );
+      return;
+    }
+
     await showWebSocketSessionSheet(
       context,
       cubit: context.read<WebSocketCubit>(),
     );
+  }
+
+  /// Validates resolved auth placeholders before the session sheet is opened.
+  RequestValidationResult _validateResolvedAuth(
+    WebSocketRequestEntity request,
+  ) {
+    if (request.auth.type != AuthType.bearerToken &&
+        request.auth.type != AuthType.jwt) {
+      return const RequestValidationResult.valid();
+    }
+
+    final resolved = const ResolveRequestUseCase()(
+      draft: RequestDraft(
+        url: request.url,
+        queryParameters: request.queryParameters,
+        headers: request.headers,
+        auth: request.auth,
+      ),
+      variableStore: _variableStore,
+    );
+    final validation = validateAuthBeforeSend(resolved.request.auth);
+    if (!validation.isValid) {
+      return validation;
+    }
+
+    if (request.auth.type == AuthType.bearerToken &&
+        resolved.issues.any(
+          (issue) => issue.source == 'auth.bearerToken.token',
+        )) {
+      return const RequestValidationResult.invalid('Bearer token is required.');
+    }
+
+    return const RequestValidationResult.valid();
+  }
+
+  /// Opens the shared OAuth2 flow and keeps WebSocket token-location preferences.
+  Future<void> _openOAuth2Configuration(
+    BuildContext context,
+    OAuth2AuthDraft initialOauth2,
+  ) async {
+    final result = await showOAuth2ConfigurationSheet(
+      context,
+      initialOauth2: initialOauth2,
+    );
+    if (!context.mounted || result == null) {
+      return;
+    }
+
+    final cubit = context.read<WebSocketCubit>();
+    final currentAuth = cubit.state.request.auth;
+    cubit.updateAuth(
+      currentAuth.copyWith(
+        oauth2: result.oauth2.copyWith(
+          addTokenToHeader: currentAuth.oauth2.addTokenToHeader,
+          headerPrefix: currentAuth.oauth2.headerPrefix,
+        ),
+      ),
+    );
+
+    final tokenDetails = result.tokenDetails;
+    if (tokenDetails != null && context.mounted) {
+      await showOAuth2TokenDetailsSheet(context, tokenDetails: tokenDetails);
+    }
   }
 
   String? _validateUrl(String url) {
@@ -322,9 +499,7 @@ class _WebSocketEditorSheetState extends State<_WebSocketEditorSheet> {
                               : null,
                           onTap: () {
                             context.read<WebSocketCubit>().updateAuth(
-                              type == AuthType.none
-                                  ? const RequestAuthDraft.none()
-                                  : currentAuth.copyWith(type: type),
+                              currentAuth.copyWith(type: type),
                             );
                             Navigator.pop(sheetContext);
                           },
@@ -577,12 +752,71 @@ String _webSocketAuthLabel(AuthType type) {
   return type.label;
 }
 
+/// Returns true when an enabled manual Authorization row suppresses generated auth.
+bool _hasAuthorizationOverride(
+  List<KeyValueItem> headers,
+  RequestAuthDraft auth,
+) =>
+    (auth.type == AuthType.basic ||
+        auth.type == AuthType.bearerToken ||
+        auth.type == AuthType.hawk) &&
+    headers.any(
+      (header) =>
+          header.isEnabled &&
+          header.key.trim().toLowerCase() == 'authorization' &&
+          !header.isBasicAuthSystemGeneratedHeader &&
+          !header.isBearerTokenSystemGeneratedHeader &&
+          !header.isSystemGeneratedHawkHeader,
+    );
+
+/// Disables OAuth body hash for the bodyless WebSocket preview.
+RequestAuthDraft _authWithoutWebSocketBodyHash(RequestAuthDraft auth) {
+  if (auth.type != AuthType.oauth1 || !auth.oauth1.includeBodyHash) {
+    return auth;
+  }
+
+  return auth.copyWith(oauth1: auth.oauth1.copyWith(includeBodyHash: false));
+}
+
+/// Converts ws/wss URLs to the HTTP scheme used by OAuth signing previews.
+String _webSocketOAuthPreviewUrl(String url) {
+  final uri = Uri.tryParse(url);
+  if (uri == null) {
+    return url;
+  }
+  if (uri.scheme == 'wss') {
+    return uri.replace(scheme: 'https').toString();
+  }
+  if (uri.scheme == 'ws') {
+    return uri.replace(scheme: 'http').toString();
+  }
+  return url;
+}
+
 class _AuthFieldsCard extends StatelessWidget {
-  const _AuthFieldsCard({required this.auth, required this.onChanged});
+  /// Creates the auth field subtree for one stable authentication mode.
+  const _AuthFieldsCard({
+    super.key,
+    required this.auth,
+    required this.onChanged,
+    required this.onConfigureOAuth2,
+  });
 
   final RequestAuthDraft auth;
   final ValueChanged<RequestAuthDraft> onChanged;
+  final VoidCallback onConfigureOAuth2;
 
+  static const List<String> _oauth1SignatureMethods = <String>[
+    'HMAC-SHA1',
+    'HMAC-SHA256',
+    'HMAC-SHA512',
+    'RSA-SHA1',
+    'RSA-SHA256',
+    'RSA-SHA512',
+    'PLAINTEXT',
+  ];
+
+  /// Renders fields for the selected WebSocket auth mode.
   @override
   Widget build(BuildContext context) {
     return _EditorCard(
@@ -590,6 +824,7 @@ class _AuthFieldsCard extends StatelessWidget {
         children: switch (auth.type) {
           AuthType.basic => [
             _AuthTextField(
+              fieldKey: AppWidgetKeys.websocketsBasicUsernameField,
               label: 'Username',
               value: auth.basic.username,
               onChanged: (value) => onChanged(
@@ -602,6 +837,7 @@ class _AuthFieldsCard extends StatelessWidget {
               ),
             ),
             _AuthTextField(
+              fieldKey: AppWidgetKeys.websocketsBasicPasswordField,
               label: 'Password',
               value: auth.basic.password,
               obscureText: true,
@@ -616,52 +852,13 @@ class _AuthFieldsCard extends StatelessWidget {
             ),
           ],
           AuthType.apiKey => [
-            _AuthTextField(
-              label: 'Key',
-              value: auth.apiKey.name,
-              onChanged: (value) => onChanged(
-                auth.copyWith(
-                  apiKey: ApiKeyAuthDraft(
-                    name: value,
-                    value: auth.apiKey.value,
-                    location: auth.apiKey.location,
-                  ),
-                ),
-              ),
-            ),
-            _AuthTextField(
-              label: 'Value',
-              value: auth.apiKey.value,
-              obscureText: true,
-              onChanged: (value) => onChanged(
-                auth.copyWith(
-                  apiKey: ApiKeyAuthDraft(
-                    name: auth.apiKey.name,
-                    value: value,
-                    location: auth.apiKey.location,
-                  ),
-                ),
-              ),
-            ),
-            _AuthDropdown<ApiKeyLocation>(
-              label: 'Add To',
-              value: auth.apiKey.location,
-              values: ApiKeyLocation.values,
-              labelFor: (value) => value.label,
-              onChanged: (value) => onChanged(
-                auth.copyWith(
-                  apiKey: ApiKeyAuthDraft(
-                    name: auth.apiKey.name,
-                    value: auth.apiKey.value,
-                    location: value,
-                  ),
-                ),
-              ),
-            ),
+            _ApiKeyAuthFields(auth: auth, onChanged: onChanged),
           ],
           AuthType.bearerToken => [
             _AuthTextField(
+              fieldKey: AppWidgetKeys.websocketsAuthField('bearer_token'),
               label: 'Token',
+              hintText: 'Enter Value',
               value: auth.bearerToken.token,
               obscureText: true,
               onChanged: (value) => onChanged(
@@ -673,39 +870,21 @@ class _AuthFieldsCard extends StatelessWidget {
                 ),
               ),
             ),
-            _AuthTextField(
-              label: 'Prefix',
-              value: auth.bearerToken.prefix,
-              onChanged: (value) => onChanged(
-                auth.copyWith(
-                  bearerToken: BearerTokenAuthDraft(
-                    token: auth.bearerToken.token,
-                    prefix: value,
-                  ),
-                ),
-              ),
-            ),
           ],
           AuthType.oauth2 => [
             _AuthTextField(
-              label: 'Access Token',
+              fieldKey: AppWidgetKeys.websocketsAuthField(
+                'oauth2_access_token',
+              ),
+              label: 'Token',
               value: auth.oauth2.accessToken,
               obscureText: true,
               onChanged: (value) => onChanged(
                 auth.copyWith(oauth2: auth.oauth2.copyWith(accessToken: value)),
               ),
             ),
-            _AuthTextField(
-              label: 'Header Prefix',
-              value: auth.oauth2.headerPrefix,
-              onChanged: (value) => onChanged(
-                auth.copyWith(
-                  oauth2: auth.oauth2.copyWith(headerPrefix: value),
-                ),
-              ),
-            ),
             _AuthSwitchRow(
-              label: 'Send As Header',
+              label: 'As Header',
               value: auth.oauth2.addTokenToHeader,
               onChanged: (value) => onChanged(
                 auth.copyWith(
@@ -713,24 +892,59 @@ class _AuthFieldsCard extends StatelessWidget {
                 ),
               ),
             ),
+            if (auth.oauth2.addTokenToHeader)
+              _AuthTextField(
+                fieldKey: AppWidgetKeys.websocketsAuthField(
+                  'oauth2_header_prefix',
+                ),
+                label: 'Header Prefix',
+                value: auth.oauth2.headerPrefix,
+                onChanged: (value) => onChanged(
+                  auth.copyWith(
+                    oauth2: auth.oauth2.copyWith(headerPrefix: value),
+                  ),
+                ),
+              ),
+            ListTile(
+              key: const ValueKey<String>(
+                AppWidgetKeys.requestsEditorOAuth2ConfigureButton,
+              ),
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Configure'),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(auth.oauth2.grantType.label),
+                  const SizedBox(width: AppSpacing.small),
+                  const Icon(CupertinoIcons.chevron_right),
+                ],
+              ),
+              onTap: onConfigureOAuth2,
+            ),
           ],
           AuthType.jwt => [
             _AuthTextField(
-              label: 'Payload JSON',
+              fieldKey: AppWidgetKeys.websocketsAuthField('jwt_header'),
+              label: 'Header',
+              value: auth.jwt.header,
+              hintText: 'Enter Value',
+              maxLines: 3,
+              onChanged: (value) => onChanged(
+                auth.copyWith(jwt: auth.jwt.copyWith(header: value)),
+              ),
+            ),
+            _AuthTextField(
+              fieldKey: AppWidgetKeys.websocketsAuthField('jwt_payload'),
+              label: 'Payload',
               value: auth.jwt.payload,
+              hintText: 'Enter Value',
+              maxLines: 3,
               onChanged: (value) => onChanged(
                 auth.copyWith(jwt: auth.jwt.copyWith(payload: value)),
               ),
             ),
-            _AuthTextField(
-              label: 'Secret',
-              value: auth.jwt.secret,
-              obscureText: true,
-              onChanged: (value) => onChanged(
-                auth.copyWith(jwt: auth.jwt.copyWith(secret: value)),
-              ),
-            ),
             _AuthDropdown<JwtAlgorithm>(
+              fieldKey: AppWidgetKeys.websocketsAuthField('jwt_algorithm'),
               label: 'Algorithm',
               value: auth.jwt.selectedAlgorithm,
               values: JwtAlgorithm.values,
@@ -739,16 +953,66 @@ class _AuthFieldsCard extends StatelessWidget {
                 auth.copyWith(jwt: auth.jwt.copyWith(algorithm: value.label)),
               ),
             ),
+            if (auth.jwt.isHmacAlgorithm) ...[
+              _AuthSwitchRow(
+                fieldKey: AppWidgetKeys.websocketsAuthField(
+                  'jwt_base64_encoded_secret',
+                ),
+                label: 'Base64 Encoded Secret',
+                value: auth.jwt.base64EncodedSecret,
+                onChanged: (value) => onChanged(
+                  auth.copyWith(
+                    jwt: auth.jwt.copyWith(base64EncodedSecret: value),
+                  ),
+                ),
+              ),
+              _AuthTextField(
+                fieldKey: AppWidgetKeys.websocketsAuthField('jwt_secret'),
+                label: 'Secret',
+                value: auth.jwt.secret,
+                obscureText: true,
+                hintText: 'Enter Value',
+                onChanged: (value) => onChanged(
+                  auth.copyWith(jwt: auth.jwt.copyWith(secret: value)),
+                ),
+              ),
+            ] else
+              _AuthTextField(
+                fieldKey: AppWidgetKeys.websocketsAuthField('jwt_private_key'),
+                label: 'Private Key',
+                value: auth.jwt.privateKey,
+                hintText: 'Enter Value',
+                maxLines: 5,
+                onChanged: (value) => onChanged(
+                  auth.copyWith(jwt: auth.jwt.copyWith(privateKey: value)),
+                ),
+              ),
             _AuthSwitchRow(
-              label: 'Send As Header',
+              fieldKey: AppWidgetKeys.websocketsAuthField('jwt_send_as_header'),
+              label: 'Send as Header',
               value: auth.jwt.sendAsHeader,
               onChanged: (value) => onChanged(
                 auth.copyWith(jwt: auth.jwt.copyWith(sendAsHeader: value)),
               ),
             ),
+            if (auth.jwt.sendAsHeader)
+              _AuthTextField(
+                fieldKey: AppWidgetKeys.websocketsAuthField(
+                  'jwt_header_prefix',
+                ),
+                label: 'Header Prefix',
+                value: auth.jwt.prefix,
+                hintText: 'Bearer',
+                onChanged: (value) => onChanged(
+                  auth.copyWith(jwt: auth.jwt.copyWith(prefix: value)),
+                ),
+              ),
           ],
           AuthType.oauth1 => [
             _AuthTextField(
+              fieldKey: AppWidgetKeys.websocketsAuthField(
+                'oauth1_consumer_key',
+              ),
               label: 'Consumer Key',
               value: auth.oauth1.consumerKey,
               onChanged: (value) => onChanged(
@@ -756,6 +1020,9 @@ class _AuthFieldsCard extends StatelessWidget {
               ),
             ),
             _AuthTextField(
+              fieldKey: AppWidgetKeys.websocketsAuthField(
+                'oauth1_consumer_secret',
+              ),
               label: 'Consumer Secret',
               value: auth.oauth1.consumerSecret,
               obscureText: true,
@@ -766,6 +1033,7 @@ class _AuthFieldsCard extends StatelessWidget {
               ),
             ),
             _AuthTextField(
+              fieldKey: AppWidgetKeys.websocketsAuthField('oauth1_token'),
               label: 'Token',
               value: auth.oauth1.token,
               onChanged: (value) => onChanged(
@@ -773,6 +1041,9 @@ class _AuthFieldsCard extends StatelessWidget {
               ),
             ),
             _AuthTextField(
+              fieldKey: AppWidgetKeys.websocketsAuthField(
+                'oauth1_token_secret',
+              ),
               label: 'Token Secret',
               value: auth.oauth1.tokenSecret,
               obscureText: true,
@@ -780,31 +1051,125 @@ class _AuthFieldsCard extends StatelessWidget {
                 auth.copyWith(oauth1: auth.oauth1.copyWith(tokenSecret: value)),
               ),
             ),
+            _AuthDropdown<String>(
+              label: 'Signature Method',
+              value: auth.oauth1.signatureMethod,
+              values: _oauth1SignatureMethods,
+              labelFor: (value) => value,
+              onChanged: (value) => onChanged(
+                auth.copyWith(
+                  oauth1: auth.oauth1.copyWith(signatureMethod: value),
+                ),
+              ),
+            ),
+            _AuthTextField(
+              fieldKey: AppWidgetKeys.websocketsAuthField('oauth1_verifier'),
+              label: 'Verifier',
+              value: auth.oauth1.verifier,
+              onChanged: (value) => onChanged(
+                auth.copyWith(oauth1: auth.oauth1.copyWith(verifier: value)),
+              ),
+            ),
+            _AuthTextField(
+              fieldKey: AppWidgetKeys.websocketsAuthField('oauth1_callback'),
+              label: 'Callback',
+              value: auth.oauth1.callback,
+              onChanged: (value) => onChanged(
+                auth.copyWith(oauth1: auth.oauth1.copyWith(callback: value)),
+              ),
+            ),
+            _AuthTextField(
+              fieldKey: AppWidgetKeys.websocketsAuthField('oauth1_timestamp'),
+              label: 'Timestamp',
+              value: auth.oauth1.timestamp,
+              onChanged: (value) => onChanged(
+                auth.copyWith(oauth1: auth.oauth1.copyWith(timestamp: value)),
+              ),
+            ),
+            _AuthTextField(
+              fieldKey: AppWidgetKeys.websocketsAuthField('oauth1_nonce'),
+              label: 'Nonce',
+              value: auth.oauth1.nonce,
+              onChanged: (value) => onChanged(
+                auth.copyWith(oauth1: auth.oauth1.copyWith(nonce: value)),
+              ),
+            ),
+            _AuthTextField(
+              fieldKey: AppWidgetKeys.websocketsAuthField('oauth1_version'),
+              label: 'Version',
+              value: auth.oauth1.version,
+              onChanged: (value) => onChanged(
+                auth.copyWith(oauth1: auth.oauth1.copyWith(version: value)),
+              ),
+            ),
+            _AuthTextField(
+              fieldKey: AppWidgetKeys.websocketsAuthField('oauth1_realm'),
+              label: 'Realm',
+              value: auth.oauth1.realm,
+              onChanged: (value) => onChanged(
+                auth.copyWith(oauth1: auth.oauth1.copyWith(realm: value)),
+              ),
+            ),
             _AuthSwitchRow(
-              label: 'Send As Authorization Header',
+              label: 'As Header',
               value: auth.oauth1.asHeader,
               onChanged: (value) => onChanged(
                 auth.copyWith(oauth1: auth.oauth1.copyWith(asHeader: value)),
               ),
             ),
+            _AuthSwitchRow(
+              label: 'Include Body Hash',
+              value: auth.oauth1.includeBodyHash,
+              enabled: false,
+              helperText:
+                  'Body hash is not supported for WebSocket handshakes yet.',
+              onChanged: (value) => onChanged(
+                auth.copyWith(
+                  oauth1: auth.oauth1.copyWith(includeBodyHash: value),
+                ),
+              ),
+            ),
+            _AuthSwitchRow(
+              label: 'Encode Signature',
+              value: auth.oauth1.encodeSignature,
+              onChanged: (value) => onChanged(
+                auth.copyWith(
+                  oauth1: auth.oauth1.copyWith(encodeSignature: value),
+                ),
+              ),
+            ),
+            _AuthSwitchRow(
+              label: 'Include Empty Parameters',
+              value: auth.oauth1.includeEmptyParameters,
+              onChanged: (value) => onChanged(
+                auth.copyWith(
+                  oauth1: auth.oauth1.copyWith(includeEmptyParameters: value),
+                ),
+              ),
+            ),
           ],
           AuthType.hawk => [
             _AuthTextField(
+              fieldKey: AppWidgetKeys.websocketsAuthField('hawk_auth_id'),
               label: 'Auth ID',
               value: auth.hawk.identifier,
+              hintText: 'Enter Value',
               onChanged: (value) => onChanged(
                 auth.copyWith(hawk: auth.hawk.copyWith(identifier: value)),
               ),
             ),
             _AuthTextField(
+              fieldKey: AppWidgetKeys.websocketsAuthField('hawk_auth_key'),
               label: 'Auth Key',
               value: auth.hawk.key,
               obscureText: true,
+              hintText: 'Enter Value',
               onChanged: (value) => onChanged(
                 auth.copyWith(hawk: auth.hawk.copyWith(key: value)),
               ),
             ),
             _AuthDropdown<HawkAlgorithm>(
+              fieldKey: AppWidgetKeys.websocketsAuthField('hawk_algorithm'),
               label: 'Algorithm',
               value: auth.hawk.selectedAlgorithm,
               values: HawkAlgorithm.values,
@@ -813,38 +1178,113 @@ class _AuthFieldsCard extends StatelessWidget {
                 auth.copyWith(hawk: auth.hawk.copyWith(algorithm: value.name)),
               ),
             ),
+            _AuthTextField(
+              fieldKey: AppWidgetKeys.websocketsAuthField('hawk_user'),
+              label: 'User',
+              value: auth.hawk.user,
+              hintText: 'Enter Value',
+              onChanged: (value) => onChanged(
+                auth.copyWith(hawk: auth.hawk.copyWith(user: value)),
+              ),
+            ),
+            _AuthTextField(
+              fieldKey: AppWidgetKeys.websocketsAuthField('hawk_nonce'),
+              label: 'Nonce',
+              value: auth.hawk.nonce,
+              hintText: 'Enter Value',
+              onChanged: (value) => onChanged(
+                auth.copyWith(hawk: auth.hawk.copyWith(nonce: value)),
+              ),
+            ),
+            _AuthTextField(
+              fieldKey: AppWidgetKeys.websocketsAuthField('hawk_ext'),
+              label: 'Ext',
+              value: auth.hawk.ext,
+              hintText: 'Enter Value',
+              onChanged: (value) => onChanged(
+                auth.copyWith(hawk: auth.hawk.copyWith(ext: value)),
+              ),
+            ),
+            _AuthTextField(
+              fieldKey: AppWidgetKeys.websocketsAuthField('hawk_app'),
+              label: 'App',
+              value: auth.hawk.app,
+              hintText: 'Enter Value',
+              onChanged: (value) => onChanged(
+                auth.copyWith(hawk: auth.hawk.copyWith(app: value)),
+              ),
+            ),
+            _AuthTextField(
+              fieldKey: AppWidgetKeys.websocketsAuthField('hawk_dlg'),
+              label: 'Dlg',
+              value: auth.hawk.delegation,
+              hintText: 'Enter Value',
+              onChanged: (value) => onChanged(
+                auth.copyWith(hawk: auth.hawk.copyWith(delegation: value)),
+              ),
+            ),
+            _AuthTextField(
+              fieldKey: AppWidgetKeys.websocketsAuthField('hawk_timestamp'),
+              label: 'Timestamp',
+              value: auth.hawk.timestamp,
+              hintText: 'Enter Value',
+              onChanged: (value) => onChanged(
+                auth.copyWith(hawk: auth.hawk.copyWith(timestamp: value)),
+              ),
+            ),
+            _AuthSwitchRow(
+              fieldKey: AppWidgetKeys.websocketsAuthField(
+                'hawk_include_payload_hash',
+              ),
+              label: 'Include Payload Hash',
+              value: auth.hawk.includePayloadHash,
+              onChanged: (value) => onChanged(
+                auth.copyWith(
+                  hawk: auth.hawk.copyWith(includePayloadHash: value),
+                ),
+              ),
+            ),
           ],
           AuthType.digest => [
             _AuthTextField(
+              fieldKey: AppWidgetKeys.websocketsAuthField('digest_username'),
               label: 'Username',
               value: auth.digest.username,
+              hintText: 'Enter Value',
               onChanged: (value) => onChanged(
                 auth.copyWith(digest: auth.digest.copyWith(username: value)),
               ),
             ),
             _AuthTextField(
+              fieldKey: AppWidgetKeys.websocketsAuthField('digest_password'),
               label: 'Password',
               value: auth.digest.password,
               obscureText: true,
+              hintText: 'Enter Value',
               onChanged: (value) => onChanged(
                 auth.copyWith(digest: auth.digest.copyWith(password: value)),
               ),
             ),
             _AuthTextField(
+              fieldKey: AppWidgetKeys.websocketsAuthField('digest_realm'),
               label: 'Realm',
               value: auth.digest.realm,
+              hintText: 'Enter Value',
               onChanged: (value) => onChanged(
                 auth.copyWith(digest: auth.digest.copyWith(realm: value)),
               ),
             ),
             _AuthTextField(
+              fieldKey: AppWidgetKeys.websocketsAuthField('digest_nonce'),
               label: 'Nonce',
               value: auth.digest.nonce,
+              hintText: 'Enter Value',
               onChanged: (value) => onChanged(
                 auth.copyWith(digest: auth.digest.copyWith(nonce: value)),
               ),
             ),
             _AuthDropdown<DigestAlgorithm>(
+              fieldKey: AppWidgetKeys.websocketsAuthField('digest_algorithm'),
               label: 'Algorithm',
               value: auth.digest.selectedAlgorithm,
               values: DigestAlgorithm.values,
@@ -855,114 +1295,129 @@ class _AuthFieldsCard extends StatelessWidget {
                 ),
               ),
             ),
+            _AuthTextField(
+              fieldKey: AppWidgetKeys.websocketsAuthField('digest_qop'),
+              label: 'QOP',
+              value: auth.digest.qop,
+              hintText: 'Enter Value',
+              onChanged: (value) => onChanged(
+                auth.copyWith(digest: auth.digest.copyWith(qop: value)),
+              ),
+            ),
+            _AuthTextField(
+              fieldKey: AppWidgetKeys.websocketsAuthField('digest_nonce_count'),
+              label: 'Nonce Count',
+              value: auth.digest.nonceCount,
+              hintText: 'Enter Value',
+              onChanged: (value) => onChanged(
+                auth.copyWith(digest: auth.digest.copyWith(nonceCount: value)),
+              ),
+            ),
+            _AuthTextField(
+              fieldKey: AppWidgetKeys.websocketsAuthField(
+                'digest_client_nonce',
+              ),
+              label: 'Client Nonce',
+              value: auth.digest.clientNonce,
+              hintText: 'Enter Value',
+              onChanged: (value) => onChanged(
+                auth.copyWith(digest: auth.digest.copyWith(clientNonce: value)),
+              ),
+            ),
+            _AuthTextField(
+              fieldKey: AppWidgetKeys.websocketsAuthField('digest_opaque'),
+              label: 'Opaque',
+              value: auth.digest.opaque,
+              hintText: 'Enter Value',
+              onChanged: (value) => onChanged(
+                auth.copyWith(digest: auth.digest.copyWith(opaque: value)),
+              ),
+            ),
           ],
           AuthType.awsSignature => [
             _AuthTextField(
+              fieldKey: AppWidgetKeys.websocketsAuthField('aws_access_key'),
               label: 'Access Key',
+              hintText: 'Enter Value',
               value: auth.aws.accessKey,
               onChanged: (value) => onChanged(
-                auth.copyWith(
-                  aws: AwsAuthDraft(
-                    accessKey: value,
-                    secretKey: auth.aws.secretKey,
-                    region: auth.aws.region,
-                    service: auth.aws.service,
-                    sessionToken: auth.aws.sessionToken,
-                  ),
-                ),
+                auth.copyWith(aws: auth.aws.copyWith(accessKey: value)),
               ),
             ),
             _AuthTextField(
+              fieldKey: AppWidgetKeys.websocketsAuthField('aws_secret_key'),
               label: 'Secret Key',
+              hintText: 'Enter Value',
               value: auth.aws.secretKey,
               obscureText: true,
               onChanged: (value) => onChanged(
-                auth.copyWith(
-                  aws: AwsAuthDraft(
-                    accessKey: auth.aws.accessKey,
-                    secretKey: value,
-                    region: auth.aws.region,
-                    service: auth.aws.service,
-                    sessionToken: auth.aws.sessionToken,
-                  ),
-                ),
+                auth.copyWith(aws: auth.aws.copyWith(secretKey: value)),
               ),
             ),
             _AuthTextField(
+              fieldKey: AppWidgetKeys.websocketsAuthField('aws_region'),
               label: 'Region',
+              hintText: 'Enter Value',
               value: auth.aws.region,
               onChanged: (value) => onChanged(
-                auth.copyWith(
-                  aws: AwsAuthDraft(
-                    accessKey: auth.aws.accessKey,
-                    secretKey: auth.aws.secretKey,
-                    region: value,
-                    service: auth.aws.service,
-                    sessionToken: auth.aws.sessionToken,
-                  ),
-                ),
+                auth.copyWith(aws: auth.aws.copyWith(region: value)),
               ),
             ),
             _AuthTextField(
+              fieldKey: AppWidgetKeys.websocketsAuthField('aws_service'),
               label: 'Service',
+              hintText: 'Enter Value',
               value: auth.aws.service,
               onChanged: (value) => onChanged(
-                auth.copyWith(
-                  aws: AwsAuthDraft(
-                    accessKey: auth.aws.accessKey,
-                    secretKey: auth.aws.secretKey,
-                    region: auth.aws.region,
-                    service: value,
-                    sessionToken: auth.aws.sessionToken,
-                  ),
-                ),
+                auth.copyWith(aws: auth.aws.copyWith(service: value)),
               ),
             ),
             _AuthTextField(
+              fieldKey: AppWidgetKeys.websocketsAuthField('aws_session_token'),
               label: 'Session Token',
+              hintText: 'Enter Value',
               value: auth.aws.sessionToken,
               obscureText: true,
               onChanged: (value) => onChanged(
-                auth.copyWith(
-                  aws: AwsAuthDraft(
-                    accessKey: auth.aws.accessKey,
-                    secretKey: auth.aws.secretKey,
-                    region: auth.aws.region,
-                    service: auth.aws.service,
-                    sessionToken: value,
-                  ),
-                ),
+                auth.copyWith(aws: auth.aws.copyWith(sessionToken: value)),
+              ),
+            ),
+            _AuthSwitchRow(
+              fieldKey: AppWidgetKeys.websocketsAuthField('aws_as_header'),
+              label: 'As Header',
+              value: auth.aws.asHeader,
+              onChanged: (value) => onChanged(
+                auth.copyWith(aws: auth.aws.copyWith(asHeader: value)),
               ),
             ),
           ],
           AuthType.ntlm => [
             _AuthTextField(
+              fieldKey: AppWidgetKeys.websocketsAuthField('ntlm_username'),
               label: 'Username',
               value: auth.ntlm.username,
+              hintText: 'Enter Value',
               onChanged: (value) => onChanged(
                 auth.copyWith(ntlm: auth.ntlm.copyWith(username: value)),
               ),
             ),
             _AuthTextField(
+              fieldKey: AppWidgetKeys.websocketsAuthField('ntlm_password'),
               label: 'Password',
               value: auth.ntlm.password,
               obscureText: true,
+              hintText: 'Enter Value',
               onChanged: (value) => onChanged(
                 auth.copyWith(ntlm: auth.ntlm.copyWith(password: value)),
               ),
             ),
             _AuthTextField(
+              fieldKey: AppWidgetKeys.websocketsAuthField('ntlm_domain'),
               label: 'Domain',
               value: auth.ntlm.domain,
+              hintText: 'Enter Value',
               onChanged: (value) => onChanged(
                 auth.copyWith(ntlm: auth.ntlm.copyWith(domain: value)),
-              ),
-            ),
-            _AuthTextField(
-              label: 'Workstation',
-              value: auth.ntlm.workstation,
-              onChanged: (value) => onChanged(
-                auth.copyWith(ntlm: auth.ntlm.copyWith(workstation: value)),
               ),
             ),
           ],
@@ -973,32 +1428,137 @@ class _AuthFieldsCard extends StatelessWidget {
   }
 }
 
+class _ApiKeyAuthFields extends StatelessWidget {
+  /// Creates API Key controls backed by the shared auth draft.
+  const _ApiKeyAuthFields({required this.auth, required this.onChanged});
+
+  final RequestAuthDraft auth;
+  final ValueChanged<RequestAuthDraft> onChanged;
+
+  /// Returns true when the editor must show the custom-name field.
+  bool get _isCustom =>
+      auth.apiKey.isCustomName || !apiKeyNamePresets.contains(auth.apiKey.name);
+
+  /// Renders preset/custom name, secure value, and placement controls.
+  @override
+  Widget build(BuildContext context) {
+    final apiKey = auth.apiKey;
+
+    return Column(
+      children: [
+        _AuthDropdown<String>(
+          fieldKey: AppWidgetKeys.websocketsAuthField('api_key_name'),
+          label: 'Key Name',
+          value: _isCustom ? apiKeyCustomNameSentinel : apiKey.name,
+          values: <String>[...apiKeyNamePresets, apiKeyCustomNameSentinel],
+          labelFor: (value) =>
+              value == apiKeyCustomNameSentinel ? 'Custom' : value,
+          onChanged: (value) {
+            final isCustomName = value == apiKeyCustomNameSentinel;
+            onChanged(
+              auth.copyWith(
+                apiKey: ApiKeyAuthDraft(
+                  name: isCustomName ? '' : value,
+                  value: apiKey.value,
+                  location: apiKey.location,
+                  isCustomName: isCustomName,
+                ),
+              ),
+            );
+          },
+        ),
+        if (_isCustom)
+          _AuthTextField(
+            fieldKey: AppWidgetKeys.websocketsAuthField('api_key_custom_name'),
+            label: 'Custom Key Name',
+            value: apiKey.name,
+            onChanged: (value) => onChanged(
+              auth.copyWith(
+                apiKey: ApiKeyAuthDraft(
+                  name: value,
+                  value: apiKey.value,
+                  location: apiKey.location,
+                  isCustomName: true,
+                ),
+              ),
+            ),
+          ),
+        _AuthTextField(
+          fieldKey: AppWidgetKeys.websocketsAuthField('api_key_value'),
+          label: 'Value',
+          value: apiKey.value,
+          obscureText: true,
+          onChanged: (value) => onChanged(
+            auth.copyWith(
+              apiKey: ApiKeyAuthDraft(
+                name: apiKey.name,
+                value: value,
+                location: apiKey.location,
+                isCustomName: apiKey.isCustomName,
+              ),
+            ),
+          ),
+        ),
+        _AuthSwitchRow(
+          fieldKey: AppWidgetKeys.websocketsAuthField('api_key_send_as_header'),
+          label: 'Send as Header',
+          value: apiKey.location == ApiKeyLocation.header,
+          onChanged: (value) => onChanged(
+            auth.copyWith(
+              apiKey: ApiKeyAuthDraft(
+                name: apiKey.name,
+                value: apiKey.value,
+                location: value ? ApiKeyLocation.header : ApiKeyLocation.query,
+                isCustomName: apiKey.isCustomName,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _AuthTextField extends StatelessWidget {
   const _AuthTextField({
+    this.fieldKey,
     required this.label,
     required this.value,
     required this.onChanged,
     this.obscureText = false,
+    this.hintText,
+    this.maxLines = 1,
   });
 
+  final String? fieldKey;
   final String label;
   final String value;
   final ValueChanged<String> onChanged;
   final bool obscureText;
+  final String? hintText;
+  final int? maxLines;
 
   @override
   Widget build(BuildContext context) {
     return TextFormField(
+      key: fieldKey == null ? null : ValueKey<String>(fieldKey!),
       initialValue: value,
       obscureText: obscureText,
-      decoration: InputDecoration(labelText: label, border: InputBorder.none),
+      maxLines: maxLines,
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hintText,
+        border: InputBorder.none,
+      ),
       onChanged: onChanged,
     );
   }
 }
 
 class _AuthDropdown<T> extends StatelessWidget {
+  /// Creates a labeled auth selector with an optional stable widget key.
   const _AuthDropdown({
+    this.fieldKey,
     required this.label,
     required this.value,
     required this.values,
@@ -1006,16 +1566,21 @@ class _AuthDropdown<T> extends StatelessWidget {
     required this.onChanged,
   });
 
+  final String? fieldKey;
   final String label;
   final T value;
   final List<T> values;
   final String Function(T value) labelFor;
   final ValueChanged<T> onChanged;
 
+  /// Renders the dropdown while forwarding non-null selections.
   @override
   Widget build(BuildContext context) {
+    final resolvedFieldKey = fieldKey;
     return DropdownButtonFormField<T>(
+      key: resolvedFieldKey == null ? null : ValueKey<String>(resolvedFieldKey),
       initialValue: value,
+      isExpanded: true,
       decoration: InputDecoration(labelText: label, border: InputBorder.none),
       items: values
           .map(
@@ -1033,23 +1598,34 @@ class _AuthDropdown<T> extends StatelessWidget {
 }
 
 class _AuthSwitchRow extends StatelessWidget {
+  /// Creates a labeled auth switch with an optional stable widget key.
   const _AuthSwitchRow({
+    this.fieldKey,
     required this.label,
     required this.value,
     required this.onChanged,
+    this.enabled = true,
+    this.helperText,
   });
 
+  final String? fieldKey;
   final String label;
   final bool value;
   final ValueChanged<bool> onChanged;
+  final bool enabled;
+  final String? helperText;
 
+  /// Renders the adaptive switch and optional helper text.
   @override
   Widget build(BuildContext context) {
+    final resolvedFieldKey = fieldKey;
     return SwitchListTile.adaptive(
+      key: resolvedFieldKey == null ? null : ValueKey<String>(resolvedFieldKey),
       contentPadding: EdgeInsets.zero,
       title: Text(label),
+      subtitle: helperText == null ? null : Text(helperText!),
       value: value,
-      onChanged: onChanged,
+      onChanged: enabled ? onChanged : null,
     );
   }
 }
@@ -1207,139 +1783,157 @@ class _TopBar extends StatelessWidget {
         horizontal: AppSpacing.medium,
         vertical: AppSpacing.small,
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          // Close button
-          GestureDetector(
-            onTap: () => Navigator.of(context).pop(),
-            child: CircleAvatar(
-              radius: 18,
-              backgroundColor: colors.surfaceMuted,
-              child: Icon(
-                CupertinoIcons.xmark,
-                size: 16,
-                color: colors.textPrimary,
-              ),
-            ),
-          ),
-
-          // Title & Rename Action
-          GestureDetector(
-            onTap: () => _showRenameDialog(context),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  requestName,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
+      child: SizedBox(
+        height: kMinInteractiveDimension,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Align(
+              alignment: Alignment.centerLeft,
+              child: IconButton(
+                tooltip: 'Close',
+                onPressed: () => Navigator.of(context).pop(),
+                icon: CircleAvatar(
+                  radius: 18,
+                  backgroundColor: colors.surfaceMuted,
+                  child: Icon(
+                    CupertinoIcons.xmark,
+                    size: 16,
+                    color: colors.textPrimary,
                   ),
                 ),
-                const SizedBox(width: AppSpacing.xxSmall),
-                Icon(
-                  CupertinoIcons.chevron_down,
-                  size: 14,
-                  color: colors.textPrimary,
-                ),
-              ],
-            ),
-          ),
-
-          // More Options Button
-          PopupMenuButton<String>(
-            icon: CircleAvatar(
-              radius: 18,
-              backgroundColor: colors.surfaceMuted,
-              child: Icon(
-                CupertinoIcons.ellipsis,
-                size: 16,
-                color: colors.textPrimary,
               ),
             ),
-            offset: const Offset(0, 48),
-            shape: const RoundedRectangleBorder(
-              borderRadius: BorderRadius.all(Radius.circular(AppRadius.medium)),
-            ),
-            color: colors.card,
-            onSelected: onMoreMenuSelected,
-            itemBuilder: (context) => [
-              PopupMenuItem(
-                value: 'environment',
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: kMinInteractiveDimension,
+              ),
+              child: GestureDetector(
+                onTap: () => _showRenameDialog(context),
                 child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(CupertinoIcons.globe, size: 18),
-                    const SizedBox(width: AppSpacing.small),
-                    Expanded(
+                    Flexible(
                       child: Text(
-                        'Environment',
-                        style: TextStyle(color: colors.textPrimary),
+                        requestName,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
-                    const Icon(CupertinoIcons.chevron_right, size: 14),
-                  ],
-                ),
-              ),
-              PopupMenuItem(
-                value: 'certificates',
-                child: Row(
-                  children: [
-                    const Icon(CupertinoIcons.shield, size: 18),
-                    const SizedBox(width: AppSpacing.small),
-                    Text(
-                      'Certificates',
-                      style: TextStyle(color: colors.textPrimary),
-                    ),
-                  ],
-                ),
-              ),
-              PopupMenuItem(
-                value: 'settings',
-                child: Row(
-                  children: [
-                    const Icon(CupertinoIcons.settings, size: 18),
-                    const SizedBox(width: AppSpacing.small),
-                    Text(
-                      'Settings',
-                      style: TextStyle(color: colors.textPrimary),
-                    ),
-                  ],
-                ),
-              ),
-              PopupMenuItem(
-                value: 'help',
-                child: Row(
-                  children: [
-                    const Icon(CupertinoIcons.question_circle, size: 18),
-                    const SizedBox(width: AppSpacing.small),
-                    Text('Help', style: TextStyle(color: colors.textPrimary)),
-                  ],
-                ),
-              ),
-              const PopupMenuDivider(),
-              PopupMenuItem(
-                value: 'clear',
-                child: Row(
-                  children: [
+                    const SizedBox(width: AppSpacing.xxSmall),
                     Icon(
-                      CupertinoIcons.trash,
-                      size: 18,
-                      color: colors.methodDelete,
-                    ),
-                    const SizedBox(width: AppSpacing.small),
-                    Text(
-                      'Clear',
-                      style: TextStyle(
-                        color: colors.methodDelete,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      CupertinoIcons.chevron_down,
+                      size: 14,
+                      color: colors.textPrimary,
                     ),
                   ],
                 ),
               ),
-            ],
-          ),
-        ],
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: PopupMenuButton<String>(
+                icon: CircleAvatar(
+                  radius: 18,
+                  backgroundColor: colors.surfaceMuted,
+                  child: Icon(
+                    CupertinoIcons.ellipsis,
+                    size: 16,
+                    color: colors.textPrimary,
+                  ),
+                ),
+                offset: const Offset(0, 48),
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.all(
+                    Radius.circular(AppRadius.medium),
+                  ),
+                ),
+                color: colors.card,
+                onSelected: onMoreMenuSelected,
+                itemBuilder: (context) => [
+                  PopupMenuItem(
+                    value: 'environment',
+                    child: Row(
+                      children: [
+                        const Icon(CupertinoIcons.globe, size: 18),
+                        const SizedBox(width: AppSpacing.small),
+                        Expanded(
+                          child: Text(
+                            'Environment',
+                            style: TextStyle(color: colors.textPrimary),
+                          ),
+                        ),
+                        const Icon(CupertinoIcons.chevron_right, size: 14),
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'certificates',
+                    child: Row(
+                      children: [
+                        const Icon(CupertinoIcons.shield, size: 18),
+                        const SizedBox(width: AppSpacing.small),
+                        Text(
+                          'Certificates',
+                          style: TextStyle(color: colors.textPrimary),
+                        ),
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'settings',
+                    child: Row(
+                      children: [
+                        const Icon(CupertinoIcons.settings, size: 18),
+                        const SizedBox(width: AppSpacing.small),
+                        Text(
+                          'Settings',
+                          style: TextStyle(color: colors.textPrimary),
+                        ),
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'help',
+                    child: Row(
+                      children: [
+                        const Icon(CupertinoIcons.question_circle, size: 18),
+                        const SizedBox(width: AppSpacing.small),
+                        Text(
+                          'Help',
+                          style: TextStyle(color: colors.textPrimary),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuDivider(),
+                  PopupMenuItem(
+                    value: 'clear',
+                    child: Row(
+                      children: [
+                        Icon(
+                          CupertinoIcons.trash,
+                          size: 18,
+                          color: colors.methodDelete,
+                        ),
+                        const SizedBox(width: AppSpacing.small),
+                        Text(
+                          'Clear',
+                          style: TextStyle(
+                            color: colors.methodDelete,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1452,6 +2046,17 @@ class _ParamsHeadersListCard extends StatelessWidget {
           ...items.asMap().entries.map((entry) {
             final idx = entry.key;
             final item = entry.value;
+            final generatedLabel = item.systemGeneratedHeaderLabel;
+            final generatedRowLabel =
+                generatedLabel ??
+                (item.isSystemGeneratedOAuth1QueryParameter
+                    ? 'OAuth 1.0a'
+                    : item.isSystemGeneratedOAuth2QueryParameter
+                    ? 'OAuth 2.0'
+                    : item.isSystemGeneratedApiKeyQueryParameter
+                    ? 'API Key'
+                    : null);
+            final isGeneratedAuth = generatedRowLabel != null;
             return Padding(
               key: ValueKey(idx),
               padding: const EdgeInsets.only(bottom: AppSpacing.small),
@@ -1459,53 +2064,77 @@ class _ParamsHeadersListCard extends StatelessWidget {
                 children: [
                   Checkbox(
                     value: item.isEnabled,
-                    onChanged: (val) {
-                      final updated = List<KeyValueItem>.from(items);
-                      updated[idx] = item.copyWith(isEnabled: val ?? true);
-                      onChanged(updated);
-                    },
+                    onChanged: isGeneratedAuth
+                        ? null
+                        : (val) {
+                            final updated = List<KeyValueItem>.from(items);
+                            updated[idx] = item.copyWith(
+                              isEnabled: val ?? true,
+                            );
+                            onChanged(updated);
+                          },
                   ),
                   Expanded(
                     child: TextFormField(
+                      readOnly: isGeneratedAuth,
                       initialValue: item.key,
                       decoration: InputDecoration(
                         hintText: hintKey,
                         border: InputBorder.none,
                       ),
-                      onChanged: (val) {
-                        final updated = List<KeyValueItem>.from(items);
-                        updated[idx] = item.copyWith(key: val);
-                        onChanged(updated);
-                      },
+                      onChanged: isGeneratedAuth
+                          ? null
+                          : (val) {
+                              final updated = List<KeyValueItem>.from(items);
+                              updated[idx] = item.copyWith(key: val);
+                              onChanged(updated);
+                            },
                     ),
                   ),
                   const SizedBox(width: AppSpacing.small),
                   Expanded(
                     child: TextFormField(
+                      readOnly: isGeneratedAuth,
                       initialValue: item.value,
                       decoration: InputDecoration(
                         hintText: hintVal,
                         border: InputBorder.none,
                       ),
-                      onChanged: (val) {
-                        final updated = List<KeyValueItem>.from(items);
-                        updated[idx] = item.copyWith(value: val);
-                        onChanged(updated);
-                      },
+                      onChanged: isGeneratedAuth
+                          ? null
+                          : (val) {
+                              final updated = List<KeyValueItem>.from(items);
+                              updated[idx] = item.copyWith(value: val);
+                              onChanged(updated);
+                            },
                     ),
                   ),
-                  IconButton(
-                    onPressed: () {
-                      final updated = List<KeyValueItem>.from(items)
-                        ..removeAt(idx);
-                      onChanged(updated);
-                    },
-                    icon: Icon(
-                      CupertinoIcons.trash,
-                      color: colors.methodDelete,
-                      size: 20,
-                    ),
-                  ),
+                  isGeneratedAuth
+                      ? Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.small,
+                          ),
+                          child: Text(
+                            generatedRowLabel,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: colors.textSecondary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                          ),
+                        )
+                      : IconButton(
+                          onPressed: () {
+                            final updated = List<KeyValueItem>.from(items)
+                              ..removeAt(idx);
+                            onChanged(updated);
+                          },
+                          icon: Icon(
+                            CupertinoIcons.trash,
+                            color: colors.methodDelete,
+                            size: 20,
+                          ),
+                        ),
                 ],
               ),
             );

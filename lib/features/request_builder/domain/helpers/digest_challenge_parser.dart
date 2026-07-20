@@ -8,6 +8,7 @@ class DigestChallenge extends Equatable {
     this.opaque = '',
     this.algorithm = '',
     this.qopOptions = const <String>[],
+    this.stale = false,
   });
 
   final String realm;
@@ -15,6 +16,7 @@ class DigestChallenge extends Equatable {
   final String opaque;
   final String algorithm;
   final List<String> qopOptions;
+  final bool stale;
 
   /// Returns the qop the client should answer with, preferring `auth`.
   String get preferredQop {
@@ -26,7 +28,14 @@ class DigestChallenge extends Equatable {
   }
 
   @override
-  List<Object> get props => [realm, nonce, opaque, algorithm, qopOptions];
+  List<Object> get props => [
+    realm,
+    nonce,
+    opaque,
+    algorithm,
+    qopOptions,
+    stale,
+  ];
 }
 
 final _parameterPattern = RegExp(r'(\w[\w-]*)\s*=\s*(?:"([^"]*)"|([^\s,]+))');
@@ -57,5 +66,6 @@ DigestChallenge? parseDigestChallenge(String headerValue) {
     opaque: parameters['opaque'] ?? '',
     algorithm: parameters['algorithm'] ?? '',
     qopOptions: List<String>.unmodifiable(qopOptions),
+    stale: (parameters['stale'] ?? '').toLowerCase() == 'true',
   );
 }

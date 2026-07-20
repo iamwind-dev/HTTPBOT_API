@@ -26,12 +26,15 @@ List<KeyValueItem> syncAuthorizationHeaderWithAuth({
       key: 'Authorization',
       value: authorizationValue,
       description: _authorizationDescriptionForAuthType(auth.type),
+      source: RequestHeaderSource.systemAuth,
+      systemTag: _authorizationSystemTagForAuthType(auth.type),
     ),
   ]);
 }
 
-/// Returns true when a header row owns the Authorization key outside editor automation.
+/// Returns true when an enabled row owns Authorization outside editor automation.
 bool _isUserDefinedAuthorizationHeader(KeyValueItem header) =>
+    header.isEnabled &&
     header.key.trim().toLowerCase() == 'authorization' &&
     !_isGeneratedAuthorizationHeaderForBasicBearer(header);
 
@@ -46,4 +49,12 @@ String _authorizationDescriptionForAuthType(AuthType authType) =>
       AuthType.basic => basicAuthSystemGeneratedHeaderDescription,
       AuthType.bearerToken => bearerTokenSystemGeneratedHeaderDescription,
       _ => bearerTokenSystemGeneratedHeaderDescription,
+    };
+
+/// Returns the stable ownership tag for Basic and Bearer generated headers.
+String _authorizationSystemTagForAuthType(AuthType authType) =>
+    switch (authType) {
+      AuthType.basic => 'basicAuth',
+      AuthType.bearerToken => 'bearerAuth',
+      _ => 'bearerAuth',
     };

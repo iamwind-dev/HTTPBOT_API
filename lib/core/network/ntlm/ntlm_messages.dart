@@ -8,7 +8,8 @@ import 'md4.dart';
 
 const String _ntlmSignature = 'NTLMSSP\x00';
 
-const int _negotiateFlags = 0x00000001 | // Unicode
+const int _negotiateFlags =
+    0x00000001 | // Unicode
     0x00000002 | // OEM
     0x00000004 | // Request Target
     0x00000200 | // NTLM
@@ -41,20 +42,53 @@ String createType1Message() {
   return base64Encode(builder.toBytes());
 }
 
-/// Parses a base64 NTLM Type-2 (challenge) token from `WWW-Authenticate`.
+/// Selects a valid NTLM Type 2 token from WWW-Authenticate header values.
+String? selectNtlmChallenge(Iterable<String> headerValues) {
+  final pattern = RegExp(
+    r'(?:^|,)\s*NTLM\s+([A-Za-z0-9+/]+={0,2})(?=\s*(?:,|$))',
+    caseSensitive: false,
+  );
+  for (final value in headerValues) {
+    final match = pattern.firstMatch(value);
+    if (match != null) {
+      return match.group(1);
+    }
+  }
+  return null;
+}
+
+/// Parses and validates a base64 NTLM Type-2 challenge token.
 NtlmType2Message parseType2Message(String token) {
   final bytes = Uint8List.fromList(base64Decode(token.trim()));
+  if (bytes.length < 32) {
+    throw const FormatException('Invalid NTLM Type 2 message.');
+  }
+
+  final expectedSignature = ascii.encode(_ntlmSignature);
+  for (var index = 0; index < expectedSignature.length; index++) {
+    if (bytes[index] != expectedSignature[index]) {
+      throw const FormatException('Invalid NTLM Type 2 message.');
+    }
+  }
+  if (_readUint32le(bytes, 8) != 2) {
+    throw const FormatException('Invalid NTLM Type 2 message.');
+  }
+
+  _validateSecurityBuffer(bytes, lengthOffset: 12, dataOffset: 16);
   final flags = _readUint32le(bytes, 20);
   final serverChallenge = Uint8List.fromList(bytes.sublist(24, 32));
 
   Uint8List targetInfo = Uint8List(0);
   if (bytes.length >= 48) {
-    final targetInfoLen = _readUint16le(bytes, 40);
-    final targetInfoOffset = _readUint32le(bytes, 44);
-    if (targetInfoLen > 0 &&
-        targetInfoOffset + targetInfoLen <= bytes.length) {
+    final targetInfoLength = _validateSecurityBuffer(
+      bytes,
+      lengthOffset: 40,
+      dataOffset: 44,
+    );
+    if (targetInfoLength > 0) {
+      final targetInfoOffset = _readUint32le(bytes, 44);
       targetInfo = Uint8List.fromList(
-        bytes.sublist(targetInfoOffset, targetInfoOffset + targetInfoLen),
+        bytes.sublist(targetInfoOffset, targetInfoOffset + targetInfoLength),
       );
     }
   }
@@ -98,10 +132,11 @@ String createType3Message({
     ..add(blobBytes);
   final ntProof = Hmac(md5, ntlmV2Hash).convert(proofInput.toBytes()).bytes;
 
-  final ntResponse = (BytesBuilder()
-        ..add(ntProof)
-        ..add(blobBytes))
-      .toBytes();
+  final ntResponse =
+      (BytesBuilder()
+            ..add(ntProof)
+            ..add(blobBytes))
+          .toBytes();
 
   final domainBytes = _toUnicode(domain);
   final userBytes = _toUnicode(username);
@@ -147,7 +182,9 @@ List<int> _ntlmV2Hash({
   required String username,
   required String domain,
 }) {
-  final ntlmHash = md4(_toUnicode(password)); // NTLM hash = MD4(UTF-16LE password)
+  final ntlmHash = md4(
+    _toUnicode(password),
+  ); // NTLM hash = MD4(UTF-16LE password)
   final identity = _toUnicode(username.toUpperCase() + domain);
   return Hmac(md5, ntlmHash).convert(identity).bytes;
 }
@@ -162,19 +199,43 @@ List<int> _toUnicode(String value) {
 }
 
 List<int> _securityBufferRef(int length, int offset) => [
-      ..._uint16le(length),
-      ..._uint16le(length),
-      ..._uint32le(offset),
-    ];
+  ..._uint16le(length),
+  ..._uint16le(length),
+  ..._uint32le(offset),
+];
 
 List<int> _uint16le(int value) => [value & 0xFF, (value >> 8) & 0xFF];
 
 List<int> _uint32le(int value) => [
-      value & 0xFF,
-      (value >> 8) & 0xFF,
-      (value >> 16) & 0xFF,
-      (value >> 24) & 0xFF,
-    ];
+  value & 0xFF,
+  (value >> 8) & 0xFF,
+  (value >> 16) & 0xFF,
+  (value >> 24) & 0xFF,
+];
+
+/// Validates an NTLM security buffer and returns its populated length.
+int _validateSecurityBuffer(
+  Uint8List bytes, {
+  required int lengthOffset,
+  required int dataOffset,
+}) {
+  if (lengthOffset < 0 ||
+      dataOffset < 0 ||
+      lengthOffset + 3 >= bytes.length ||
+      dataOffset + 3 >= bytes.length) {
+    throw const FormatException('Invalid NTLM Type 2 message.');
+  }
+
+  final length = _readUint16le(bytes, lengthOffset);
+  final maximumLength = _readUint16le(bytes, lengthOffset + 2);
+  final offset = _readUint32le(bytes, dataOffset);
+  if (length > maximumLength ||
+      offset > bytes.length ||
+      length > bytes.length - offset) {
+    throw const FormatException('Invalid NTLM Type 2 message.');
+  }
+  return length;
+}
 
 int _readUint16le(Uint8List bytes, int offset) =>
     bytes[offset] | (bytes[offset + 1] << 8);
