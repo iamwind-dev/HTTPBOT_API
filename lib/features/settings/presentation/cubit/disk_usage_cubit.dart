@@ -23,6 +23,7 @@ class DiskUsageCubit extends Cubit<DiskUsageState> {
           fileUsages: files,
           selectedRequestIds: const <String>{},
           selectedFileIds: const <String>{},
+          selectionMode: false,
         ),
       );
     } catch (_) {
@@ -41,6 +42,7 @@ class DiskUsageCubit extends Cubit<DiskUsageState> {
         selectedTab: tab,
         selectedRequestIds: const <String>{},
         selectedFileIds: const <String>{},
+        selectionMode: false,
       ),
     );
   }
@@ -50,19 +52,28 @@ class DiskUsageCubit extends Cubit<DiskUsageState> {
     selected.contains(requestId)
         ? selected.remove(requestId)
         : selected.add(requestId);
-    emit(state.copyWith(selectedRequestIds: selected));
+    emit(state.copyWith(selectedRequestIds: selected, selectionMode: true));
   }
 
   void toggleFile(String fileId) {
     final selected = Set<String>.of(state.selectedFileIds);
     selected.contains(fileId) ? selected.remove(fileId) : selected.add(fileId);
-    emit(state.copyWith(selectedFileIds: selected));
+    emit(state.copyWith(selectedFileIds: selected, selectionMode: true));
   }
+
+  void enterSelectionMode() => emit(
+    state.copyWith(
+      selectionMode: true,
+      selectedRequestIds: const <String>{},
+      selectedFileIds: const <String>{},
+    ),
+  );
 
   void selectAll() {
     if (state.selectedTab == DiskUsageTab.requests) {
       emit(
         state.copyWith(
+          selectionMode: true,
           selectedRequestIds: state.requestUsages
               .map((item) => item.requestId)
               .toSet(),
@@ -73,6 +84,7 @@ class DiskUsageCubit extends Cubit<DiskUsageState> {
 
     emit(
       state.copyWith(
+        selectionMode: true,
         selectedFileIds: state.fileUsages.map((item) => item.fileId).toSet(),
       ),
     );
@@ -83,6 +95,7 @@ class DiskUsageCubit extends Cubit<DiskUsageState> {
       state.copyWith(
         selectedRequestIds: const <String>{},
         selectedFileIds: const <String>{},
+        selectionMode: false,
       ),
     );
   }
@@ -114,6 +127,7 @@ class DiskUsageCubit extends Cubit<DiskUsageState> {
           fileUsages: files,
           selectedRequestIds: const <String>{},
           selectedFileIds: const <String>{},
+          selectionMode: false,
         ),
       );
     } catch (_) {

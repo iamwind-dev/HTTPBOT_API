@@ -12,6 +12,7 @@ class DiskUsageState extends Equatable {
     required this.fileUsages,
     required this.selectedRequestIds,
     required this.selectedFileIds,
+    required this.selectionMode,
     this.message = '',
   });
 
@@ -22,6 +23,7 @@ class DiskUsageState extends Equatable {
       fileUsages = const <DiskUsageFileItem>[],
       selectedRequestIds = const <String>{},
       selectedFileIds = const <String>{},
+      selectionMode = false,
       message = '';
 
   final DiskUsageStatus status;
@@ -30,9 +32,8 @@ class DiskUsageState extends Equatable {
   final List<DiskUsageFileItem> fileUsages;
   final Set<String> selectedRequestIds;
   final Set<String> selectedFileIds;
+  final bool selectionMode;
   final String message;
-
-  bool get selectionMode => selectedIds.isNotEmpty;
 
   Set<String> get selectedIds => selectedTab == DiskUsageTab.requests
       ? selectedRequestIds
@@ -74,6 +75,7 @@ class DiskUsageState extends Equatable {
     List<DiskUsageFileItem>? fileUsages,
     Set<String>? selectedRequestIds,
     Set<String>? selectedFileIds,
+    bool? selectionMode,
     String? message,
   }) => DiskUsageState(
     status: status ?? this.status,
@@ -82,6 +84,7 @@ class DiskUsageState extends Equatable {
     fileUsages: fileUsages ?? this.fileUsages,
     selectedRequestIds: selectedRequestIds ?? this.selectedRequestIds,
     selectedFileIds: selectedFileIds ?? this.selectedFileIds,
+    selectionMode: selectionMode ?? this.selectionMode,
     message: message ?? this.message,
   );
 
@@ -93,6 +96,7 @@ class DiskUsageState extends Equatable {
     fileUsages,
     selectedRequestIds,
     selectedFileIds,
+    selectionMode,
     message,
   ];
 }

@@ -14,6 +14,10 @@ const _footerText =
     'selected environment. However, variables with the same names set in '
     'the selected environment take precedence.';
 
+class GlobalVariablesController {
+  VoidCallback? save;
+}
+
 /// Opens the Global Variables editor and returns the saved list, or null on cancel.
 Future<List<RequestVariable>?> showGlobalVariablesSheet(
   BuildContext context, {
@@ -35,11 +39,13 @@ class GlobalVariablesView extends StatefulWidget {
     required this.variables,
     this.onClose,
     this.onSave,
+    this.controller,
   });
 
   final List<RequestVariable> variables;
   final VoidCallback? onClose;
   final Future<void> Function(List<RequestVariable> variables)? onSave;
+  final GlobalVariablesController? controller;
 
   @override
   State<GlobalVariablesView> createState() => _GlobalVariablesViewState();
@@ -216,15 +222,16 @@ class _GlobalVariablesViewState extends State<GlobalVariablesView> {
   @override
   Widget build(BuildContext context) {
     final viewInsets = MediaQuery.of(context).viewInsets;
+    widget.controller?.save = () => unawaited(_save());
 
     return SafeArea(
       child: Padding(
         padding: EdgeInsets.only(bottom: viewInsets.bottom),
         child: SingleChildScrollView(
           key: const ValueKey<String>(AppWidgetKeys.globalVariablesSheet),
-          padding: const EdgeInsets.fromLTRB(
+          padding: EdgeInsets.fromLTRB(
             AppSpacing.large,
-            AppSpacing.large,
+            widget.onClose == null ? 0 : AppSpacing.large,
             AppSpacing.large,
             AppSpacing.large,
           ),
@@ -232,12 +239,13 @@ class _GlobalVariablesViewState extends State<GlobalVariablesView> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _GlobalVariablesHeader(
-                onClose: widget.onClose ?? _close,
-                showCloseButton: widget.onClose != null,
-                onSave: _save,
-              ),
-              const SizedBox(height: AppSpacing.large),
+              if (widget.onClose != null) ...[
+                _GlobalVariablesHeader(
+                  onClose: widget.onClose ?? _close,
+                  onSave: _save,
+                ),
+                const SizedBox(height: AppSpacing.large),
+              ],
               _VariablesCard(
                 variables: _variables,
                 keyController: _keyController,
@@ -277,28 +285,20 @@ class _GlobalVariablesViewState extends State<GlobalVariablesView> {
 }
 
 class _GlobalVariablesHeader extends StatelessWidget {
-  const _GlobalVariablesHeader({
-    required this.onClose,
-    required this.onSave,
-    this.showCloseButton = true,
-  });
+  const _GlobalVariablesHeader({required this.onClose, required this.onSave});
 
   final VoidCallback onClose;
   final Future<void> Function() onSave;
-  final bool showCloseButton;
 
   /// Builds the X, centered title, and blue check toolbar.
   @override
   Widget build(BuildContext context) => Row(
     children: [
-      if (showCloseButton)
-        IconButton(
-          key: const ValueKey<String>(AppWidgetKeys.globalVariablesCloseButton),
-          onPressed: onClose,
-          icon: const Icon(CupertinoIcons.xmark),
-        )
-      else
-        const SizedBox(width: 48),
+      IconButton(
+        key: const ValueKey<String>(AppWidgetKeys.globalVariablesCloseButton),
+        onPressed: onClose,
+        icon: const Icon(CupertinoIcons.xmark),
+      ),
       Expanded(
         child: Text(
           'Global Variables',

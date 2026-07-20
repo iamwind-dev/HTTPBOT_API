@@ -116,13 +116,16 @@ class _AppBottomNavigationTile<T> extends StatelessWidget {
               SizedBox(
                 height: AppSpacing.large,
                 child: Center(
-                  child: Text(
-                    item.label,
-                    style: labelStyle,
-                    maxLines: 1,
-                    textAlign: TextAlign.center,
-                    overflow: TextOverflow.visible,
-                    softWrap: false,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      item.label,
+                      style: labelStyle,
+                      maxLines: 1,
+                      textAlign: TextAlign.center,
+                      overflow: TextOverflow.ellipsis,
+                      softWrap: false,
+                    ),
                   ),
                 ),
               ),

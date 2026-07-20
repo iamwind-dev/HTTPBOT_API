@@ -9,6 +9,7 @@ class HistoryDiskUsageState extends Equatable {
     required this.status,
     required this.histories,
     required this.selectedHistoryIds,
+    required this.selectionMode,
     this.message = '',
   });
 
@@ -16,14 +17,14 @@ class HistoryDiskUsageState extends Equatable {
     : status = HistoryDiskUsageStatus.initial,
       histories = const <DiskUsageHistoryItem>[],
       selectedHistoryIds = const <String>{},
+      selectionMode = false,
       message = '';
 
   final HistoryDiskUsageStatus status;
   final List<DiskUsageHistoryItem> histories;
   final Set<String> selectedHistoryIds;
+  final bool selectionMode;
   final String message;
-
-  bool get selectionMode => selectedHistoryIds.isNotEmpty;
   int get selectedCount => selectedHistoryIds.length;
   int get selectedBytes => histories
       .where((item) => selectedHistoryIds.contains(item.historyId))
@@ -33,14 +34,22 @@ class HistoryDiskUsageState extends Equatable {
     HistoryDiskUsageStatus? status,
     List<DiskUsageHistoryItem>? histories,
     Set<String>? selectedHistoryIds,
+    bool? selectionMode,
     String? message,
   }) => HistoryDiskUsageState(
     status: status ?? this.status,
     histories: histories ?? this.histories,
     selectedHistoryIds: selectedHistoryIds ?? this.selectedHistoryIds,
+    selectionMode: selectionMode ?? this.selectionMode,
     message: message ?? this.message,
   );
 
   @override
-  List<Object> get props => [status, histories, selectedHistoryIds, message];
+  List<Object> get props => [
+    status,
+    histories,
+    selectedHistoryIds,
+    selectionMode,
+    message,
+  ];
 }

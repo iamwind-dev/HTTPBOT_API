@@ -61,7 +61,10 @@ class DiskUsageTabPicker extends StatelessWidget {
           PopupMenuItem(value: DiskUsageTab.files, child: Text('Files')),
         ],
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.xSmall,
+            vertical: 6,
+          ),
           decoration: BoxDecoration(
             color: context.appColors.headerActionSurface,
             borderRadius: BorderRadius.circular(28),
@@ -80,10 +83,10 @@ class DiskUsageTabPicker extends StatelessWidget {
                   fontWeight: FontWeight.w500,
                 ),
               ),
-              const SizedBox(width: 4),
+              const SizedBox(width: AppSpacing.xxxSmall),
               Icon(
                 CupertinoIcons.chevron_up_chevron_down,
-                size: 18,
+                size: 12,
                 color: context.appColors.iconPrimary,
               ),
             ],
@@ -143,9 +146,9 @@ class _DiskUsageContent extends StatelessWidget {
             onSelectButtonPressed: () {
               state.selectionMode
                   ? context.read<DiskUsageCubit>().clearSelection()
-                  : context.read<DiskUsageCubit>().selectAll();
+                  : context.read<DiskUsageCubit>().enterSelectionMode();
             },
-            onDeletePressed: state.selectionMode
+            onDeletePressed: state.selectedCount > 0
                 ? () => _confirmDelete(
                     context,
                     context.read<DiskUsageCubit>().deleteSelected,
@@ -372,9 +375,11 @@ class RequestHistoryDiskUsagePage extends StatelessWidget {
                   onSelectButtonPressed: () {
                     state.selectionMode
                         ? context.read<HistoryDiskUsageCubit>().clearSelection()
-                        : context.read<HistoryDiskUsageCubit>().selectAll();
+                        : context
+                              .read<HistoryDiskUsageCubit>()
+                              .enterSelectionMode();
                   },
-                  onDeletePressed: state.selectionMode
+                  onDeletePressed: state.selectedCount > 0
                       ? () => _confirmDelete(
                           context,
                           context.read<HistoryDiskUsageCubit>().deleteSelected,

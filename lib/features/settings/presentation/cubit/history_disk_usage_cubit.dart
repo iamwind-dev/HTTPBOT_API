@@ -24,6 +24,7 @@ class HistoryDiskUsageCubit extends Cubit<HistoryDiskUsageState> {
           status: HistoryDiskUsageStatus.loaded,
           histories: histories,
           selectedHistoryIds: const <String>{},
+          selectionMode: false,
         ),
       );
     } catch (_) {
@@ -41,12 +42,17 @@ class HistoryDiskUsageCubit extends Cubit<HistoryDiskUsageState> {
     selected.contains(historyId)
         ? selected.remove(historyId)
         : selected.add(historyId);
-    emit(state.copyWith(selectedHistoryIds: selected));
+    emit(state.copyWith(selectedHistoryIds: selected, selectionMode: true));
   }
+
+  void enterSelectionMode() => emit(
+    state.copyWith(selectionMode: true, selectedHistoryIds: const <String>{}),
+  );
 
   void selectAll() {
     emit(
       state.copyWith(
+        selectionMode: true,
         selectedHistoryIds: state.histories
             .map((item) => item.historyId)
             .toSet(),
@@ -55,7 +61,12 @@ class HistoryDiskUsageCubit extends Cubit<HistoryDiskUsageState> {
   }
 
   void clearSelection() {
-    emit(state.copyWith(selectedHistoryIds: const <String>{}));
+    emit(
+      state.copyWith(
+        selectedHistoryIds: const <String>{},
+        selectionMode: false,
+      ),
+    );
   }
 
   Future<void> deleteSelected() async {
@@ -74,6 +85,7 @@ class HistoryDiskUsageCubit extends Cubit<HistoryDiskUsageState> {
           status: HistoryDiskUsageStatus.loaded,
           histories: histories,
           selectedHistoryIds: const <String>{},
+          selectionMode: false,
         ),
       );
     } catch (_) {
