@@ -7,6 +7,7 @@ import 'request_test_result.dart';
 import 'request_key_value.dart';
 import 'request_resolution_issue.dart';
 import 'http_cookie_entity.dart';
+import 'http_exchange.dart';
 
 enum RequestExecutionErrorType {
   blocked,
@@ -29,6 +30,7 @@ class RequestExecutionResult extends Equatable {
     this.errorType,
     this.errorMessage = '',
     this.executedRequestSnapshot,
+    this.exchanges = const <HttpExchange>[],
     this.responseCookies = const <HttpCookieEntity>[],
     this.testResults = const <RequestTestResult>[],
     this.resolutionIssues = const <RequestResolutionIssue>[],
@@ -45,6 +47,7 @@ class RequestExecutionResult extends Equatable {
   final RequestExecutionErrorType? errorType;
   final String errorMessage;
   final ExecutedRequestSnapshot? executedRequestSnapshot;
+  final List<HttpExchange> exchanges;
   final List<HttpCookieEntity> responseCookies;
   final List<RequestTestResult> testResults;
   final List<RequestResolutionIssue> resolutionIssues;
@@ -72,6 +75,7 @@ class RequestExecutionResult extends Equatable {
     bool clearErrorType = false,
     String? errorMessage,
     ExecutedRequestSnapshot? executedRequestSnapshot,
+    List<HttpExchange>? exchanges,
     List<HttpCookieEntity>? responseCookies,
     List<RequestTestResult>? testResults,
     List<RequestResolutionIssue>? resolutionIssues,
@@ -88,6 +92,7 @@ class RequestExecutionResult extends Equatable {
     errorMessage: errorMessage ?? this.errorMessage,
     executedRequestSnapshot:
         executedRequestSnapshot ?? this.executedRequestSnapshot,
+    exchanges: exchanges ?? this.exchanges,
     responseCookies: responseCookies ?? this.responseCookies,
     testResults: testResults ?? this.testResults,
     resolutionIssues: resolutionIssues ?? this.resolutionIssues,
@@ -106,6 +111,7 @@ class RequestExecutionResult extends Equatable {
     errorType,
     errorMessage,
     executedRequestSnapshot,
+    exchanges,
     responseCookies,
     testResults,
     resolutionIssues,

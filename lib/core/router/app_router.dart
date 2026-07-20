@@ -13,6 +13,7 @@ import 'package:httpbot_api/features/postman/presentation/widget/search_postman.
 import 'package:httpbot_api/features/web_sockets/presentation/screens/websocket_screen.dart';
 import 'package:httpbot_api/features/web_sockets/presentation/widget/search_websocket.dart';
 import 'package:httpbot_api/features/web_sockets/presentation/widget/websocket_shell_action_button.dart';
+import 'package:httpbot_api/features/web_sockets/presentation/cubits/web_socket_list_cubit.dart';
 
 import '../../core/constants/app_strings.dart';
 import '../../core/keys/widget_keys.dart';
@@ -32,6 +33,7 @@ import '../../features/request_builder/presentation/cubit/request_builder_cubit.
 import '../../features/request_builder/presentation/pages/request_builder_page.dart';
 import '../../features/request_builder/presentation/widgets/manage_environments_sheet.dart';
 import '../../features/request_builder/presentation/widgets/global_variables_sheet.dart';
+import '../../features/request_builder/presentation/widgets/response_filters_sheet.dart';
 import '../../features/request_builder/presentation/widgets/request_cookies_sheet.dart';
 import '../../features/request_builder/presentation/widgets/request_editor_sheet.dart';
 import '../../features/request_builder/presentation/widgets/request_search_field.dart';
@@ -144,9 +146,12 @@ abstract final class AppRouter {
             routes: <RouteBase>[
               GoRoute(
                 path: '/websockets',
-                builder: (context, state) => _WebSocketsShell(
-                  onTabSelected: (tab) =>
-                      _handleShellTabSelection(context, tab),
+                builder: (context, state) => BlocProvider<WebSocketListCubit>(
+                  create: (_) => getIt<WebSocketListCubit>()..load(),
+                  child: _WebSocketsShell(
+                    onTabSelected: (tab) =>
+                        _handleShellTabSelection(context, tab),
+                  ),
                 ),
               ),
             ],
@@ -368,6 +373,9 @@ abstract final class AppRouter {
       return const ManageEnvironmentsView();
     }
 
+    if (itemId == 'response-filters') {
+      return const ResponseFiltersView();
+    }
     if (itemId == 'global-variables') {
       return SettingsGlobalVariablesPage(controller: globalVariablesController);
     }
