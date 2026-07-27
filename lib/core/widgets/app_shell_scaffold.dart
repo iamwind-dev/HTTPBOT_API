@@ -129,12 +129,8 @@ class _ShellBody extends StatelessWidget {
   Widget build(BuildContext context) => ResponsiveContent(
     child: Padding(
       padding: EdgeInsets.symmetric(horizontal: bodyHorizontalPadding),
-      child: Stack(
+      child: Column(
         children: [
-          Padding(
-            padding: EdgeInsets.only(top: headerHeight),
-            child: body,
-          ),
           AppPageHeader(
             title: title,
             leading: leading,
@@ -143,6 +139,7 @@ class _ShellBody extends StatelessWidget {
             centerTitle: centerTitle,
             height: headerHeight,
           ),
+          Expanded(child: body),
         ],
       ),
     ),

@@ -9,6 +9,7 @@ import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_theme_colors.dart';
 import '../../../../core/theme/app_theme_context.dart';
+import '../../../../core/widgets/app_popup_menu.dart';
 import '../../../../injection/injection.dart';
 import '../../domain/helpers/filter_response_mode.dart';
 import '../../domain/repositories/response_filter_repository.dart';
@@ -27,8 +28,7 @@ Future<void> showFilterResponseSheet(
 }) => showRequestModalSheet<void>(
   context,
   builder: (context) => BlocProvider<FilterResponseCubit>(
-    create: (_) =>
-        FilterResponseCubit(body: body, contentType: contentType),
+    create: (_) => FilterResponseCubit(body: body, contentType: contentType),
     child: const _FilterResponseSheet(),
   ),
 );
@@ -140,33 +140,52 @@ class _FilterResponseMoreButton extends StatelessWidget {
 
     return PopupMenuButton<_FilterMoreAction>(
       key: const ValueKey<String>(AppWidgetKeys.filterResponseMoreButton),
-      color: colors.surface,
       onSelected: (action) => _onSelected(context, action),
       itemBuilder: (context) => [
         const PopupMenuItem<_FilterMoreAction>(
           value: _FilterMoreAction.help,
-          child: Text(AppStrings.filterResponseHelp),
+          child: AppPopupMenuRow(
+            icon: CupertinoIcons.question_circle,
+            label: AppStrings.filterResponseHelp,
+          ),
         ),
-        CheckedPopupMenuItem<_FilterMoreAction>(
+        PopupMenuItem<_FilterMoreAction>(
           value: _FilterMoreAction.wrap,
-          checked: wrap,
-          child: const Text(AppStrings.filterResponseWrap),
+          child: AppPopupMenuRow(
+            icon: CupertinoIcons.textformat,
+            label: AppStrings.filterResponseWrap,
+            trailing: wrap
+                ? const Icon(CupertinoIcons.check_mark, size: 16)
+                : null,
+          ),
         ),
         const PopupMenuItem<_FilterMoreAction>(
           value: _FilterMoreAction.saveQuery,
-          child: Text(AppStrings.filterResponseSaveQuery),
+          child: AppPopupMenuRow(
+            icon: CupertinoIcons.square_arrow_down,
+            label: AppStrings.filterResponseSaveQuery,
+          ),
         ),
         const PopupMenuItem<_FilterMoreAction>(
           value: _FilterMoreAction.manageQueries,
-          child: Text(AppStrings.filterResponseManageQueries),
+          child: AppPopupMenuRow(
+            icon: CupertinoIcons.folder,
+            label: AppStrings.filterResponseManageQueries,
+          ),
         ),
         const PopupMenuItem<_FilterMoreAction>(
           value: _FilterMoreAction.copyResult,
-          child: Text(AppStrings.filterResponseCopyResult),
+          child: AppPopupMenuRow(
+            icon: CupertinoIcons.doc_on_doc,
+            label: AppStrings.filterResponseCopyResult,
+          ),
         ),
         const PopupMenuItem<_FilterMoreAction>(
           value: _FilterMoreAction.copyQuery,
-          child: Text(AppStrings.filterResponseCopyQuery),
+          child: AppPopupMenuRow(
+            icon: CupertinoIcons.doc_on_clipboard,
+            label: AppStrings.filterResponseCopyQuery,
+          ),
         ),
       ],
       child: DecoratedBox(
@@ -211,11 +230,7 @@ class _FilterResponseMoreButton extends StatelessWidget {
     }
   }
 
-  Future<void> _copy(
-    BuildContext context,
-    String text,
-    String message,
-  ) async {
+  Future<void> _copy(BuildContext context, String text, String message) async {
     await Clipboard.setData(ClipboardData(text: text));
     if (!context.mounted) {
       return;
@@ -257,11 +272,9 @@ class _FilterResponseMoreButton extends StatelessWidget {
       return;
     }
 
-    await ResponseFiltersCubit(getIt<ResponseFilterRepository>()).create(
-      name: draft.name,
-      query: draft.query,
-      mode: draft.mode,
-    );
+    await ResponseFiltersCubit(
+      getIt<ResponseFilterRepository>(),
+    ).create(name: draft.name, query: draft.query, mode: draft.mode);
     if (!context.mounted) {
       return;
     }
@@ -407,7 +420,12 @@ List<InlineSpan> _highlightJson(
       _ => colors.codeNumber,
     };
 
-    spans.add(TextSpan(text: token, style: baseStyle?.copyWith(color: color)));
+    spans.add(
+      TextSpan(
+        text: token,
+        style: baseStyle?.copyWith(color: color),
+      ),
+    );
     currentIndex = match.end;
   }
 
@@ -596,7 +614,6 @@ class _FilterResponseModePicker extends StatelessWidget {
       buildWhen: (previous, current) => previous.mode != current.mode,
       builder: (context, state) => PopupMenuButton<FilterResponseMode>(
         key: const ValueKey<String>(AppWidgetKeys.filterResponseModePicker),
-        color: colors.surface,
         onSelected: context.read<FilterResponseCubit>().modeChanged,
         itemBuilder: (context) => [
           for (final mode in _orderedModes)

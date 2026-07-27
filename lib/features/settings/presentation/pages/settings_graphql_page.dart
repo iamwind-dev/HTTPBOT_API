@@ -9,6 +9,7 @@ import '../../../../core/keys/widget_keys.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_theme_context.dart';
+import '../../../../core/widgets/app_popup_menu.dart';
 import '../../../../injection/injection.dart';
 import '../../../request_builder/domain/entities/saved_graphql_query_entity.dart';
 import '../../../request_builder/domain/entities/saved_graphql_variable_entity.dart';
@@ -54,12 +55,7 @@ class _SettingsGraphQlPageState extends State<SettingsGraphQlPage> {
         value: _cubit,
         child: BlocBuilder<GraphQlSettingsCubit, GraphQlSettingsState>(
           builder: (context, state) => Padding(
-            padding: const EdgeInsets.fromLTRB(
-              0,
-              0,
-              0,
-              AppSpacing.xxxLarge,
-            ),
+            padding: const EdgeInsets.fromLTRB(0, 0, 0, AppSpacing.xxxLarge),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -67,7 +63,8 @@ class _SettingsGraphQlPageState extends State<SettingsGraphQlPage> {
                   selectedTab: state.selectedTab,
                   onTabChanged: (tab) =>
                       context.read<GraphQlSettingsCubit>().switchTab(tab),
-                  onAddPressed: () => _openCreateSheet(context, state.selectedTab),
+                  onAddPressed: () =>
+                      _openCreateSheet(context, state.selectedTab),
                   onHelpPressed: () => _openHelp(context),
                 ),
                 const SizedBox(height: AppSpacing.large),
@@ -204,23 +201,26 @@ class _SettingsGraphQlPageState extends State<SettingsGraphQlPage> {
     await context.read<GraphQlSettingsCubit>().deleteVariables(item.id);
   }
 
-  Future<bool?> _showDeleteConfirmation(BuildContext context) => showDialog<bool>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('Delete Item?'),
-      content: const Text('Are you sure you would like to delete this item?'),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(false),
-          child: const Text('Cancel'),
+  Future<bool?> _showDeleteConfirmation(BuildContext context) =>
+      showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Delete Item?'),
+          content: const Text(
+            'Are you sure you would like to delete this item?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Delete'),
+            ),
+          ],
         ),
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(true),
-          child: const Text('Delete'),
-        ),
-      ],
-    ),
-  );
+      );
 
   Future<void> _openHelp(BuildContext context) async {
     await showRequestModalSheet<void>(
@@ -410,10 +410,7 @@ class _SavedGraphQlListTile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      title,
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
+                    Text(title, style: Theme.of(context).textTheme.titleMedium),
                     const SizedBox(height: AppSpacing.xSmall),
                     Text(
                       _truncatePreview(preview),
@@ -435,8 +432,22 @@ class _SavedGraphQlListTile extends StatelessWidget {
                   }
                 },
                 itemBuilder: (context) => const [
-                  PopupMenuItem<String>(value: 'edit', child: Text('Edit')),
-                  PopupMenuItem<String>(value: 'delete', child: Text('Delete')),
+                  PopupMenuItem<String>(
+                    value: 'edit',
+                    child: AppPopupMenuRow(
+                      icon: CupertinoIcons.pencil,
+                      label: 'Edit',
+                    ),
+                  ),
+                  PopupMenuDivider(),
+                  PopupMenuItem<String>(
+                    value: 'delete',
+                    child: AppPopupMenuRow(
+                      icon: CupertinoIcons.trash,
+                      label: 'Delete',
+                      destructive: true,
+                    ),
+                  ),
                 ],
               ),
             ],
@@ -485,10 +496,7 @@ class _SavedGraphQlEmptyState extends StatelessWidget {
 }
 
 class _SavedGraphQlQueryDraft {
-  const _SavedGraphQlQueryDraft({
-    required this.name,
-    required this.query,
-  });
+  const _SavedGraphQlQueryDraft({required this.name, required this.query});
 
   final String name;
   final String query;
@@ -668,10 +676,7 @@ class _SavedGraphQlVariablesEditorSheetState
         padding: const EdgeInsets.all(AppSpacing.large),
         child: Column(
           children: [
-            _EditorHeader(
-              title: 'GraphQL Variables',
-              onSave: _save,
-            ),
+            _EditorHeader(title: 'GraphQL Variables', onSave: _save),
             const SizedBox(height: AppSpacing.large),
             DecoratedBox(
               decoration: _editorCardDecoration(context),

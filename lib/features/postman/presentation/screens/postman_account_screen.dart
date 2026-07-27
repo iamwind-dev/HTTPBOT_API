@@ -152,8 +152,8 @@ class _InfoRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.appColors;
 
-    return SizedBox(
-      height: 78,
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 78),
       child: Row(
         children: [
           SizedBox(

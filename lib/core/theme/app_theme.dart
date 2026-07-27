@@ -55,6 +55,20 @@ abstract final class AppTheme {
           side: BorderSide(color: colors.border),
         ),
       ),
+      popupMenuTheme: PopupMenuThemeData(
+        color: colors.card,
+        surfaceTintColor: Colors.transparent,
+        elevation: 8,
+        shadowColor: Colors.black.withValues(alpha: 0.18),
+        position: PopupMenuPosition.under,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(AppRadius.medium)),
+        ),
+        textStyle: TextStyle(
+          color: colors.textPrimary,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
       bottomSheetTheme: const BottomSheetThemeData(
         constraints: BoxConstraints(maxWidth: AppResponsive.maxSheetWidth),
       ),

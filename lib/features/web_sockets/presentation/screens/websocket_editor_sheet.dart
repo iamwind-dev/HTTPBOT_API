@@ -7,6 +7,7 @@ import '../../../../core/keys/widget_keys.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_theme_context.dart';
+import '../../../../core/widgets/app_popup_menu.dart';
 import '../../../../injection/injection.dart';
 import '../../../request_builder/domain/entities/api_key_auth_options.dart';
 import '../../../request_builder/domain/entities/request_auth_draft.dart';
@@ -193,6 +194,7 @@ class _WebSocketEditorSheetState extends State<_WebSocketEditorSheet> {
                         enabled: !isConnecting,
                         decoration: const InputDecoration(
                           hintText: 'wss://',
+                          filled: false,
                           border: InputBorder.none,
                           enabledBorder: InputBorder.none,
                           focusedBorder: InputBorder.none,
@@ -298,8 +300,8 @@ class _WebSocketEditorSheetState extends State<_WebSocketEditorSheet> {
                 padding: const EdgeInsets.all(AppSpacing.medium),
                 child: Align(
                   alignment: Alignment.centerRight,
-                  child: SizedBox(
-                    height: 48,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 48),
                     child: FilledButton(
                       key: const ValueKey<String>(
                         AppWidgetKeys.websocketsConnectButton,
@@ -1855,78 +1857,40 @@ class _TopBar extends StatelessWidget {
                 itemBuilder: (context) => [
                   PopupMenuItem(
                     value: 'environment',
-                    child: Row(
-                      children: [
-                        const Icon(CupertinoIcons.globe, size: 18),
-                        const SizedBox(width: AppSpacing.small),
-                        Expanded(
-                          child: Text(
-                            'Environment',
-                            style: TextStyle(color: colors.textPrimary),
-                          ),
-                        ),
-                        const Icon(CupertinoIcons.chevron_right, size: 14),
-                      ],
+                    child: const AppPopupMenuRow(
+                      icon: CupertinoIcons.globe,
+                      label: 'Environment',
+                      trailing: Icon(CupertinoIcons.chevron_right, size: 14),
                     ),
                   ),
-                  PopupMenuItem(
+                  const PopupMenuItem(
                     value: 'certificates',
-                    child: Row(
-                      children: [
-                        const Icon(CupertinoIcons.shield, size: 18),
-                        const SizedBox(width: AppSpacing.small),
-                        Text(
-                          'Certificates',
-                          style: TextStyle(color: colors.textPrimary),
-                        ),
-                      ],
+                    child: AppPopupMenuRow(
+                      icon: CupertinoIcons.shield,
+                      label: 'Certificates',
                     ),
                   ),
-                  PopupMenuItem(
+                  const PopupMenuItem(
                     value: 'settings',
-                    child: Row(
-                      children: [
-                        const Icon(CupertinoIcons.settings, size: 18),
-                        const SizedBox(width: AppSpacing.small),
-                        Text(
-                          'Settings',
-                          style: TextStyle(color: colors.textPrimary),
-                        ),
-                      ],
+                    child: AppPopupMenuRow(
+                      icon: CupertinoIcons.settings,
+                      label: 'Settings',
                     ),
                   ),
-                  PopupMenuItem(
+                  const PopupMenuItem(
                     value: 'help',
-                    child: Row(
-                      children: [
-                        const Icon(CupertinoIcons.question_circle, size: 18),
-                        const SizedBox(width: AppSpacing.small),
-                        Text(
-                          'Help',
-                          style: TextStyle(color: colors.textPrimary),
-                        ),
-                      ],
+                    child: AppPopupMenuRow(
+                      icon: CupertinoIcons.question_circle,
+                      label: 'Help',
                     ),
                   ),
                   const PopupMenuDivider(),
-                  PopupMenuItem(
+                  const PopupMenuItem(
                     value: 'clear',
-                    child: Row(
-                      children: [
-                        Icon(
-                          CupertinoIcons.trash,
-                          size: 18,
-                          color: colors.methodDelete,
-                        ),
-                        const SizedBox(width: AppSpacing.small),
-                        Text(
-                          'Clear',
-                          style: TextStyle(
-                            color: colors.methodDelete,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
+                    child: AppPopupMenuRow(
+                      icon: CupertinoIcons.trash,
+                      label: 'Clear',
+                      destructive: true,
                     ),
                   ),
                 ],

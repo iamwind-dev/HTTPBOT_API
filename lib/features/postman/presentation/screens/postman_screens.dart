@@ -941,7 +941,7 @@ class _PostmanSearchBar extends StatelessWidget {
     final colors = context.appColors;
 
     return Container(
-      height: 60,
+      constraints: const BoxConstraints(minHeight: 60),
       decoration: BoxDecoration(
         color: colors.surface,
         borderRadius: BorderRadius.circular(30),
@@ -960,7 +960,11 @@ class _PostmanSearchBar extends StatelessWidget {
             color: colors.iconPrimary,
             size: 34,
           ),
-          contentPadding: const EdgeInsets.only(top: 16, right: 20),
+          contentPadding: const EdgeInsets.only(
+            top: 16,
+            right: 20,
+            bottom: 16,
+          ),
         ),
       ),
     );
@@ -1936,7 +1940,7 @@ class _PostmanDialogButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(22),
         onTap: onTap,
         child: Ink(
-          height: 56,
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
           decoration: BoxDecoration(
             color: colors.surfaceMuted,
             borderRadius: BorderRadius.circular(22),

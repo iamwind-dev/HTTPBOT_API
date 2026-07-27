@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_theme_context.dart';
+import '../../../../core/widgets/app_popup_menu.dart';
 import '../models/request_list_item.dart';
 
 enum RequestListItemAction {
@@ -23,6 +24,16 @@ extension RequestListItemActionLabel on RequestListItemAction {
     RequestListItemAction.exportHar => 'Export as HAR',
     RequestListItemAction.favourite => 'Favourite',
     RequestListItemAction.delete => 'Delete',
+  };
+
+  IconData get icon => switch (this) {
+    RequestListItemAction.edit => CupertinoIcons.pencil,
+    RequestListItemAction.duplicate => CupertinoIcons.doc_on_doc,
+    RequestListItemAction.viewCurl =>
+      CupertinoIcons.chevron_left_slash_chevron_right,
+    RequestListItemAction.exportHar => CupertinoIcons.arrow_up_doc,
+    RequestListItemAction.favourite => CupertinoIcons.star,
+    RequestListItemAction.delete => CupertinoIcons.trash,
   };
 }
 
@@ -88,20 +99,17 @@ class _RequestListItemMoreButton extends StatelessWidget {
   Widget build(BuildContext context) => PopupMenuButton<RequestListItemAction>(
     tooltip: 'More request actions',
     icon: const Icon(CupertinoIcons.ellipsis),
-    color: context.appColors.surface,
-    elevation: 12,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
     constraints: const BoxConstraints(minWidth: 180),
-    position: PopupMenuPosition.under,
     onSelected: onSelected,
-    itemBuilder: (context) => RequestListItemAction.values
-        .map(
-          (action) => PopupMenuItem<RequestListItemAction>(
-            value: action,
-            child: _RequestListItemActionRow(action: action),
-          ),
-        )
-        .toList(growable: false),
+    itemBuilder: (context) => [
+      for (final action in RequestListItemAction.values) ...[
+        if (action == RequestListItemAction.delete) const PopupMenuDivider(),
+        PopupMenuItem<RequestListItemAction>(
+          value: action,
+          child: _RequestListItemActionRow(action: action),
+        ),
+      ],
+    ],
   );
 }
 
@@ -111,19 +119,11 @@ class _RequestListItemActionRow extends StatelessWidget {
   final RequestListItemAction action;
 
   @override
-  Widget build(BuildContext context) {
-    final colors = context.appColors;
-
-    return Text(
-      action.label,
-      style: TextStyle(
-        color: action == RequestListItemAction.delete
-            ? colors.methodDelete
-            : colors.textPrimary,
-        fontWeight: FontWeight.w600,
-      ),
-    );
-  }
+  Widget build(BuildContext context) => AppPopupMenuRow(
+    icon: action.icon,
+    label: action.label,
+    destructive: action == RequestListItemAction.delete,
+  );
 }
 
 class _RequestMethodBadge extends StatelessWidget {

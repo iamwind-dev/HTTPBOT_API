@@ -50,7 +50,7 @@ class AppPageHeader extends StatelessWidget {
         : _bottomSlotSpacing;
 
     return Container(
-      height: resolvedHeight,
+      constraints: BoxConstraints(minHeight: resolvedHeight),
       padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -65,6 +65,7 @@ class AppPageHeader extends StatelessWidget {
         ),
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const SizedBox(height: _topInset),
