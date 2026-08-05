@@ -26,6 +26,7 @@ import '../../../../injection/injection.dart';
 import '../../domain/entities/imported_collection_entity.dart';
 import '../cubits/collection_cubit.dart';
 import '../cubits/collection_state.dart';
+import '../cubits/collection_ui_cubits.dart';
 
 class CollectionScreen extends StatelessWidget {
   const CollectionScreen({super.key});
@@ -37,8 +38,8 @@ class CollectionScreen extends StatelessWidget {
         final filteredItems = state.items
             .where(
               (item) => item.name.toLowerCase().contains(
-                    state.searchQuery.trim().toLowerCase(),
-                  ),
+                state.searchQuery.trim().toLowerCase(),
+              ),
             )
             .toList(growable: false);
         final collections = filteredItems
@@ -226,22 +227,26 @@ class _CollectionDetailView extends StatefulWidget {
 }
 
 class _CollectionDetailViewState extends State<_CollectionDetailView> {
-  final Set<String> _expandedFolders = <String>{};
+  late final CollectionTreeCubit _treeCubit;
   late final TextEditingController _searchController;
   static const _curlParser = SimpleCurlRequestParser();
 
-  String get _searchQuery => _searchController.text;
+  String get _searchQuery => _treeCubit.state.query;
+  Set<String> get _expandedFolders => _treeCubit.state.expandedFolders;
 
   @override
   void initState() {
     super.initState();
     _searchController = TextEditingController();
-    _seedExpandedFolders();
+    _treeCubit = CollectionTreeCubit(
+      initiallyExpanded: _allFolderKeys(widget.collection.folders),
+    );
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _treeCubit.close();
     super.dispose();
   }
 
@@ -249,129 +254,128 @@ class _CollectionDetailViewState extends State<_CollectionDetailView> {
   void didUpdateWidget(covariant _CollectionDetailView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.collection.id != widget.collection.id) {
-      _expandedFolders
-        ..clear()
-        ..addAll(_allFolderKeys(widget.collection.folders));
+      _treeCubit.reset(
+        expandedFolders: _allFolderKeys(widget.collection.folders),
+      );
       _searchController.clear();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.appColors;
-    final normalizedSearchQuery = _searchQuery.trim();
-    final visibleFolders = _filterFolders(
-      widget.collection.folders,
-      normalizedSearchQuery,
-    );
-    final visibleRootRequests = widget.collection.rootRequests
-        .where((request) => _requestMatchesQuery(request, _searchQuery))
-        .toList(growable: false);
-    final isEmptyCollection =
-        widget.collection.folders.isEmpty && widget.collection.rootRequests.isEmpty;
+    return BlocBuilder<CollectionTreeCubit, CollectionTreeState>(
+      bloc: _treeCubit,
+      builder: (context, treeState) {
+        final colors = context.appColors;
+        final normalizedSearchQuery = _searchQuery.trim();
+        final visibleFolders = _filterFolders(
+          widget.collection.folders,
+          normalizedSearchQuery,
+        );
+        final visibleRootRequests = widget.collection.rootRequests
+            .where((request) => _requestMatchesQuery(request, _searchQuery))
+            .toList(growable: false);
+        final isEmptyCollection =
+            widget.collection.folders.isEmpty &&
+            widget.collection.rootRequests.isEmpty;
 
-    final hasVisibleItems =
-        visibleFolders.isNotEmpty || visibleRootRequests.isNotEmpty;
+        final hasVisibleItems =
+            visibleFolders.isNotEmpty || visibleRootRequests.isNotEmpty;
 
-    return Stack(
-      children: [
-        ListView(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
+        return Stack(
           children: [
-            _CollectionSearchBar(
-              controller: _searchController,
-              onChanged: (_) => setState(() {}),
-            ),
-            const SizedBox(height: 12),
-            Divider(color: colors.divider, thickness: 1),
-            const SizedBox(height: 10),
-            if (!hasVisibleItems)
-              Padding(
-                padding: const EdgeInsets.only(top: 48),
-                child: isEmptyCollection && normalizedSearchQuery.isEmpty
-                    ? Column(
-                        children: [
-                          Icon(
-                            Icons.import_export_rounded,
-                            size: 56,
-                            color: colors.textSecondary,
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            'No Requests',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: colors.textPrimary,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            "Tap '+' to create a new request.",
+            ListView(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
+              children: [
+                _CollectionSearchBar(
+                  controller: _searchController,
+                  onChanged: _treeCubit.updateQuery,
+                ),
+                const SizedBox(height: 12),
+                Divider(color: colors.divider, thickness: 1),
+                const SizedBox(height: 10),
+                if (!hasVisibleItems)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 48),
+                    child: isEmptyCollection && normalizedSearchQuery.isEmpty
+                        ? Column(
+                            children: [
+                              Icon(
+                                Icons.import_export_rounded,
+                                size: 56,
+                                color: colors.textSecondary,
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                'No Requests',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: colors.textPrimary,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                "Tap '+' to create a new request.",
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: colors.textSecondary,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          )
+                        : Text(
+                            'No matching items',
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               color: colors.textSecondary,
-                              fontSize: 15,
+                              fontSize: 16,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
-                        ],
-                      )
-                    : Text(
-                        'No matching items',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: colors.textSecondary,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
+                  ),
+                for (final request in visibleRootRequests)
+                  _RequestRow(
+                    request: request,
+                    depth: 0,
+                    onTap: () => _openRequestEditor(request),
+                    onLongPress: () => _showRequestActions(request: request),
+                  ),
+                for (final folder in visibleFolders)
+                  _CollectionFolderNode(
+                    folder: folder,
+                    depth: 0,
+                    expandedKeys: _expandedFolders,
+                    onToggle: _treeCubit.toggleFolder,
+                    onLongPress: _showFolderActions,
+                    onRequestTap: _openRequestEditor,
+                    onRequestLongPress:
+                        ({required request, required folderKey}) =>
+                            _showRequestActions(
+                              request: request,
+                              folderKey: folderKey,
+                            ),
+                  ),
+              ],
+            ),
+            Positioned(
+              right: 16,
+              bottom: 16,
+              child: FloatingActionButton(
+                key: const ValueKey<String>(AppWidgetKeys.collectionsDetailFab),
+                heroTag: AppWidgetKeys.collectionsDetailFab,
+                backgroundColor: colors.methodGet,
+                foregroundColor: colors.textOnPrimary,
+                onPressed: _showDetailActionMenu,
+                child: const Icon(Icons.add_rounded),
               ),
-            for (final request in visibleRootRequests)
-              _RequestRow(
-                request: request,
-                depth: 0,
-                onTap: () => _openRequestEditor(request),
-                onLongPress: () => _showRequestActions(request: request),
-              ),
-            for (final folder in visibleFolders)
-              _CollectionFolderNode(
-                folder: folder,
-                depth: 0,
-                expandedKeys: _expandedFolders,
-                onToggle: (folderKey) => setState(() {
-                  if (_expandedFolders.contains(folderKey)) {
-                    _expandedFolders.remove(folderKey);
-                  } else {
-                    _expandedFolders.add(folderKey);
-                  }
-                }),
-                onLongPress: _showFolderActions,
-                onRequestTap: _openRequestEditor,
-                onRequestLongPress: ({
-                  required request,
-                  required folderKey,
-                }) => _showRequestActions(
-                  request: request,
-                  folderKey: folderKey,
-                ),
-              ),
+            ),
           ],
-        ),
-        Positioned(
-          right: 16,
-          bottom: 16,
-          child: FloatingActionButton(
-            key: const ValueKey<String>(AppWidgetKeys.collectionsDetailFab),
-            heroTag: AppWidgetKeys.collectionsDetailFab,
-            backgroundColor: colors.methodGet,
-            foregroundColor: colors.textOnPrimary,
-            onPressed: _showDetailActionMenu,
-            child: const Icon(Icons.add_rounded),
-          ),
-        ),
-      ],
+        );
+      },
     );
   }
 
@@ -623,12 +627,6 @@ class _CollectionDetailViewState extends State<_CollectionDetailView> {
     return HttpMethod.get;
   }
 
-  void _seedExpandedFolders() {
-    _expandedFolders
-      ..clear()
-      ..addAll(_allFolderKeys(widget.collection.folders));
-  }
-
   Set<String> _allFolderKeys(
     List<ImportedCollectionFolderEntity> folders, [
     String parentKey = '',
@@ -761,7 +759,7 @@ class _CollectionDetailViewState extends State<_CollectionDetailView> {
     );
 
     context.read<CollectionCubit>().updateCollection(updatedCollection);
-    setState(() => _expandedFolders.add(folder.key));
+    _treeCubit.expandFolder(folder.key);
   }
 
   Future<void> _createRootFolder() async {
@@ -782,9 +780,7 @@ class _CollectionDetailViewState extends State<_CollectionDetailView> {
       return;
     }
 
-    setState(() {
-      _expandedFolders.add(folderName);
-    });
+    _treeCubit.expandFolder(folderName);
   }
 
   Future<void> _deleteFolder(_VisibleFolderNode folder) async {
@@ -829,7 +825,7 @@ class _CollectionDetailViewState extends State<_CollectionDetailView> {
     );
 
     context.read<CollectionCubit>().updateCollection(updatedCollection);
-    setState(() => _expandedFolders.add(folder.key));
+    _treeCubit.expandFolder(folder.key);
   }
 
   Future<void> _createRootRequest() async {
@@ -902,7 +898,7 @@ class _CollectionDetailViewState extends State<_CollectionDetailView> {
     );
 
     context.read<CollectionCubit>().updateCollection(updatedCollection);
-    setState(() => _expandedFolders.add(folder.key));
+    _treeCubit.expandFolder(folder.key);
   }
 
   Future<void> _importCurlIntoCollection() async {
@@ -1021,21 +1017,23 @@ class _CollectionDetailViewState extends State<_CollectionDetailView> {
     transform, [
     String parentKey = '',
   ]) {
-    return folders.map((folder) {
-      final currentKey = _folderKey(parentKey, folder.name);
-      if (currentKey == targetKey) {
-        return transform(folder);
-      }
+    return folders
+        .map((folder) {
+          final currentKey = _folderKey(parentKey, folder.name);
+          if (currentKey == targetKey) {
+            return transform(folder);
+          }
 
-      return folder.copyWith(
-        folders: _updateFolderTree(
-          folder.folders,
-          targetKey,
-          transform,
-          currentKey,
-        ),
-      );
-    }).toList(growable: false);
+          return folder.copyWith(
+            folders: _updateFolderTree(
+              folder.folders,
+              targetKey,
+              transform,
+              currentKey,
+            ),
+          );
+        })
+        .toList(growable: false);
   }
 
   List<ImportedCollectionFolderEntity> _deleteFolderFromTree(
@@ -1051,11 +1049,7 @@ class _CollectionDetailViewState extends State<_CollectionDetailView> {
       }
       nextFolders.add(
         folder.copyWith(
-          folders: _deleteFolderFromTree(
-            folder.folders,
-            targetKey,
-            currentKey,
-          ),
+          folders: _deleteFolderFromTree(folder.folders, targetKey, currentKey),
         ),
       );
     }
@@ -1116,10 +1110,7 @@ class _CollectionDetailViewState extends State<_CollectionDetailView> {
     if (index < 0) {
       return requests;
     }
-    return [
-      ...requests.sublist(0, index),
-      ...requests.sublist(index + 1),
-    ];
+    return [...requests.sublist(0, index), ...requests.sublist(index + 1)];
   }
 
   List<ImportedCollectionRequestEntity> _deleteFolderRequest(
@@ -1139,7 +1130,10 @@ class _CollectionDetailViewState extends State<_CollectionDetailView> {
       url: draft.url,
       baseUrlValue: '',
       queryParameters: draft.queryParameters
-          .where((item) => item.key.trim().isNotEmpty || item.value.trim().isNotEmpty)
+          .where(
+            (item) =>
+                item.key.trim().isNotEmpty || item.value.trim().isNotEmpty,
+          )
           .map(
             (item) => ImportedRequestFieldEntity(
               name: item.key,
@@ -1149,7 +1143,10 @@ class _CollectionDetailViewState extends State<_CollectionDetailView> {
           )
           .toList(growable: false),
       headers: draft.headers
-          .where((item) => item.key.trim().isNotEmpty || item.value.trim().isNotEmpty)
+          .where(
+            (item) =>
+                item.key.trim().isNotEmpty || item.value.trim().isNotEmpty,
+          )
           .map(
             (item) => ImportedRequestFieldEntity(
               name: item.key,
@@ -1294,11 +1291,7 @@ class _CollectionSearchBar extends StatelessWidget {
             color: colors.iconPrimary,
             size: 34,
           ),
-          contentPadding: const EdgeInsets.only(
-            top: 16,
-            right: 20,
-            bottom: 16,
-          ),
+          contentPadding: const EdgeInsets.only(top: 16, right: 20, bottom: 16),
         ),
       ),
     );
@@ -1354,10 +1347,8 @@ class _CollectionFolderNode extends StatelessWidget {
               request: request,
               depth: depth + 1,
               onTap: () => onRequestTap(request),
-              onLongPress: () => onRequestLongPress(
-                request: request,
-                folderKey: folder.key,
-              ),
+              onLongPress: () =>
+                  onRequestLongPress(request: request, folderKey: folder.key),
             ),
           for (final child in folder.visibleChildren)
             _CollectionFolderNode(
@@ -1771,7 +1762,9 @@ class _CollectionDetailActionsSheet extends StatelessWidget {
         child: Align(
           alignment: Alignment.bottomRight,
           child: Container(
-            key: const ValueKey<String>(AppWidgetKeys.collectionsDetailMenuSheet),
+            key: const ValueKey<String>(
+              AppWidgetKeys.collectionsDetailMenuSheet,
+            ),
             width: 280,
             decoration: BoxDecoration(
               color: colors.surface,
@@ -1794,8 +1787,9 @@ class _CollectionDetailActionsSheet extends StatelessWidget {
                   ),
                   icon: Icons.code_rounded,
                   label: 'Import curl...',
-                  onTap: () =>
-                      Navigator.of(context).pop(_CollectionDetailAction.importCurl),
+                  onTap: () => Navigator.of(
+                    context,
+                  ).pop(_CollectionDetailAction.importCurl),
                 ),
                 _CollectionActionMenuItem(
                   itemKey: const ValueKey<String>(
@@ -1803,8 +1797,9 @@ class _CollectionDetailActionsSheet extends StatelessWidget {
                   ),
                   icon: Icons.create_new_folder_outlined,
                   label: 'New Folder',
-                  onTap: () =>
-                      Navigator.of(context).pop(_CollectionDetailAction.newFolder),
+                  onTap: () => Navigator.of(
+                    context,
+                  ).pop(_CollectionDetailAction.newFolder),
                 ),
                 _CollectionActionMenuItem(
                   itemKey: const ValueKey<String>(
@@ -1812,8 +1807,9 @@ class _CollectionDetailActionsSheet extends StatelessWidget {
                   ),
                   icon: Icons.add_circle_outline_rounded,
                   label: 'New Request',
-                  onTap: () =>
-                      Navigator.of(context).pop(_CollectionDetailAction.newRequest),
+                  onTap: () => Navigator.of(
+                    context,
+                  ).pop(_CollectionDetailAction.newRequest),
                 ),
               ],
             ),
@@ -1909,13 +1905,13 @@ class _FolderNameDialog extends StatelessWidget {
         label: label,
         onTap: onTap,
         buttonKey: label == 'Create'
-            ? const ValueKey<String>(AppWidgetKeys.collectionsNewFolderCreateButton)
+            ? const ValueKey<String>(
+                AppWidgetKeys.collectionsNewFolderCreateButton,
+              )
             : null,
       ),
-      cancelButtonBuilder: (label, onTap) => _CollectionDialogButton(
-        label: label,
-        onTap: onTap,
-      ),
+      cancelButtonBuilder: (label, onTap) =>
+          _CollectionDialogButton(label: label, onTap: onTap),
     );
   }
 }
@@ -2007,16 +2003,13 @@ class _FolderNameDialogBodyState extends State<_FolderNameDialogBody> {
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: widget.confirmButtonBuilder(
-                    widget.actionLabel,
-                    () {
-                      final value = _controller.text.trim();
-                      if (value.isEmpty) {
-                        return;
-                      }
-                      Navigator.of(context).pop(value);
-                    },
-                  ),
+                  child: widget.confirmButtonBuilder(widget.actionLabel, () {
+                    final value = _controller.text.trim();
+                    if (value.isEmpty) {
+                      return;
+                    }
+                    Navigator.of(context).pop(value);
+                  }),
                 ),
               ],
             ),
@@ -2380,193 +2373,196 @@ class _CollectionEditorPage extends StatefulWidget {
 
 class _CollectionEditorPageState extends State<_CollectionEditorPage> {
   late final TextEditingController _nameController;
-  late List<ImportedCollectionVariableEntity> _variables;
+  late final CollectionVariablesCubit _variablesCubit;
 
   @override
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.collection.name);
-    _variables = widget.collection.variables.isEmpty
+    final variables = widget.collection.variables.isEmpty
         ? <ImportedCollectionVariableEntity>[
             const ImportedCollectionVariableEntity(name: 'baseUrl', value: ''),
           ]
         : widget.collection.variables
               .map((item) => item.copyWith())
               .toList(growable: true);
+    _variablesCubit = CollectionVariablesCubit(variables);
   }
 
   @override
   void dispose() {
     _nameController.dispose();
+    _variablesCubit.close();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.appColors;
+    return BlocBuilder<
+      CollectionVariablesCubit,
+      List<ImportedCollectionVariableEntity>
+    >(
+      bloc: _variablesCubit,
+      builder: (context, variables) {
+        final colors = context.appColors;
 
-    return Scaffold(
-      backgroundColor: colors.background,
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-          children: [
-            Row(
+        return Scaffold(
+          backgroundColor: colors.background,
+          body: SafeArea(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
               children: [
-                _HeaderCircleButton(
-                  icon: Icons.close_rounded,
-                  onTap: () => Navigator.of(context).pop(),
+                Row(
+                  children: [
+                    _HeaderCircleButton(
+                      icon: Icons.close_rounded,
+                      onTap: () => Navigator.of(context).pop(),
+                    ),
+                    Expanded(
+                      child: Text(
+                        'Collection',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: colors.textPrimary,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    _HeaderCircleButton(
+                      icon: Icons.check_rounded,
+                      filled: true,
+                      onTap: _save,
+                    ),
+                  ],
                 ),
-                Expanded(
-                  child: Text(
-                    'Collection',
-                    textAlign: TextAlign.center,
+                const SizedBox(height: 28),
+                _EditorCard(
+                  child: TextField(
+                    controller: _nameController,
                     style: TextStyle(
                       color: colors.textPrimary,
                       fontSize: 20,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    decoration: const InputDecoration(
+                      border: InputBorder.none,
+                      hintText: 'Collection name',
                     ),
                   ),
                 ),
-                _HeaderCircleButton(
-                  icon: Icons.check_rounded,
-                  filled: true,
-                  onTap: _save,
+                const SizedBox(height: 28),
+                Text(
+                  'Variables',
+                  style: TextStyle(
+                    color: colors.textSecondary,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 28),
-            _EditorCard(
-              child: TextField(
-                controller: _nameController,
-                style: TextStyle(
-                  color: colors.textPrimary,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w500,
-                ),
-                decoration: const InputDecoration(
-                  border: InputBorder.none,
-                  hintText: 'Collection name',
-                ),
-              ),
-            ),
-            const SizedBox(height: 28),
-            Text(
-              'Variables',
-              style: TextStyle(
-                color: colors.textSecondary,
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 14),
-            _EditorCard(
-              padding: EdgeInsets.zero,
-              child: Column(
-                children: [
-                  for (var i = 0; i < _variables.length; i++) ...[
-                    _VariableRow(
-                      variable: _variables[i],
-                      onChanged: (updated) =>
-                          setState(() => _variables[i] = updated),
-                    ),
-                    if (i != _variables.length - 1)
+                const SizedBox(height: 14),
+                _EditorCard(
+                  padding: EdgeInsets.zero,
+                  child: Column(
+                    children: [
+                      for (var i = 0; i < variables.length; i++) ...[
+                        _VariableRow(
+                          variable: variables[i],
+                          onChanged: (updated) =>
+                              _variablesCubit.updateAt(i, updated),
+                        ),
+                        if (i != variables.length - 1)
+                          Divider(
+                            height: 1,
+                            thickness: 1,
+                            color: colors.divider,
+                            indent: 64,
+                          ),
+                      ],
                       Divider(
                         height: 1,
                         thickness: 1,
                         color: colors.divider,
                         indent: 64,
                       ),
-                  ],
-                  Divider(
-                    height: 1,
-                    thickness: 1,
-                    color: colors.divider,
-                    indent: 64,
-                  ),
-                  InkWell(
-                    onTap: () => setState(() {
-                      _variables.add(
-                        const ImportedCollectionVariableEntity(
-                          name: '',
-                          value: '',
+                      InkWell(
+                        onTap: _variablesCubit.addEmpty,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 18,
+                            vertical: 18,
+                          ),
+                          child: Row(
+                            children: [
+                              const _VariableStateDot(
+                                icon: Icons.add_rounded,
+                                filled: true,
+                              ),
+                              const SizedBox(width: 18),
+                              Text(
+                                'Add',
+                                style: TextStyle(
+                                  color: colors.textSecondary,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      );
-                    }),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 18,
-                        vertical: 18,
                       ),
-                      child: Row(
-                        children: [
-                          const _VariableStateDot(
-                            icon: Icons.add_rounded,
-                            filled: true,
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 28),
+                Text(
+                  'Auth',
+                  style: TextStyle(
+                    color: colors.textSecondary,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                _EditorCard(
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Auth',
+                          style: TextStyle(
+                            color: colors.textPrimary,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w500,
                           ),
-                          const SizedBox(width: 18),
-                          Text(
-                            'Add',
-                            style: TextStyle(
-                              color: colors.textSecondary,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 28),
-            Text(
-              'Auth',
-              style: TextStyle(
-                color: colors.textSecondary,
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 14),
-            _EditorCard(
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Auth',
-                      style: TextStyle(
-                        color: colors.textPrimary,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w500,
+                      Text(
+                        widget.collection.authLabel,
+                        style: TextStyle(
+                          color: colors.methodGet,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
-                    ),
+                      Icon(
+                        Icons.unfold_more_rounded,
+                        color: colors.methodGet,
+                        size: 22,
+                      ),
+                    ],
                   ),
-                  Text(
-                    widget.collection.authLabel,
-                    style: TextStyle(
-                      color: colors.methodGet,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  Icon(
-                    Icons.unfold_more_rounded,
-                    color: colors.methodGet,
-                    size: 22,
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
   void _save() {
-    final cleanedVariables = _variables
+    final cleanedVariables = _variablesCubit.state
         .where((item) => item.name.trim().isNotEmpty)
         .map(
           (item) =>
