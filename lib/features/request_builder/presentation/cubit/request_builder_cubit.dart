@@ -4,11 +4,16 @@ import '../../domain/entities/request_draft.dart';
 import '../../domain/entities/request_draft_session.dart';
 import '../../domain/entities/requests_method.dart';
 import '../../domain/entities/saved_request_draft.dart';
+import '../../domain/entities/har_request_import_outcome.dart';
+import '../../domain/helpers/har_request_codec.dart';
+import '../../domain/helpers/simple_curl_request_parser.dart';
 import '../../domain/usecases/clear_current_request_draft_session_use_case.dart';
 import '../../domain/usecases/get_current_request_draft_session_use_case.dart';
 import '../../domain/usecases/get_request_draft_use_case.dart';
 import '../../domain/usecases/get_request_variable_store_use_case.dart';
 import '../../domain/usecases/get_saved_request_drafts_use_case.dart';
+import '../../domain/usecases/import_har_requests_use_case.dart';
+import '../../domain/usecases/parse_curl_request_use_case.dart';
 import '../../domain/usecases/save_current_request_draft_session_use_case.dart';
 import '../../domain/usecases/save_saved_request_drafts_use_case.dart';
 import '../models/request_list_item.dart';
@@ -26,6 +31,8 @@ class RequestBuilderCubit extends Cubit<RequestBuilderState> {
     clearCurrentRequestDraftSessionUseCase,
     required GetSavedRequestDraftsUseCase getSavedRequestDraftsUseCase,
     required SaveSavedRequestDraftsUseCase saveSavedRequestDraftsUseCase,
+    required ImportHarRequestsUseCase importHarRequestsUseCase,
+    required ParseCurlRequestUseCase parseCurlRequestUseCase,
     List<RequestListItem>? seedRequests,
   }) : _getCurrentRequestDraftSessionUseCase =
            getCurrentRequestDraftSessionUseCase,
@@ -35,6 +42,8 @@ class RequestBuilderCubit extends Cubit<RequestBuilderState> {
            clearCurrentRequestDraftSessionUseCase,
        _getSavedRequestDraftsUseCase = getSavedRequestDraftsUseCase,
        _saveSavedRequestDraftsUseCase = saveSavedRequestDraftsUseCase,
+       _importHarRequestsUseCase = importHarRequestsUseCase,
+       _parseCurlRequestUseCase = parseCurlRequestUseCase,
        _seedRequests = seedRequests,
        super(const RequestBuilderState.initial());
 
@@ -48,7 +57,10 @@ class RequestBuilderCubit extends Cubit<RequestBuilderState> {
   _clearCurrentRequestDraftSessionUseCase;
   final GetSavedRequestDraftsUseCase _getSavedRequestDraftsUseCase;
   final SaveSavedRequestDraftsUseCase _saveSavedRequestDraftsUseCase;
+  final ImportHarRequestsUseCase _importHarRequestsUseCase;
+  final ParseCurlRequestUseCase _parseCurlRequestUseCase;
   final List<RequestListItem>? _seedRequests;
+  static const HarRequestCodec _harRequestCodec = HarRequestCodec();
 
   /// Loads the starting draft, variable store, and the visible list of saved requests.
   Future<void> load() async {
@@ -88,6 +100,11 @@ class RequestBuilderCubit extends Cubit<RequestBuilderState> {
     emit(state.copyWith(searchQuery: value));
   }
 
+  /// Toggles the favourites-only filter while retaining the current search query.
+  void toggleFavouritesOnly() {
+    emit(state.copyWith(showFavouritesOnly: !state.showFavouritesOnly));
+  }
+
   /// Persists the latest draft and reflects core request metadata back into the list.
   Future<void> saveEditedDraft({
     required int requestIndex,
@@ -109,7 +126,14 @@ class RequestBuilderCubit extends Cubit<RequestBuilderState> {
     final updatedSavedRequests = _replaceSavedRequest(
       state.savedRequests,
       requestIndex,
-      SavedRequestDraft(title: title, draft: draft),
+      SavedRequestDraft(
+        title: title,
+        draft: draft,
+        isFavourite:
+            requestIndex >= 0 && requestIndex < state.savedRequests.length
+            ? state.savedRequests[requestIndex].isFavourite
+            : false,
+      ),
     );
     await _saveSavedRequestDraftsUseCase(updatedSavedRequests);
 
@@ -159,13 +183,37 @@ class RequestBuilderCubit extends Cubit<RequestBuilderState> {
     );
   }
 
-  Future<void> importHar() async {
-    // TODO: Parse a selected HAR file and add the imported request drafts.
+  /// Appends valid HAR request entries and returns a presentation-safe outcome.
+  Future<HarRequestImportOutcome> importHarContent(String content) async {
+    final outcome = _importHarRequestsUseCase(content);
+    if (outcome is HarRequestImportFailure) {
+      return outcome;
+    }
+    final importedRequests = outcome as HarRequestImportSuccess;
+    final updatedSavedRequests = [
+      ...state.savedRequests,
+      ...importedRequests.requests,
+    ];
+    await _saveSavedRequestDraftsUseCase(updatedSavedRequests);
+
+    if (isClosed) {
+      return outcome;
+    }
+
+    emit(
+      state.copyWith(
+        requests: updatedSavedRequests
+            .map(_listItemFromSavedRequest)
+            .toList(growable: false),
+        savedRequests: updatedSavedRequests,
+      ),
+    );
+    return outcome;
   }
 
-  Future<void> importCurl() async {
-    // TODO: Parse a pasted curl command and add the imported request draft.
-  }
+  /// Parses a supported cURL command without mutating saved requests.
+  CurlParseResult importCurlCommand(String command) =>
+      _parseCurlRequestUseCase(command);
 
   Future<void> duplicateRequest(int requestIndex) async {
     if (requestIndex < 0 || requestIndex >= state.savedRequests.length) {
@@ -223,16 +271,43 @@ class RequestBuilderCubit extends Cubit<RequestBuilderState> {
     );
   }
 
-  Future<void> viewCurl(int requestIndex) async {
-    // TODO: Generate and present the selected request as a cURL command.
+  /// Builds a HAR document for the original saved-list index, if it is valid.
+  String? exportHarForRequest(int requestIndex) {
+    if (requestIndex < 0 || requestIndex >= state.savedRequests.length) {
+      return null;
+    }
+
+    final request = state.savedRequests[requestIndex];
+    return _harRequestCodec.encode(title: request.title, draft: request.draft);
   }
 
-  Future<void> exportHar(int requestIndex) async {
-    // TODO: Export the selected request as a HAR entry/file.
-  }
-
+  /// Toggles a saved request favourite flag while retaining its draft payload.
   Future<void> toggleFavourite(int requestIndex) async {
-    // TODO: Persist favourite state once request list items model favourites.
+    if (requestIndex < 0 || requestIndex >= state.savedRequests.length) {
+      return;
+    }
+
+    final sourceRequest = state.savedRequests[requestIndex];
+    final updatedSavedRequests = [...state.savedRequests];
+    updatedSavedRequests[requestIndex] = SavedRequestDraft(
+      title: sourceRequest.title,
+      draft: sourceRequest.draft,
+      isFavourite: !sourceRequest.isFavourite,
+    );
+    await _saveSavedRequestDraftsUseCase(updatedSavedRequests);
+
+    if (isClosed) {
+      return;
+    }
+
+    emit(
+      state.copyWith(
+        requests: updatedSavedRequests
+            .map(_listItemFromSavedRequest)
+            .toList(growable: false),
+        savedRequests: updatedSavedRequests,
+      ),
+    );
   }
 
   Future<void> saveCurrentDraftSession({
@@ -328,6 +403,7 @@ class RequestBuilderCubit extends Cubit<RequestBuilderState> {
             ? 'Untitled Request'
             : request.title.trim(),
         url: request.draft.url,
+        isFavourite: request.isFavourite,
       );
 
   HttpMethod _methodFromLabel(String label) {

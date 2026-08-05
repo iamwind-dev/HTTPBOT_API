@@ -45,6 +45,8 @@ import '../features/request_builder/data/repositories/response_filter_repository
 import '../features/request_builder/domain/repositories/response_filter_repository.dart';
 import '../features/request_builder/data/repositories/http_cookie_repository_impl.dart';
 import '../features/request_builder/data/repositories/request_builder_repository_impl.dart';
+import '../features/request_builder/data/repositories/platform_request_transfer_gateway.dart';
+import '../features/request_builder/data/services/har_request_decoder_impl.dart';
 import '../features/request_builder/data/datasources/oauth2_remote_datasource.dart';
 import '../features/request_builder/data/repositories/oauth2_repository_impl.dart';
 import '../features/request_builder/data/repositories/graphql_repository_impl.dart';
@@ -56,6 +58,8 @@ import '../features/request_builder/domain/repositories/oauth2_repository.dart';
 import '../features/request_builder/domain/repositories/response_filters_repository.dart';
 import '../features/request_builder/domain/repositories/request_execution_repository.dart';
 import '../features/request_builder/domain/repositories/request_builder_repository.dart';
+import '../features/request_builder/domain/repositories/har_request_decoder.dart';
+import '../features/request_builder/domain/repositories/request_transfer_gateway.dart';
 import '../features/request_builder/domain/repositories/saved_credentials_repository.dart';
 import '../features/request_builder/domain/usecases/exchange_oauth2_authorization_code_use_case.dart';
 import '../features/request_builder/domain/usecases/fetch_graphql_schema_use_case.dart';
@@ -72,6 +76,7 @@ import '../features/request_builder/domain/usecases/save_saved_credentials_use_c
 import '../features/request_builder/presentation/cubit/manage_credentials_cubit.dart';
 import '../features/request_builder/presentation/cubit/manage_response_filters_cubit.dart';
 import '../features/request_builder/domain/usecases/clear_current_request_draft_session_use_case.dart';
+import '../features/request_builder/domain/usecases/build_request_har_export_use_case.dart';
 import '../features/request_builder/domain/usecases/execute_request_use_case.dart';
 import '../features/request_builder/domain/usecases/evaluate_request_tests_use_case.dart';
 import '../features/request_builder/domain/usecases/get_current_request_draft_session_use_case.dart';
@@ -79,6 +84,8 @@ import '../features/request_builder/domain/usecases/get_request_draft_use_case.d
 import '../features/request_builder/domain/usecases/get_request_variable_store_use_case.dart';
 import '../features/request_builder/domain/usecases/get_saved_request_drafts_use_case.dart';
 import '../features/request_builder/domain/usecases/parse_response_use_case.dart';
+import '../features/request_builder/domain/usecases/parse_curl_request_use_case.dart';
+import '../features/request_builder/domain/usecases/import_har_requests_use_case.dart';
 import '../features/request_builder/domain/usecases/apply_request_auth_use_case.dart';
 import '../features/request_builder/domain/usecases/save_current_request_draft_session_use_case.dart';
 import '../features/request_builder/domain/usecases/save_request_draft_use_case.dart';
@@ -184,6 +191,10 @@ void configureDependencies() {
     ..registerLazySingleton<RequestBuilderRepository>(
       RequestBuilderRepositoryImpl.new,
     )
+    ..registerLazySingleton<RequestTransferGateway>(
+      PlatformRequestTransferGateway.new,
+    )
+    ..registerLazySingleton<HarRequestDecoder>(HarRequestDecoderImpl.new)
     ..registerLazySingleton<HttpCookieRepository>(HttpCookieRepositoryImpl.new)
     ..registerLazySingleton<RequestExecutionRepository>(
       () => RequestExecutionRepositoryImpl(
@@ -230,7 +241,12 @@ void configureDependencies() {
     )
     ..registerLazySingleton(
       () => SaveSavedRequestDraftsUseCase(getIt<RequestBuilderRepository>()),
-    );
+    )
+    ..registerLazySingleton(BuildRequestHarExportUseCase.new)
+    ..registerLazySingleton(
+      () => ImportHarRequestsUseCase(getIt<HarRequestDecoder>()),
+    )
+    ..registerLazySingleton(ParseCurlRequestUseCase.new);
   getIt.registerLazySingleton(
     () => GetRequestVariableStoreUseCase(getIt<RequestBuilderRepository>()),
   );

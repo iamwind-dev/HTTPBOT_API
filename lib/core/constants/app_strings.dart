@@ -3,6 +3,7 @@ abstract final class AppStrings {
   static const requestsTitle = 'Requests';
   static const requestsSearchHint = 'Search';
   static const requestsFavoriteTooltip = 'Favorite requests';
+  static const requestsShowAllTooltip = 'Show all requests';
   static const requestsAddTooltip = 'Create request';
   static const requestsEmptyTitle = 'No requests yet';
   static const requestsEmptyMessage =
@@ -10,6 +11,9 @@ abstract final class AppStrings {
   static const requestsNoResultsTitle = 'No matching requests';
   static const requestsNoResultsMessage =
       'Try a different search term or create a new request.';
+  static const requestsNoFavouritesTitle = 'No favourite requests';
+  static const requestsNoFavouritesMessage =
+      'Mark a request as favourite to keep it here.';
   static const requestsImportHar = 'Import HAR';
   static const requestsImportCurl = 'Import curl';
   static const requestsNewRequest = 'New Request';
@@ -133,8 +137,7 @@ abstract final class AppStrings {
       'No cookies have been saved yet. Tap + to add a new cookie.';
   static const testsTitle = 'Tests';
   static const testsNoTestsTitle = 'No Tests';
-  static const testsNoTestsMessage =
-      'Add tests to validate your API responses';
+  static const testsNoTestsMessage = 'Add tests to validate your API responses';
   static const testsAddTitle = 'New Test';
   static const testsEditTitle = 'Edit Test';
   static const testsDeleteTitle = 'Delete Item?';
@@ -159,7 +162,8 @@ abstract final class AppStrings {
   static const testsNoResultsTitle = 'No Tests Available';
   static const testsNoResultsMessage =
       'No tests have been created for this request';
-  static const testsNoResponseRunMessage = 'No tests were run for this request.';
+  static const testsNoResponseRunMessage =
+      'No tests were run for this request.';
   static const requestSettingsTitle = 'Settings';
   static const requestSettingsSavedResponsesInHistory =
       'Saved responses in history';
@@ -297,10 +301,12 @@ abstract final class AppStrings {
   static const settingsResponseFilterSaveQuery = 'Save Query';
   static const settingsResponseFilterManageQueries = 'Manage Queries';
   static const settingsResponseFilterWrapResponse = 'Wrap Response';
-  static const settingsResponseFilterQueryRequired = 'Filter query is required.';
+  static const settingsResponseFilterQueryRequired =
+      'Filter query is required.';
   static const settingsResponseFilterUnableToSave = 'Unable to save filter.';
   static const settingsResponseFilterUnableToLoad = 'Unable to load filters.';
-  static const settingsResponseFilterUnableToDelete = 'Unable to delete filter.';
+  static const settingsResponseFilterUnableToDelete =
+      'Unable to delete filter.';
   static const settingsResponseFilterInvalidQuery = 'Invalid filter query.';
   static const settingsResponseFilterTextOnly =
       'Filtering only works on text responses.';
@@ -322,8 +328,7 @@ abstract final class AppStrings {
   static const settingsGraphqlSavedQueries = 'Saved Queries';
   static const settingsGraphqlSavedVariables = 'Saved Variables';
   static const settingsGraphqlNoSavedQueries = 'No Saved GraphQL Queries';
-  static const settingsGraphqlNoSavedVariables =
-      'No Saved GraphQL Variables';
+  static const settingsGraphqlNoSavedVariables = 'No Saved GraphQL Variables';
   static const settingsGraphqlQueryRequired = 'Query is required.';
   static const settingsGraphqlVariablesJsonInvalid =
       'Variables must be a valid JSON object.';

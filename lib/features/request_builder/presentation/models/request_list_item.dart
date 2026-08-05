@@ -5,11 +5,13 @@ class RequestListItem extends Equatable {
     required this.method,
     required this.title,
     required this.url,
+    this.isFavourite = false,
   });
 
   final String method;
   final String title;
   final String url;
+  final bool isFavourite;
 
   bool matches(String query) {
     final normalizedQuery = query.trim().toLowerCase();
@@ -24,5 +26,5 @@ class RequestListItem extends Equatable {
   }
 
   @override
-  List<Object> get props => [method, title, url];
+  List<Object> get props => [method, title, url, isFavourite];
 }

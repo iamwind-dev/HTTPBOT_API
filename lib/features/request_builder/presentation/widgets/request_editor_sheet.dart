@@ -25,6 +25,8 @@ import '../../domain/entities/request_variable_store.dart';
 import '../../domain/entities/requests_method.dart';
 import '../../domain/helpers/curl_command_builder.dart';
 import '../../domain/helpers/graphql_input_utils.dart';
+import '../../domain/repositories/request_transfer_gateway.dart';
+import '../../domain/usecases/build_request_har_export_use_case.dart';
 import '../../domain/entities/saved_graphql_query_entity.dart';
 import '../../domain/entities/saved_graphql_variable_entity.dart';
 import '../../domain/entities/graphql_schema_view_entity.dart';
@@ -79,6 +81,7 @@ Future<RequestEditorResult?> showRequestEditorSheet(
     initialDraft: initialDraft,
   );
   final requestSendBloc = getIt<RequestSendBloc>();
+  Future<void>? editorRouteClosed;
   Timer? autosaveTimer;
   RequestEditorState? pendingAutosaveState;
 
@@ -104,20 +107,26 @@ Future<RequestEditorResult?> showRequestEditorSheet(
   });
 
   try {
-    final result = await showRequestModalSheet<RequestEditorResult?>(
+    final result = await showRequestModalSheet<RequestEditorResult>(
       context,
-      builder: (context) => MultiBlocProvider(
-        providers: [
-          BlocProvider<RequestEditorCubit>.value(value: editorCubit),
-          BlocProvider<RequestSendBloc>.value(value: requestSendBloc),
-        ],
-        child: _RequestEditorSheet(
-          initialTitle: title,
-          initialDraft: initialDraft,
-          variableStore: variableStore,
-          onDraftDiscarded: onDraftDiscarded,
-        ),
-      ),
+      builder: (sheetContext) {
+        editorRouteClosed = ModalRoute.of(
+          sheetContext,
+        )?.completed.then<void>((_) {});
+
+        return MultiBlocProvider(
+          providers: [
+            BlocProvider<RequestEditorCubit>.value(value: editorCubit),
+            BlocProvider<RequestSendBloc>.value(value: requestSendBloc),
+          ],
+          child: _RequestEditorSheet(
+            initialTitle: title,
+            initialDraft: initialDraft,
+            variableStore: variableStore,
+            onDraftDiscarded: onDraftDiscarded,
+          ),
+        );
+      },
     );
 
     autosaveTimer?.cancel();
@@ -125,9 +134,13 @@ Future<RequestEditorResult?> showRequestEditorSheet(
     return result;
   } finally {
     autosaveTimer?.cancel();
-    await editorSubscription.cancel();
-    await editorCubit.close();
-    await requestSendBloc.close();
+    unawaited(
+      (editorRouteClosed ?? Future<void>.value()).then<void>((_) async {
+        await editorSubscription.cancel();
+        await editorCubit.close();
+        await requestSendBloc.close();
+      }),
+    );
   }
 }
 
@@ -346,7 +359,37 @@ class _RequestEditorSheetState extends State<_RequestEditorSheet> {
   }
 
   Future<void> _exportHar() async {
-    // TODO: Export the current request draft as a HAR entry/file.
+    final editorState = context.read<RequestEditorCubit>().state;
+    final title = editorState.title.trim().isEmpty
+        ? 'request'
+        : editorState.title.trim();
+    try {
+      final payload = getIt<BuildRequestHarExportUseCase>()(
+        title: title,
+        draft: editorState.draft,
+      );
+      final outcome = await getIt<RequestTransferGateway>().shareHar(payload);
+      if (!mounted || outcome is! HarShareFailure) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to export the HAR file.')),
+      );
+    } on FormatException {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter a valid HTTP or HTTPS URL first.')),
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to export the HAR file.')),
+      );
+    }
   }
 
   Future<void> _openCookies() async {
