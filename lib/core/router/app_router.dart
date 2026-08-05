@@ -22,14 +22,20 @@ import '../../core/widgets/app_page_header.dart';
 import '../../core/widgets/app_shell_scaffold.dart';
 import '../../features/request_builder/domain/entities/request_draft.dart';
 import '../../features/request_builder/domain/entities/request_variable_store.dart';
+import '../../features/request_builder/domain/entities/har_request_import_outcome.dart';
+import '../../features/request_builder/domain/helpers/simple_curl_request_parser.dart';
+import '../../features/request_builder/domain/repositories/request_transfer_gateway.dart';
 import '../../features/request_builder/domain/usecases/clear_current_request_draft_session_use_case.dart';
 import '../../features/request_builder/domain/usecases/get_current_request_draft_session_use_case.dart';
 import '../../features/request_builder/domain/usecases/get_request_draft_use_case.dart';
 import '../../features/request_builder/domain/usecases/get_request_variable_store_use_case.dart';
 import '../../features/request_builder/domain/usecases/get_saved_request_drafts_use_case.dart';
+import '../../features/request_builder/domain/usecases/import_har_requests_use_case.dart';
+import '../../features/request_builder/domain/usecases/parse_curl_request_use_case.dart';
 import '../../features/request_builder/domain/usecases/save_current_request_draft_session_use_case.dart';
 import '../../features/request_builder/domain/usecases/save_saved_request_drafts_use_case.dart';
 import '../../features/request_builder/presentation/cubit/request_builder_cubit.dart';
+import '../../features/request_builder/presentation/cubit/request_builder_state.dart';
 import '../../features/request_builder/presentation/pages/request_builder_page.dart';
 import '../../features/request_builder/presentation/widgets/manage_environments_sheet.dart';
 import '../../features/request_builder/presentation/widgets/global_variables_sheet.dart';
@@ -133,6 +139,8 @@ abstract final class AppRouter {
                         getIt<GetSavedRequestDraftsUseCase>(),
                     saveSavedRequestDraftsUseCase:
                         getIt<SaveSavedRequestDraftsUseCase>(),
+                    importHarRequestsUseCase: getIt<ImportHarRequestsUseCase>(),
+                    parseCurlRequestUseCase: getIt<ParseCurlRequestUseCase>(),
                   )..load(),
                   child: _RequestsShell(
                     onTabSelected: (tab) =>
@@ -473,8 +481,8 @@ class _RequestsShell extends StatelessWidget {
     bottomSlot: const RequestSearchField(),
     body: const RequestBuilderPage(),
     floatingActionButton: RequestShellActionButton(
-      onImportHar: () => context.read<RequestBuilderCubit>().importHar(),
-      onImportCurl: () => context.read<RequestBuilderCubit>().importCurl(),
+      onImportHar: () => _importHar(context),
+      onImportCurl: () => _importCurl(context),
       onNewRequest: () => _openNewRequestEditor(context),
     ),
     onTabSelected: onTabSelected,
@@ -504,6 +512,133 @@ class _RequestsShell extends StatelessWidget {
       draft: result.draft,
     );
   }
+
+  /// Selects a HAR file, then appends only its valid request entries.
+  Future<void> _importHar(BuildContext context) async {
+    final selection = await getIt<RequestTransferGateway>().selectHar();
+    if (!context.mounted) {
+      return;
+    }
+    switch (selection) {
+      case HarSelectionCancelled():
+        return;
+      case HarSelectionFailure():
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Unable to import the HAR file.')),
+        );
+        return;
+      case HarSelectionSuccess(:final content):
+        try {
+          final result = await context
+              .read<RequestBuilderCubit>()
+              .importHarContent(content);
+          if (!context.mounted) {
+            return;
+          }
+          switch (result) {
+            case HarRequestImportSuccess(:final requests, :final skippedCount):
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    skippedCount == 0
+                        ? 'Imported ${requests.length} request(s).'
+                        : 'Imported ${requests.length} request(s); skipped $skippedCount invalid entry(s).',
+                  ),
+                ),
+              );
+            case HarRequestImportFailure():
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('The selected file is not a valid HAR file.'),
+                ),
+              );
+          }
+        } catch (_) {
+          if (!context.mounted) {
+            return;
+          }
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Unable to import the HAR file.')),
+          );
+        }
+    }
+  }
+
+  /// Parses pasted cURL and opens the existing editor before any request is saved.
+  Future<void> _importCurl(BuildContext context) async {
+    final controller = TextEditingController();
+    Future<void>? dialogClosed;
+    final command = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        dialogClosed = ModalRoute.of(
+          dialogContext,
+        )?.completed.then<void>((_) {});
+
+        return AlertDialog(
+          title: const Text('Import cURL'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            minLines: 3,
+            maxLines: 8,
+            decoration: const InputDecoration(hintText: 'Paste a curl command'),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(controller.text),
+              child: const Text('Continue'),
+            ),
+          ],
+        );
+      },
+    );
+
+    // Keep the controller alive until the dialog's reverse transition unmounts its field.
+    await (dialogClosed ?? Future<void>.value());
+    controller.dispose();
+    if (!context.mounted || command == null) {
+      return;
+    }
+
+    final cubit = context.read<RequestBuilderCubit>();
+    CurlParseResult parsed;
+    try {
+      parsed = cubit.importCurlCommand(command);
+    } on FormatException {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Enter a cURL command with an HTTP or HTTPS URL.'),
+        ),
+      );
+      return;
+    }
+    final draft = parsed.draft;
+
+    if (parsed.diagnostics.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Some unsupported cURL options were ignored.'),
+        ),
+      );
+    }
+
+    final result = await showRequestEditorSheet(
+      context,
+      title: '${draft.method.wireName} ${draft.url}',
+      initialDraft: draft,
+      variableStore:
+          cubit.state.initialVariableStore ?? const RequestVariableStore(),
+    );
+    if (result == null || cubit.isClosed) {
+      return;
+    }
+    await cubit.saveNewDraft(title: result.title, draft: result.draft);
+  }
 }
 
 class _WebSocketsShell extends StatelessWidget {
@@ -516,7 +651,7 @@ class _WebSocketsShell extends StatelessWidget {
   Widget build(BuildContext context) => AppShellScaffold(
     currentTab: AppShellTab.websockets,
     title: AppStrings.websocketsTabLabel,
-    trailing: const _RequestFavoriteButton(),
+    trailing: null,
     bottomSlot: const SearchWebsocket(),
     body: WebsocketScreen(),
     floatingActionButton: const WebSocketShellActionButton(),
@@ -641,18 +776,24 @@ class _SettingsDetailShell extends StatelessWidget {
 class _RequestFavoriteButton extends StatelessWidget {
   const _RequestFavoriteButton();
 
-  // Preserve the request-specific trailing action while the shell is now router-owned.
+  /// Toggles the Requests list favourites-only filter from the shared shell.
   @override
-  Widget build(BuildContext context) {
-    final colors = context.appColors;
-
-    return IconButton(
-      key: const ValueKey<String>(AppWidgetKeys.requestsFavoriteButton),
-      tooltip: AppStrings.requestsFavoriteTooltip,
-      onPressed: () {},
-      icon: Icon(Icons.favorite_border_rounded, color: colors.iconPrimary),
-    );
-  }
+  Widget build(BuildContext context) =>
+      BlocBuilder<RequestBuilderCubit, RequestBuilderState>(
+        builder: (context, state) => IconButton(
+          key: const ValueKey<String>(AppWidgetKeys.requestsFavoriteButton),
+          tooltip: state.showFavouritesOnly
+              ? AppStrings.requestsShowAllTooltip
+              : AppStrings.requestsFavoriteTooltip,
+          onPressed: context.read<RequestBuilderCubit>().toggleFavouritesOnly,
+          icon: Icon(
+            state.showFavouritesOnly
+                ? Icons.favorite_rounded
+                : Icons.favorite_border_rounded,
+            color: context.appColors.iconPrimary,
+          ),
+        ),
+      );
 }
 
 class _CollectionsMoreButton extends StatelessWidget {

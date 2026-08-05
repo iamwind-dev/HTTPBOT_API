@@ -7,6 +7,37 @@ import '../entities/requests_method.dart';
 class SimpleCurlRequestParser {
   const SimpleCurlRequestParser();
 
+  /// Parses a cURL command and reports options outside the supported subset.
+  CurlParseResult parseWithDiagnostics(String input) {
+    final draft = parse(input);
+    final uri = Uri.tryParse(draft.url.trim());
+    if (uri == null ||
+        !uri.hasScheme ||
+        uri.host.isEmpty ||
+        !const <String>{'http', 'https'}.contains(uri.scheme.toLowerCase())) {
+      throw const FormatException('A valid HTTP or HTTPS URL is required.');
+    }
+
+    const supportedOptions = <String>{
+      '-X',
+      '--request',
+      '-H',
+      '--header',
+      '-d',
+      '--data',
+      '--data-raw',
+      '--data-binary',
+      '-u',
+      '--user',
+    };
+    final diagnostics = _tokenize(input)
+        .where(
+          (token) => token.startsWith('-') && !supportedOptions.contains(token),
+        )
+        .toList(growable: false);
+    return CurlParseResult(draft: draft, diagnostics: diagnostics);
+  }
+
   RequestDraft parse(String input) {
     final tokens = _tokenize(input);
     if (tokens.isEmpty) {
@@ -27,7 +58,8 @@ class SimpleCurlRequestParser {
         continue;
       }
 
-      if ((token == '-X' || token == '--request') && index + 1 < tokens.length) {
+      if ((token == '-X' || token == '--request') &&
+          index + 1 < tokens.length) {
         method = _methodFromToken(tokens[++index]);
         continue;
       }
@@ -106,8 +138,10 @@ class SimpleCurlRequestParser {
         .where((item) => item.key.toLowerCase() == 'content-type')
         .map((item) => item.value.toLowerCase())
         .cast<String?>()
-        .firstWhere((value) => value != null && value.trim().isNotEmpty,
-            orElse: () => null);
+        .firstWhere(
+          (value) => value != null && value.trim().isNotEmpty,
+          orElse: () => null,
+        );
 
     final subtype = switch (contentType) {
       final value when value != null && value.contains('json') =>
@@ -136,8 +170,9 @@ class SimpleCurlRequestParser {
   }
 
   List<String> _tokenize(String input) {
-    final matches = RegExp(r'''"([^"\\]|\\.)*"|'([^'\\]|\\.)*'|\S+''')
-        .allMatches(input);
+    final matches = RegExp(
+      r'''"([^"\\]|\\.)*"|'([^'\\]|\\.)*'|\S+''',
+    ).allMatches(input);
     return matches
         .map((match) => _stripQuotes(match.group(0) ?? ''))
         .where((token) => token.trim().isNotEmpty)
@@ -152,4 +187,12 @@ class SimpleCurlRequestParser {
     }
     return value;
   }
+}
+
+/// Represents a parsed cURL draft plus ignored-option diagnostics.
+class CurlParseResult {
+  const CurlParseResult({required this.draft, required this.diagnostics});
+
+  final RequestDraft draft;
+  final List<String> diagnostics;
 }

@@ -256,12 +256,14 @@ class RequestBuilderRepositoryImpl implements RequestBuilderRepository {
 
   Map<String, Object?> _savedRequestDraftToJson(SavedRequestDraft request) => {
     'title': request.title,
+    'isFavourite': request.isFavourite,
     'draft': _requestDraftToJson(request.draft),
   };
 
   SavedRequestDraft _savedRequestDraftFromJson(Map<String, dynamic> json) =>
       SavedRequestDraft(
         title: json['title'] as String? ?? 'Untitled Request',
+        isFavourite: json['isFavourite'] as bool? ?? false,
         draft: _requestDraftFromJson(_mapFromJson(json['draft'])),
       );
 

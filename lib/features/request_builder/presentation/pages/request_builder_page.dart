@@ -5,13 +5,18 @@ import '../../../../core/constants/app_strings.dart';
 import '../../../../core/keys/widget_keys.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_theme_context.dart';
+import '../../../../injection/injection.dart';
 import '../../domain/entities/request_variable_store.dart';
+import '../../domain/helpers/curl_command_builder.dart';
+import '../../domain/repositories/request_transfer_gateway.dart';
+import '../../domain/usecases/build_request_har_export_use_case.dart';
 import '../cubit/request_builder_cubit.dart';
 import '../cubit/request_builder_state.dart';
 import '../models/request_list_item.dart';
 import '../widgets/request_empty_state.dart';
 import '../widgets/request_editor_sheet.dart';
 import '../widgets/request_list_item_card.dart';
+import '../widgets/view_curl_sheet.dart';
 
 class RequestBuilderPage extends StatelessWidget {
   const RequestBuilderPage({super.key});
@@ -24,7 +29,7 @@ class RequestBuilderPage extends StatelessWidget {
     final visibleEntries = state.requests
         .asMap()
         .entries
-        .where((entry) => entry.value.matches(state.searchQuery))
+        .where((entry) => state.matches(entry.value))
         .toList(growable: false);
     Widget content = ListView.separated(
       physics: const ClampingScrollPhysics(),
@@ -58,6 +63,11 @@ class RequestBuilderPage extends StatelessWidget {
         title: AppStrings.requestsEmptyTitle,
         message: AppStrings.requestsEmptyMessage,
       );
+    } else if (state.isFavouritesEmptyState) {
+      content = const RequestEmptyState(
+        title: AppStrings.requestsNoFavouritesTitle,
+        message: AppStrings.requestsNoFavouritesMessage,
+      );
     } else if (state.isNoResultsState) {
       content = const RequestEmptyState(
         title: AppStrings.requestsNoResultsTitle,
@@ -88,14 +98,61 @@ class RequestBuilderPage extends StatelessWidget {
           requestIndex,
         );
       case RequestListItemAction.viewCurl:
-        await context.read<RequestBuilderCubit>().viewCurl(requestIndex);
+        await _viewCurl(context, requestIndex: requestIndex, state: state);
       case RequestListItemAction.exportHar:
-        await context.read<RequestBuilderCubit>().exportHar(requestIndex);
+        await _exportHar(context, requestIndex);
       case RequestListItemAction.favourite:
         await context.read<RequestBuilderCubit>().toggleFavourite(requestIndex);
       case RequestListItemAction.delete:
         await context.read<RequestBuilderCubit>().deleteRequest(requestIndex);
     }
+  }
+
+  /// Shares the selected saved request as a HAR file without persisting a copy.
+  Future<void> _exportHar(BuildContext context, int requestIndex) async {
+    final cubit = context.read<RequestBuilderCubit>();
+    if (requestIndex < 0 || requestIndex >= cubit.state.savedRequests.length) {
+      return;
+    }
+
+    final request = cubit.state.savedRequests[requestIndex];
+    try {
+      final payload = getIt<BuildRequestHarExportUseCase>()(
+        title: request.title,
+        draft: request.draft,
+      );
+      final outcome = await getIt<RequestTransferGateway>().shareHar(payload);
+      if (!context.mounted || outcome is! HarShareFailure) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to export the HAR file.')),
+      );
+    } catch (_) {
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to export the HAR file.')),
+      );
+    }
+  }
+
+  /// Builds and displays cURL for the saved request selected from the list.
+  Future<void> _viewCurl(
+    BuildContext context, {
+    required int requestIndex,
+    required RequestBuilderState state,
+  }) async {
+    if (requestIndex < 0 || requestIndex >= state.savedRequests.length) {
+      return;
+    }
+
+    final curlCommand = const CurlCommandBuilder().build(
+      draft: state.savedRequests[requestIndex].draft,
+      variableStore: state.initialVariableStore ?? const RequestVariableStore(),
+    );
+    await showViewCurlSheet(context, curlCommand: curlCommand);
   }
 
   /// Opens the tapped request in the modal editor while preserving list state underneath.
