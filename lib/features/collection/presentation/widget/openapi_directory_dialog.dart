@@ -8,6 +8,7 @@ import '../../../../core/theme/app_theme_context.dart';
 import '../../data/services/collection_file_importer.dart';
 import '../../domain/entities/openapi_directory_entry.dart';
 import '../cubits/collection_cubit.dart';
+import '../cubits/collection_ui_cubits.dart';
 
 class DirectoryImportSelection {
   const DirectoryImportSelection({required this.title, required this.specUrl});
@@ -25,10 +26,8 @@ class OpenApiDirectoryDialog extends StatefulWidget {
 
 class _OpenApiDirectoryDialogState extends State<OpenApiDirectoryDialog> {
   final TextEditingController _searchController = TextEditingController();
+  final OpenApiDirectoryCubit _uiCubit = OpenApiDirectoryCubit();
   late final Future<List<OpenApiDirectoryEntry>> _futureEntries;
-  String _query = '';
-  OpenApiDirectoryEntry? _selectedEntry;
-  String? _selectedVersionName;
 
   @override
   void initState() {
@@ -41,7 +40,7 @@ class _OpenApiDirectoryDialogState extends State<OpenApiDirectoryDialog> {
     if (!mounted) {
       return;
     }
-    setState(() => _query = _searchController.text.trim().toLowerCase());
+    _uiCubit.updateQuery(_searchController.text.trim().toLowerCase());
   }
 
   @override
@@ -49,170 +48,167 @@ class _OpenApiDirectoryDialogState extends State<OpenApiDirectoryDialog> {
     _searchController
       ..removeListener(_handleSearchChanged)
       ..dispose();
+    _uiCubit.close();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.appColors;
-    final theme = Theme.of(context);
-    final entry = _selectedEntry;
+    return BlocBuilder<OpenApiDirectoryCubit, OpenApiDirectoryState>(
+      bloc: _uiCubit,
+      builder: (context, state) {
+        final colors = context.appColors;
+        final theme = Theme.of(context);
+        final entry = state.selectedEntry;
 
-    return Dialog(
-      insetPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.xSmall),
-      backgroundColor: Colors.transparent,
-      child: Container(
-        height: MediaQuery.sizeOf(context).height * 0.9,
-        decoration: BoxDecoration(
-          color: colors.surface,
-          borderRadius: BorderRadius.circular(36),
-          border: Border.all(color: colors.border.withValues(alpha: 0.35)),
-        ),
-        child: SafeArea(
-          top: false,
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.medium,
-                  AppSpacing.medium,
-                  AppSpacing.medium,
-                  AppSpacing.medium,
-                ),
-                child: Row(
-                  children: [
-                    _CircleHeaderButton(
-                      icon: entry == null
-                          ? Icons.close_rounded
-                          : Icons.arrow_back_ios_new_rounded,
-                      onTap: () {
-                        if (entry == null) {
-                          Navigator.of(context).pop();
-                          return;
-                        }
-
-                        setState(() {
-                          _selectedEntry = null;
-                          _selectedVersionName = null;
-                        });
-                      },
-                    ),
-                    Expanded(
-                      child: Text(
-                        entry?.title ?? 'OpenAPI Directory',
-                        textAlign: TextAlign.center,
-                        style: theme.textTheme.headlineSmall?.copyWith(
-                          color: colors.textPrimary,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    SizedBox(
-                      width: 56,
-                      child: entry == null
-                          ? null
-                          : Align(
-                              alignment: Alignment.centerRight,
-                              child: _ConfirmHeaderButton(
-                                onTap: _confirmSelectedVersion,
-                              ),
-                            ),
-                    ),
-                  ],
-                ),
-              ),
-              if (entry == null)
-                Container(
-                  width: double.infinity,
-                  color: const Color(0xFF173452),
-                  padding: const EdgeInsets.symmetric(
-                    vertical: AppSpacing.medium,
-                  ),
-                  child: Text(
-                    'Powered by APIs.guru',
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      color: colors.textOnPrimary,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              Expanded(
-                child: entry == null
-                    ? _DirectoryListStep(
-                        futureEntries: _futureEntries,
-                        query: _query,
-                        onEntrySelected: (selected) {
-                          setState(() {
-                            _selectedEntry = selected;
-                            _selectedVersionName =
-                                selected.preferredVersionName;
-                          });
-                        },
-                      )
-                    : _DirectoryVersionStep(
-                        entry: entry,
-                        selectedVersionName: _selectedVersionName,
-                        onVersionSelected: (versionName) {
-                          setState(() => _selectedVersionName = versionName);
-                        },
-                      ),
-              ),
-              if (entry == null)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.medium,
-                    AppSpacing.small,
-                    AppSpacing.medium,
-                    AppSpacing.medium,
-                  ),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: colors.background,
-                      borderRadius: BorderRadius.circular(AppRadius.xLarge),
-                      border: Border.all(
-                        color: colors.border.withValues(alpha: 0.3),
-                      ),
-                    ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.medium,
+        return Dialog(
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.xSmall,
+          ),
+          backgroundColor: Colors.transparent,
+          child: Container(
+            height: MediaQuery.sizeOf(context).height * 0.9,
+            decoration: BoxDecoration(
+              color: colors.surface,
+              borderRadius: BorderRadius.circular(36),
+              border: Border.all(color: colors.border.withValues(alpha: 0.35)),
+            ),
+            child: SafeArea(
+              top: false,
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.medium,
+                      AppSpacing.medium,
+                      AppSpacing.medium,
+                      AppSpacing.medium,
                     ),
                     child: Row(
                       children: [
-                        Icon(
-                          Icons.search_rounded,
-                          color: colors.iconSecondary,
-                          size: 30,
+                        _CircleHeaderButton(
+                          icon: entry == null
+                              ? Icons.close_rounded
+                              : Icons.arrow_back_ios_new_rounded,
+                          onTap: () {
+                            if (entry == null) {
+                              Navigator.of(context).pop();
+                              return;
+                            }
+
+                            _uiCubit.clearEntry();
+                          },
                         ),
-                        const SizedBox(width: AppSpacing.small),
                         Expanded(
-                          child: TextField(
-                            controller: _searchController,
+                          child: Text(
+                            entry?.title ?? 'OpenAPI Directory',
+                            textAlign: TextAlign.center,
                             style: theme.textTheme.headlineSmall?.copyWith(
                               color: colors.textPrimary,
-                              fontWeight: FontWeight.w400,
-                            ),
-                            decoration: InputDecoration(
-                              border: InputBorder.none,
-                              hintText: 'Search APIs',
-                              hintStyle: theme.textTheme.headlineSmall
-                                  ?.copyWith(
-                                    color: colors.textSecondary.withValues(
-                                      alpha: 0.78,
-                                    ),
-                                    fontWeight: FontWeight.w400,
-                                  ),
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
+                        ),
+                        SizedBox(
+                          width: 56,
+                          child: entry == null
+                              ? null
+                              : Align(
+                                  alignment: Alignment.centerRight,
+                                  child: _ConfirmHeaderButton(
+                                    onTap: _confirmSelectedVersion,
+                                  ),
+                                ),
                         ),
                       ],
                     ),
                   ),
-                ),
-            ],
+                  if (entry == null)
+                    Container(
+                      width: double.infinity,
+                      color: const Color(0xFF173452),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: AppSpacing.medium,
+                      ),
+                      child: Text(
+                        'Powered by APIs.guru',
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          color: colors.textOnPrimary,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  Expanded(
+                    child: entry == null
+                        ? _DirectoryListStep(
+                            futureEntries: _futureEntries,
+                            query: state.query,
+                            onEntrySelected: _uiCubit.selectEntry,
+                          )
+                        : _DirectoryVersionStep(
+                            entry: entry,
+                            selectedVersionName: state.selectedVersionName,
+                            onVersionSelected: _uiCubit.selectVersion,
+                          ),
+                  ),
+                  if (entry == null)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(
+                        AppSpacing.medium,
+                        AppSpacing.small,
+                        AppSpacing.medium,
+                        AppSpacing.medium,
+                      ),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: colors.background,
+                          borderRadius: BorderRadius.circular(AppRadius.xLarge),
+                          border: Border.all(
+                            color: colors.border.withValues(alpha: 0.3),
+                          ),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.medium,
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.search_rounded,
+                              color: colors.iconSecondary,
+                              size: 30,
+                            ),
+                            const SizedBox(width: AppSpacing.small),
+                            Expanded(
+                              child: TextField(
+                                controller: _searchController,
+                                style: theme.textTheme.headlineSmall?.copyWith(
+                                  color: colors.textPrimary,
+                                  fontWeight: FontWeight.w400,
+                                ),
+                                decoration: InputDecoration(
+                                  border: InputBorder.none,
+                                  hintText: 'Search APIs',
+                                  hintStyle: theme.textTheme.headlineSmall
+                                      ?.copyWith(
+                                        color: colors.textSecondary.withValues(
+                                          alpha: 0.78,
+                                        ),
+                                        fontWeight: FontWeight.w400,
+                                      ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -234,8 +230,8 @@ class _OpenApiDirectoryDialogState extends State<OpenApiDirectoryDialog> {
   }
 
   void _confirmSelectedVersion() {
-    final entry = _selectedEntry;
-    final versionName = _selectedVersionName;
+    final entry = _uiCubit.state.selectedEntry;
+    final versionName = _uiCubit.state.selectedVersionName;
     if (entry == null || versionName == null) {
       return;
     }
@@ -463,60 +459,73 @@ class _ExpandableDescriptionCard extends StatefulWidget {
 
 class _ExpandableDescriptionCardState
     extends State<_ExpandableDescriptionCard> {
-  bool _expanded = false;
+  final ExpansionCubit _expansionCubit = ExpansionCubit();
+
+  @override
+  void dispose() {
+    _expansionCubit.close();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.appColors;
-    final theme = Theme.of(context);
-    final text = widget.description.isEmpty
-        ? 'No description available.'
-        : widget.description;
+    return BlocBuilder<ExpansionCubit, bool>(
+      bloc: _expansionCubit,
+      builder: (context, expanded) {
+        final colors = context.appColors;
+        final theme = Theme.of(context);
+        final text = widget.description.isEmpty
+            ? 'No description available.'
+            : widget.description;
 
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.large,
-        vertical: AppSpacing.large,
-      ),
-      decoration: BoxDecoration(
-        color: colors.surfaceMuted,
-        borderRadius: BorderRadius.circular(28),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            text,
-            maxLines: _expanded ? null : 5,
-            overflow: _expanded ? TextOverflow.visible : TextOverflow.ellipsis,
-            style: theme.textTheme.headlineSmall?.copyWith(
-              color: colors.textPrimary,
-              fontWeight: FontWeight.w400,
-              height: 1.3,
-            ),
+        return Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.large,
+            vertical: AppSpacing.large,
           ),
-          if (widget.description.isNotEmpty) ...[
-            const SizedBox(height: AppSpacing.medium),
-            InkWell(
-              onTap: () => setState(() => _expanded = !_expanded),
-              borderRadius: BorderRadius.circular(AppRadius.medium),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.xxSmall,
-                  vertical: AppSpacing.xxSmall,
-                ),
-                child: Text(
-                  _expanded ? 'Show less' : 'Read more',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    color: colors.methodGet,
-                    fontWeight: FontWeight.w600,
-                  ),
+          decoration: BoxDecoration(
+            color: colors.surfaceMuted,
+            borderRadius: BorderRadius.circular(28),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                text,
+                maxLines: expanded ? null : 5,
+                overflow: expanded
+                    ? TextOverflow.visible
+                    : TextOverflow.ellipsis,
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  color: colors.textPrimary,
+                  fontWeight: FontWeight.w400,
+                  height: 1.3,
                 ),
               ),
-            ),
-          ],
-        ],
-      ),
+              if (widget.description.isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.medium),
+                InkWell(
+                  onTap: _expansionCubit.toggle,
+                  borderRadius: BorderRadius.circular(AppRadius.medium),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.xxSmall,
+                      vertical: AppSpacing.xxSmall,
+                    ),
+                    child: Text(
+                      expanded ? 'Show less' : 'Read more',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        color: colors.methodGet,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
     );
   }
 }

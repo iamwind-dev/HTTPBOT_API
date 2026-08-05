@@ -16,6 +16,7 @@ import '../../domain/entities/postman_url_entity.dart';
 import '../../domain/entities/postman_variable_entity.dart';
 import '../../presentation/cubit/postman_cubit.dart';
 import '../../presentation/cubit/postman_state.dart';
+import '../../presentation/cubit/postman_ui_cubits.dart';
 import '../mappers/postman_request_to_request_draft_mapper.dart';
 import '../model/postman_list_item_model.dart';
 import '../widget/postman_list_item.dart';
@@ -143,9 +144,8 @@ class PostmanScreen extends StatelessWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       barrierDismissible: true,
-      builder: (_) => _DeletePostmanCollectionDialog(
-        collectionName: collection.name,
-      ),
+      builder: (_) =>
+          _DeletePostmanCollectionDialog(collectionName: collection.name),
     );
 
     if (!context.mounted || confirmed != true) {
@@ -183,9 +183,7 @@ class PostmanScreen extends StatelessWidget {
             },
           )
           .toList(growable: false),
-      'folders': collection.folders
-          .map(_folderToJson)
-          .toList(growable: false),
+      'folders': collection.folders.map(_folderToJson).toList(growable: false),
       'requests': collection.requests
           .map(_requestToJson)
           .toList(growable: false),
@@ -255,11 +253,12 @@ class _PostmanDetailView extends StatefulWidget {
 }
 
 class _PostmanDetailViewState extends State<_PostmanDetailView> {
-  final Set<String> _expandedFolders = <String>{};
+  final PostmanTreeCubit _treeCubit = PostmanTreeCubit();
   late final TextEditingController _searchController;
   static const _curlParser = SimpleCurlRequestParser();
 
-  String get _searchQuery => _searchController.text;
+  String get _searchQuery => _treeCubit.state.query;
+  Set<String> get _expandedFolders => _treeCubit.state.expandedFolders;
 
   @override
   void initState() {
@@ -270,6 +269,7 @@ class _PostmanDetailViewState extends State<_PostmanDetailView> {
   @override
   void dispose() {
     _searchController.dispose();
+    _treeCubit.close();
     super.dispose();
   }
 
@@ -277,81 +277,73 @@ class _PostmanDetailViewState extends State<_PostmanDetailView> {
   void didUpdateWidget(covariant _PostmanDetailView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.collection.id != widget.collection.id) {
-      _expandedFolders.clear();
+      _treeCubit.reset();
       _searchController.clear();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.appColors;
-    final visibleFolders = _filterFolders(
-      widget.collection.folders,
-      _searchQuery.trim(),
-    );
-    final visibleRootRequests = widget.collection.requests
-        .where((request) => _requestMatchesQuery(request, _searchQuery))
-        .toList(growable: false);
-    final hasVisibleItems =
-        visibleFolders.isNotEmpty || visibleRootRequests.isNotEmpty;
+    return BlocBuilder<PostmanTreeCubit, PostmanTreeState>(
+      bloc: _treeCubit,
+      builder: (context, treeState) {
+        final colors = context.appColors;
+        final visibleFolders = _filterFolders(
+          widget.collection.folders,
+          _searchQuery.trim(),
+        );
+        final visibleRootRequests = widget.collection.requests
+            .where((request) => _requestMatchesQuery(request, _searchQuery))
+            .toList(growable: false);
+        final hasVisibleItems =
+            visibleFolders.isNotEmpty || visibleRootRequests.isNotEmpty;
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
-      children: [
-        _PostmanSearchBar(
-          controller: _searchController,
-          onChanged: (_) => setState(() {}),
-        ),
-        const SizedBox(height: 12),
-        Divider(color: colors.divider, thickness: 1),
-        const SizedBox(height: 10),
-        if (!hasVisibleItems)
-          Padding(
-            padding: const EdgeInsets.only(top: 48),
-            child: Text(
-              'No matching items',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: colors.textSecondary,
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
+        return ListView(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 120),
+          children: [
+            _PostmanSearchBar(
+              controller: _searchController,
+              onChanged: _treeCubit.updateQuery,
+            ),
+            const SizedBox(height: 12),
+            Divider(color: colors.divider, thickness: 1),
+            const SizedBox(height: 10),
+            if (!hasVisibleItems)
+              Padding(
+                padding: const EdgeInsets.only(top: 48),
+                child: Text(
+                  'No matching items',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: colors.textSecondary,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
               ),
-            ),
-          ),
-        for (final request in visibleRootRequests)
-          _PostmanRequestRow(
-            request: request,
-            depth: 0,
-            onTap: () => _editOrOpenRequest(request: request),
-            onLongPress: () => _showRequestActions(request: request),
-          ),
-        for (final folder in visibleFolders)
-          _PostmanFolderNode(
-            folder: folder,
-            depth: 0,
-            expandedKeys: _expandedFolders,
-            forceExpanded: _searchQuery.trim().isNotEmpty,
-            onToggle: (folderKey) => setState(() {
-              if (_expandedFolders.contains(folderKey)) {
-                _expandedFolders.remove(folderKey);
-              } else {
-                _expandedFolders.add(folderKey);
-              }
-            }),
-            onLongPress: _showFolderActions,
-            onRequestLongPress: ({
-              required request,
-              required folderKey,
-            }) => _showRequestActions(
-              request: request,
-              folderKey: folderKey,
-            ),
-            onRequestTap: ({
-              required request,
-              required folderKey,
-            }) => _editOrOpenRequest(request: request, folderKey: folderKey),
-          ),
-      ],
+            for (final request in visibleRootRequests)
+              _PostmanRequestRow(
+                request: request,
+                depth: 0,
+                onTap: () => _editOrOpenRequest(request: request),
+                onLongPress: () => _showRequestActions(request: request),
+              ),
+            for (final folder in visibleFolders)
+              _PostmanFolderNode(
+                folder: folder,
+                depth: 0,
+                expandedKeys: _expandedFolders,
+                forceExpanded: _searchQuery.trim().isNotEmpty,
+                onToggle: _treeCubit.toggleFolder,
+                onLongPress: _showFolderActions,
+                onRequestLongPress: ({required request, required folderKey}) =>
+                    _showRequestActions(request: request, folderKey: folderKey),
+                onRequestTap: ({required request, required folderKey}) =>
+                    _editOrOpenRequest(request: request, folderKey: folderKey),
+              ),
+          ],
+        );
+      },
     );
   }
 
@@ -532,7 +524,7 @@ class _PostmanDetailViewState extends State<_PostmanDetailView> {
     );
 
     await context.read<PostmanCubit>().updateCollection(updatedCollection);
-    setState(() => _expandedFolders.add(folder.key));
+    _treeCubit.expandFolder(folder.key);
   }
 
   Future<void> _deleteFolder(_VisiblePostmanFolderNode folder) async {
@@ -569,7 +561,7 @@ class _PostmanDetailViewState extends State<_PostmanDetailView> {
     );
 
     await context.read<PostmanCubit>().updateCollection(updatedCollection);
-    setState(() => _expandedFolders.add(folder.key));
+    _treeCubit.expandFolder(folder.key);
   }
 
   Future<void> _editOrOpenRequest({
@@ -647,7 +639,7 @@ class _PostmanDetailViewState extends State<_PostmanDetailView> {
     );
 
     await context.read<PostmanCubit>().updateCollection(updatedCollection);
-    setState(() => _expandedFolders.add(folder.key));
+    _treeCubit.expandFolder(folder.key);
   }
 
   Future<void> _viewCurlRequest(PostmanRequestEntity request) async {
@@ -741,21 +733,23 @@ class _PostmanDetailViewState extends State<_PostmanDetailView> {
     PostmanFolderEntity Function(PostmanFolderEntity) transform, [
     String parentKey = '',
   ]) {
-    return folders.map((folder) {
-      final currentKey = _folderKey(parentKey, folder.id);
-      if (currentKey == targetKey) {
-        return transform(folder);
-      }
+    return folders
+        .map((folder) {
+          final currentKey = _folderKey(parentKey, folder.id);
+          if (currentKey == targetKey) {
+            return transform(folder);
+          }
 
-      return folder.copyWith(
-        folders: _updateFolderTree(
-          folder.folders,
-          targetKey,
-          transform,
-          currentKey,
-        ),
-      );
-    }).toList(growable: false);
+          return folder.copyWith(
+            folders: _updateFolderTree(
+              folder.folders,
+              targetKey,
+              transform,
+              currentKey,
+            ),
+          );
+        })
+        .toList(growable: false);
   }
 
   List<PostmanFolderEntity> _deleteFolderFromTree(
@@ -832,10 +826,7 @@ class _PostmanDetailViewState extends State<_PostmanDetailView> {
     if (index < 0) {
       return requests;
     }
-    return [
-      ...requests.sublist(0, index),
-      ...requests.sublist(index + 1),
-    ];
+    return [...requests.sublist(0, index), ...requests.sublist(index + 1)];
   }
 
   List<PostmanRequestEntity> _deleteFolderRequest(
@@ -853,7 +844,10 @@ class _PostmanDetailViewState extends State<_PostmanDetailView> {
       method: draft.method.wireName,
       url: PostmanUrlEntity(raw: draft.url),
       queryParameters: draft.queryParameters
-          .where((item) => item.key.trim().isNotEmpty || item.value.trim().isNotEmpty)
+          .where(
+            (item) =>
+                item.key.trim().isNotEmpty || item.value.trim().isNotEmpty,
+          )
           .map(
             (item) => PostmanKeyValueEntity(
               key: item.key,
@@ -865,7 +859,10 @@ class _PostmanDetailViewState extends State<_PostmanDetailView> {
           )
           .toList(growable: false),
       headers: draft.headers
-          .where((item) => item.key.trim().isNotEmpty || item.value.trim().isNotEmpty)
+          .where(
+            (item) =>
+                item.key.trim().isNotEmpty || item.value.trim().isNotEmpty,
+          )
           .map(
             (item) => PostmanKeyValueEntity(
               key: item.key,
@@ -883,15 +880,15 @@ class _PostmanDetailViewState extends State<_PostmanDetailView> {
   PostmanBodyEntity _bodyFromDraft(RequestDraft draft) {
     return switch (draft.body.type) {
       RequestBodyType.raw => PostmanBodyEntity(
-          type: PostmanBodyType.raw,
-          raw: draft.body.raw.content,
-          rawSubtype: switch (draft.body.raw.subtype) {
-            RawBodySubtype.json => PostmanRawBodySubtype.json,
-            RawBodySubtype.xml => PostmanRawBodySubtype.xml,
-            RawBodySubtype.html => PostmanRawBodySubtype.html,
-            RawBodySubtype.text => PostmanRawBodySubtype.text,
-          },
-        ),
+        type: PostmanBodyType.raw,
+        raw: draft.body.raw.content,
+        rawSubtype: switch (draft.body.raw.subtype) {
+          RawBodySubtype.json => PostmanRawBodySubtype.json,
+          RawBodySubtype.xml => PostmanRawBodySubtype.xml,
+          RawBodySubtype.html => PostmanRawBodySubtype.html,
+          RawBodySubtype.text => PostmanRawBodySubtype.text,
+        },
+      ),
       RequestBodyType.none => const PostmanBodyEntity(),
       _ => const PostmanBodyEntity(),
     };
@@ -928,10 +925,7 @@ class _PostmanDetailViewState extends State<_PostmanDetailView> {
 }
 
 class _PostmanSearchBar extends StatelessWidget {
-  const _PostmanSearchBar({
-    required this.controller,
-    required this.onChanged,
-  });
+  const _PostmanSearchBar({required this.controller, required this.onChanged});
 
   final TextEditingController controller;
   final ValueChanged<String> onChanged;
@@ -941,7 +935,7 @@ class _PostmanSearchBar extends StatelessWidget {
     final colors = context.appColors;
 
     return Container(
-      height: 60,
+      constraints: const BoxConstraints(minHeight: 60),
       decoration: BoxDecoration(
         color: colors.surface,
         borderRadius: BorderRadius.circular(30),
@@ -960,7 +954,7 @@ class _PostmanSearchBar extends StatelessWidget {
             color: colors.iconPrimary,
             size: 34,
           ),
-          contentPadding: const EdgeInsets.only(top: 16, right: 20),
+          contentPadding: const EdgeInsets.only(top: 16, right: 20, bottom: 16),
         ),
       ),
     );
@@ -1021,14 +1015,10 @@ class _PostmanFolderNode extends StatelessWidget {
             _PostmanRequestRow(
               request: request,
               depth: depth + 1,
-              onTap: () => onRequestTap(
-                request: request,
-                folderKey: folder.key,
-              ),
-              onLongPress: () => onRequestLongPress(
-                request: request,
-                folderKey: folder.key,
-              ),
+              onTap: () =>
+                  onRequestTap(request: request, folderKey: folder.key),
+              onLongPress: () =>
+                  onRequestLongPress(request: request, folderKey: folder.key),
             ),
           for (final child in folder.visibleChildren)
             _PostmanFolderNode(
@@ -1502,14 +1492,10 @@ class _FolderNameDialog extends StatelessWidget {
       title: title,
       actionLabel: actionLabel,
       initialValue: initialValue,
-      confirmButtonBuilder: (label, onTap) => _PostmanDialogButton(
-        label: label,
-        onTap: onTap,
-      ),
-      cancelButtonBuilder: (label, onTap) => _PostmanDialogButton(
-        label: label,
-        onTap: onTap,
-      ),
+      confirmButtonBuilder: (label, onTap) =>
+          _PostmanDialogButton(label: label, onTap: onTap),
+      cancelButtonBuilder: (label, onTap) =>
+          _PostmanDialogButton(label: label, onTap: onTap),
     );
   }
 }
@@ -1598,16 +1584,13 @@ class _FolderNameDialogBodyState extends State<_FolderNameDialogBody> {
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: widget.confirmButtonBuilder(
-                    widget.actionLabel,
-                    () {
-                      final value = _controller.text.trim();
-                      if (value.isEmpty) {
-                        return;
-                      }
-                      Navigator.of(context).pop(value);
-                    },
-                  ),
+                  child: widget.confirmButtonBuilder(widget.actionLabel, () {
+                    final value = _controller.text.trim();
+                    if (value.isEmpty) {
+                      return;
+                    }
+                    Navigator.of(context).pop(value);
+                  }),
                 ),
               ],
             ),
@@ -1936,7 +1919,7 @@ class _PostmanDialogButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(22),
         onTap: onTap,
         child: Ink(
-          height: 56,
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
           decoration: BoxDecoration(
             color: colors.surfaceMuted,
             borderRadius: BorderRadius.circular(22),
@@ -1970,196 +1953,197 @@ class _PostmanCollectionEditorPage extends StatefulWidget {
 class _PostmanCollectionEditorPageState
     extends State<_PostmanCollectionEditorPage> {
   late final TextEditingController _nameController;
-  late List<PostmanVariableEntity> _variables;
+  late final PostmanVariablesCubit _variablesCubit;
 
   @override
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.collection.name);
-    _variables = widget.collection.variables.isEmpty
+    final variables = widget.collection.variables.isEmpty
         ? <PostmanVariableEntity>[
             const PostmanVariableEntity(key: 'baseUrl', value: ''),
           ]
         : widget.collection.variables
               .map((item) => item.copyWith())
               .toList(growable: true);
+    _variablesCubit = PostmanVariablesCubit(variables);
   }
 
   @override
   void dispose() {
     _nameController.dispose();
+    _variablesCubit.close();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.appColors;
+    return BlocBuilder<PostmanVariablesCubit, List<PostmanVariableEntity>>(
+      bloc: _variablesCubit,
+      builder: (context, variables) {
+        final colors = context.appColors;
 
-    return Scaffold(
-      backgroundColor: colors.background,
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-          children: [
-            Row(
+        return Scaffold(
+          backgroundColor: colors.background,
+          body: SafeArea(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
               children: [
-                _HeaderCircleButton(
-                  icon: Icons.close_rounded,
-                  onTap: () => Navigator.of(context).pop(),
+                Row(
+                  children: [
+                    _HeaderCircleButton(
+                      icon: Icons.close_rounded,
+                      onTap: () => Navigator.of(context).pop(),
+                    ),
+                    Expanded(
+                      child: Text(
+                        'Collection',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: colors.textPrimary,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    _HeaderCircleButton(
+                      icon: Icons.check_rounded,
+                      filled: true,
+                      onTap: _save,
+                    ),
+                  ],
                 ),
-                Expanded(
-                  child: Text(
-                    'Collection',
-                    textAlign: TextAlign.center,
+                const SizedBox(height: 28),
+                _EditorCard(
+                  child: TextField(
+                    controller: _nameController,
                     style: TextStyle(
                       color: colors.textPrimary,
                       fontSize: 20,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    decoration: const InputDecoration(
+                      border: InputBorder.none,
+                      hintText: 'Collection name',
                     ),
                   ),
                 ),
-                _HeaderCircleButton(
-                  icon: Icons.check_rounded,
-                  filled: true,
-                  onTap: _save,
+                const SizedBox(height: 28),
+                Text(
+                  'Variables',
+                  style: TextStyle(
+                    color: colors.textSecondary,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 28),
-            _EditorCard(
-              child: TextField(
-                controller: _nameController,
-                style: TextStyle(
-                  color: colors.textPrimary,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w500,
-                ),
-                decoration: const InputDecoration(
-                  border: InputBorder.none,
-                  hintText: 'Collection name',
-                ),
-              ),
-            ),
-            const SizedBox(height: 28),
-            Text(
-              'Variables',
-              style: TextStyle(
-                color: colors.textSecondary,
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 14),
-            _EditorCard(
-              padding: EdgeInsets.zero,
-              child: Column(
-                children: [
-                  for (var i = 0; i < _variables.length; i++) ...[
-                    _PostmanVariableRow(
-                      variable: _variables[i],
-                      onChanged: (updated) =>
-                          setState(() => _variables[i] = updated),
-                    ),
-                    if (i != _variables.length - 1)
+                const SizedBox(height: 14),
+                _EditorCard(
+                  padding: EdgeInsets.zero,
+                  child: Column(
+                    children: [
+                      for (var i = 0; i < variables.length; i++) ...[
+                        _PostmanVariableRow(
+                          variable: variables[i],
+                          onChanged: (updated) =>
+                              _variablesCubit.updateAt(i, updated),
+                        ),
+                        if (i != variables.length - 1)
+                          Divider(
+                            height: 1,
+                            thickness: 1,
+                            color: colors.divider,
+                            indent: 64,
+                          ),
+                      ],
                       Divider(
                         height: 1,
                         thickness: 1,
                         color: colors.divider,
                         indent: 64,
                       ),
-                  ],
-                  Divider(
-                    height: 1,
-                    thickness: 1,
-                    color: colors.divider,
-                    indent: 64,
-                  ),
-                  InkWell(
-                    onTap: () => setState(() {
-                      _variables.add(
-                        const PostmanVariableEntity(key: '', value: ''),
-                      );
-                    }),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 18,
-                        vertical: 18,
-                      ),
-                      child: Row(
-                        children: [
-                          const _VariableStateDot(
-                            icon: Icons.add_rounded,
-                            filled: true,
+                      InkWell(
+                        onTap: _variablesCubit.addEmpty,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 18,
+                            vertical: 18,
                           ),
-                          const SizedBox(width: 18),
-                          Text(
-                            'Add',
-                            style: TextStyle(
-                              color: colors.textSecondary,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w500,
-                            ),
+                          child: Row(
+                            children: [
+                              const _VariableStateDot(
+                                icon: Icons.add_rounded,
+                                filled: true,
+                              ),
+                              const SizedBox(width: 18),
+                              Text(
+                                'Add',
+                                style: TextStyle(
+                                  color: colors.textSecondary,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
-                    ),
+                    ],
                   ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 28),
-            Text(
-              'Auth',
-              style: TextStyle(
-                color: colors.textSecondary,
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 14),
-            _EditorCard(
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Auth',
-                      style: TextStyle(
-                        color: colors.textPrimary,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w500,
+                ),
+                const SizedBox(height: 28),
+                Text(
+                  'Auth',
+                  style: TextStyle(
+                    color: colors.textSecondary,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                _EditorCard(
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Auth',
+                          style: TextStyle(
+                            color: colors.textPrimary,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
                       ),
-                    ),
+                      Text(
+                        _postmanAuthLabel(widget.collection.auth.type),
+                        style: TextStyle(
+                          color: colors.methodGet,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      Icon(
+                        Icons.unfold_more_rounded,
+                        color: colors.methodGet,
+                        size: 22,
+                      ),
+                    ],
                   ),
-                  Text(
-                    _postmanAuthLabel(widget.collection.auth.type),
-                    style: TextStyle(
-                      color: colors.methodGet,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  Icon(
-                    Icons.unfold_more_rounded,
-                    color: colors.methodGet,
-                    size: 22,
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
   void _save() {
-    final cleanedVariables = _variables
+    final cleanedVariables = _variablesCubit.state
         .where((item) => item.key.trim().isNotEmpty)
         .map(
-          (item) => item.copyWith(
-            key: item.key.trim(),
-            value: item.value.trim(),
-          ),
+          (item) =>
+              item.copyWith(key: item.key.trim(), value: item.value.trim()),
         )
         .toList(growable: false);
 
@@ -2235,10 +2219,7 @@ class _HeaderCircleButton extends StatelessWidget {
 }
 
 class _PostmanVariableRow extends StatelessWidget {
-  const _PostmanVariableRow({
-    required this.variable,
-    required this.onChanged,
-  });
+  const _PostmanVariableRow({required this.variable, required this.onChanged});
 
   final PostmanVariableEntity variable;
   final ValueChanged<PostmanVariableEntity> onChanged;

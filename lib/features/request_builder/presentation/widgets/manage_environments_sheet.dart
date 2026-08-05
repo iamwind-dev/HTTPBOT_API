@@ -9,6 +9,7 @@ import '../../../../core/keys/widget_keys.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_theme_context.dart';
+import '../../../../core/widgets/app_popup_menu.dart';
 import '../../../../injection/injection.dart';
 import '../../../postman/domain/usecases/load_postman_api_key_usecase.dart';
 import '../../domain/entities/request_environment.dart';
@@ -475,8 +476,6 @@ class _SourcePill extends StatelessWidget {
     return PopupMenuButton<RequestEnvironmentSource>(
       key: const ValueKey<String>(AppWidgetKeys.manageEnvironmentsSourcePill),
       tooltip: 'Environment source',
-      color: colors.surface,
-      position: PopupMenuPosition.under,
       onSelected: onChanged,
       itemBuilder: (context) => [
         const PopupMenuItem<RequestEnvironmentSource>(
@@ -546,13 +545,16 @@ class _ActionsPill extends StatelessWidget {
             ),
             tooltip: 'More actions',
             icon: const Icon(CupertinoIcons.ellipsis),
-            color: colors.surface,
-            position: PopupMenuPosition.under,
             itemBuilder: (context) => [
               PopupMenuItem<void>(
                 enabled: onDeactivate != null,
                 onTap: onDeactivate,
-                child: const Text('Deactivate Environment'),
+                child: AppPopupMenuRow(
+                  icon: CupertinoIcons.pause_circle,
+                  label: 'Deactivate Environment',
+                  destructive: true,
+                  enabled: onDeactivate != null,
+                ),
               ),
             ],
           ),
@@ -562,28 +564,26 @@ class _ActionsPill extends StatelessWidget {
             ),
             tooltip: 'Add environment',
             icon: const Icon(CupertinoIcons.add),
-            color: colors.surface,
-            position: PopupMenuPosition.under,
             onSelected: onPlusAction,
             itemBuilder: (context) => [
               if (source == RequestEnvironmentSource.local)
                 const PopupMenuItem<_ManageEnvironmentsPlusAction>(
                   value: _ManageEnvironmentsPlusAction.newEnvironment,
-                  child: _PlusMenuRow(
+                  child: AppPopupMenuRow(
                     icon: CupertinoIcons.add,
                     label: 'New Environment',
                   ),
                 ),
               const PopupMenuItem<_ManageEnvironmentsPlusAction>(
                 value: _ManageEnvironmentsPlusAction.importFile,
-                child: _PlusMenuRow(
+                child: AppPopupMenuRow(
                   icon: CupertinoIcons.arrow_down_doc,
                   label: 'Import File...',
                 ),
               ),
               const PopupMenuItem<_ManageEnvironmentsPlusAction>(
                 value: _ManageEnvironmentsPlusAction.importPostman,
-                child: _PlusMenuRow(
+                child: AppPopupMenuRow(
                   icon: CupertinoIcons.cloud_download,
                   label: 'Import from Postman...',
                 ),
@@ -594,24 +594,6 @@ class _ActionsPill extends StatelessWidget {
       ),
     );
   }
-}
-
-class _PlusMenuRow extends StatelessWidget {
-  const _PlusMenuRow({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) => Row(
-    children: [
-      Icon(icon, size: AppSpacing.large, color: context.appColors.iconPrimary),
-      const SizedBox(width: AppSpacing.small),
-      Expanded(
-        child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
-      ),
-    ],
-  );
 }
 
 class _EnvironmentEmptyState extends StatelessWidget {

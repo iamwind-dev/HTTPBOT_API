@@ -9,6 +9,7 @@ import '../../../../core/keys/widget_keys.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_theme_context.dart';
+import '../../../../core/widgets/app_popup_menu.dart';
 import '../../../../injection/injection.dart';
 import '../../domain/entities/response_filter.dart';
 import '../../domain/helpers/response_filter_utils.dart';
@@ -30,15 +31,16 @@ class ResponseFilterEditorDraft {
   final String query;
 }
 
-Future<ResponseFilter?> showSavedResponseFiltersSheet(
-  BuildContext context,
-) => showRequestModalSheet<ResponseFilter?>(
-  context,
-  builder: (sheetContext) => BlocProvider<ManageResponseFiltersCubit>(
-    create: (_) => getIt<ManageResponseFiltersCubit>()..load(),
-    child: const _SavedResponseFiltersSheet(mode: SavedResponseFiltersMode.select),
-  ),
-);
+Future<ResponseFilter?> showSavedResponseFiltersSheet(BuildContext context) =>
+    showRequestModalSheet<ResponseFilter?>(
+      context,
+      builder: (sheetContext) => BlocProvider<ManageResponseFiltersCubit>(
+        create: (_) => getIt<ManageResponseFiltersCubit>()..load(),
+        child: const _SavedResponseFiltersSheet(
+          mode: SavedResponseFiltersMode.select,
+        ),
+      ),
+    );
 
 Future<ResponseFilterEditorDraft?> showResponseFilterEditorSheet(
   BuildContext context, {
@@ -57,21 +59,19 @@ Future<ResponseFilterEditorDraft?> showResponseFilterEditorSheet(
 );
 
 class SavedResponseFiltersPage extends StatelessWidget {
-  const SavedResponseFiltersPage({
-    super.key,
-    this.controller,
-  });
+  const SavedResponseFiltersPage({super.key, this.controller});
 
   final SavedResponseFiltersController? controller;
 
   @override
-  Widget build(BuildContext context) => BlocProvider<ManageResponseFiltersCubit>(
-    create: (_) => getIt<ManageResponseFiltersCubit>()..load(),
-    child: SavedResponseFiltersView(
-      mode: SavedResponseFiltersMode.manage,
-      controller: controller,
-    ),
-  );
+  Widget build(BuildContext context) =>
+      BlocProvider<ManageResponseFiltersCubit>(
+        create: (_) => getIt<ManageResponseFiltersCubit>()..load(),
+        child: SavedResponseFiltersView(
+          mode: SavedResponseFiltersMode.manage,
+          controller: controller,
+        ),
+      );
 }
 
 class SavedResponseFiltersController {
@@ -106,51 +106,54 @@ class SavedResponseFiltersView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     controller?.openCreate = () => _openCreateFilter(context);
-    controller?.deleteAll = () => context.read<ManageResponseFiltersCubit>().deleteAll();
+    controller?.deleteAll = () =>
+        context.read<ManageResponseFiltersCubit>().deleteAll();
 
-    final list = BlocBuilder<ManageResponseFiltersCubit, ManageResponseFiltersState>(
-      builder: (context, state) {
-        if (state.status == ManageResponseFiltersStatus.loading &&
-            state.filters.isEmpty) {
-          return const Center(child: CircularProgressIndicator());
-        }
+    final list =
+        BlocBuilder<ManageResponseFiltersCubit, ManageResponseFiltersState>(
+          builder: (context, state) {
+            if (state.status == ManageResponseFiltersStatus.loading &&
+                state.filters.isEmpty) {
+              return const Center(child: CircularProgressIndicator());
+            }
 
-        if (state.status == ManageResponseFiltersStatus.failure &&
-            state.filters.isEmpty) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.large),
-              child: Text(
-                state.errorMessage.isEmpty
-                    ? AppStrings.settingsResponseFilterUnableToLoad
-                    : state.errorMessage,
-                textAlign: TextAlign.center,
+            if (state.status == ManageResponseFiltersStatus.failure &&
+                state.filters.isEmpty) {
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(AppSpacing.large),
+                  child: Text(
+                    state.errorMessage.isEmpty
+                        ? AppStrings.settingsResponseFilterUnableToLoad
+                        : state.errorMessage,
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              );
+            }
+
+            if (state.filters.isEmpty) {
+              return const _SavedResponseFiltersEmptyState();
+            }
+
+            return ListView.separated(
+              padding: EdgeInsets.only(
+                top: useSheetScaffold ? 0 : AppSpacing.medium,
+                bottom: AppSpacing.xxxLarge,
               ),
-            ),
-          );
-        }
-
-        if (state.filters.isEmpty) {
-          return const _SavedResponseFiltersEmptyState();
-        }
-
-        return ListView.separated(
-          padding: EdgeInsets.only(
-            top: useSheetScaffold ? 0 : AppSpacing.medium,
-            bottom: AppSpacing.xxxLarge,
-          ),
-          itemCount: state.filters.length,
-          separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.small),
-          itemBuilder: (context, index) => _SavedResponseFilterTile(
-            key: ValueKey<String>(
-              AppWidgetKeys.settingsResponseFilterListItemAt(index),
-            ),
-            filter: state.filters[index],
-            mode: mode,
-          ),
+              itemCount: state.filters.length,
+              separatorBuilder: (_, _) =>
+                  const SizedBox(height: AppSpacing.small),
+              itemBuilder: (context, index) => _SavedResponseFilterTile(
+                key: ValueKey<String>(
+                  AppWidgetKeys.settingsResponseFilterListItemAt(index),
+                ),
+                filter: state.filters[index],
+                mode: mode,
+              ),
+            );
+          },
         );
-      },
-    );
 
     if (!useSheetScaffold) {
       return Padding(
@@ -165,7 +168,9 @@ class SavedResponseFiltersView extends StatelessWidget {
         children: [
           _SavedResponseFiltersHeader(
             onClose: () => Navigator.of(context).maybePop(),
-            onDeleteAll: controller?.deleteAll ?? () => context.read<ManageResponseFiltersCubit>().deleteAll(),
+            onDeleteAll:
+                controller?.deleteAll ??
+                () => context.read<ManageResponseFiltersCubit>().deleteAll(),
             onAdd: () => _openCreateFilter(context),
           ),
           const SizedBox(height: AppSpacing.large),
@@ -215,18 +220,15 @@ class _SavedResponseFiltersHeader extends StatelessWidget {
 
     return Row(
       children: [
-        IconButton(
-          onPressed: onClose,
-          icon: const Icon(CupertinoIcons.back),
-        ),
+        IconButton(onPressed: onClose, icon: const Icon(CupertinoIcons.back)),
         const SizedBox(width: AppSpacing.xSmall),
         Expanded(
           child: Text(
             AppStrings.settingsResponseFilters,
             textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
           ),
         ),
         DecoratedBox(
@@ -245,7 +247,11 @@ class _SavedResponseFiltersHeader extends StatelessWidget {
             itemBuilder: (context) => const [
               PopupMenuItem<String>(
                 value: 'delete_all',
-                child: Text(AppStrings.settingsResponseFilterDeleteAll),
+                child: AppPopupMenuRow(
+                  icon: CupertinoIcons.trash,
+                  label: AppStrings.settingsResponseFilterDeleteAll,
+                  destructive: true,
+                ),
               ),
             ],
           ),
@@ -279,7 +285,9 @@ class _SavedResponseFiltersEmptyState extends StatelessWidget {
     final colors = context.appColors;
 
     return Center(
-      key: const ValueKey<String>(AppWidgetKeys.settingsResponseFiltersEmptyState),
+      key: const ValueKey<String>(
+        AppWidgetKeys.settingsResponseFiltersEmptyState,
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -319,7 +327,9 @@ class _SavedResponseFilterTile extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: const BorderRadius.all(Radius.circular(AppRadius.xxLarge)),
+        borderRadius: const BorderRadius.all(
+          Radius.circular(AppRadius.xxLarge),
+        ),
         onTap: () => _handleTap(context),
         onLongPress: () => _showActions(context),
         child: DecoratedBox(
@@ -337,25 +347,25 @@ class _SavedResponseFilterTile extends StatelessWidget {
               children: [
                 Text(
                   filter.name,
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: AppSpacing.xxxSmall),
                 Text(
                   filter.filterType.label,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colors.textSecondary,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: colors.textSecondary),
                 ),
                 const SizedBox(height: AppSpacing.small),
                 Text(
                   filter.query,
                   maxLines: 3,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontFamily: 'monospace',
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(fontFamily: 'monospace'),
                 ),
               ],
             ),
@@ -493,7 +503,8 @@ class _ResponseFilterEditorSheet extends StatefulWidget {
       _ResponseFilterEditorSheetState();
 }
 
-class _ResponseFilterEditorSheetState extends State<_ResponseFilterEditorSheet> {
+class _ResponseFilterEditorSheetState
+    extends State<_ResponseFilterEditorSheet> {
   late final TextEditingController _nameController;
   late final TextEditingController _valueController;
   late ResponseFilterType _filterType;

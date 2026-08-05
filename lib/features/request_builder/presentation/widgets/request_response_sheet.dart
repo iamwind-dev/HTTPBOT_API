@@ -9,6 +9,7 @@ import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_theme_colors.dart';
 import '../../../../core/theme/app_theme_context.dart';
+import '../../../../core/widgets/app_popup_menu.dart';
 import '../../../../injection/injection.dart';
 import '../../domain/entities/executed_request_snapshot.dart';
 import '../../domain/entities/parsed_response.dart';
@@ -261,10 +262,7 @@ class _ResponseSummaryBadge extends StatelessWidget {
 }
 
 class _ResponseContent extends StatelessWidget {
-  const _ResponseContent({
-    required this.state,
-    required this.selectedMode,
-  });
+  const _ResponseContent({required this.state, required this.selectedMode});
 
   final RequestSendState state;
   final ResponseViewMode selectedMode;
@@ -277,10 +275,18 @@ class _ResponseContent extends StatelessWidget {
       ResponseViewMode.request => _RequestSnapshotView(
         executionResult: executionResult,
       ),
-      ResponseViewMode.metrics => _MetricsView(executionResult: executionResult),
-      ResponseViewMode.tests => _ResponseTestsView(executionResult: executionResult),
-      ResponseViewMode.cookies => _CookiesView(executionResult: executionResult),
-      ResponseViewMode.headers => _HeadersView(executionResult: executionResult),
+      ResponseViewMode.metrics => _MetricsView(
+        executionResult: executionResult,
+      ),
+      ResponseViewMode.tests => _ResponseTestsView(
+        executionResult: executionResult,
+      ),
+      ResponseViewMode.cookies => _CookiesView(
+        executionResult: executionResult,
+      ),
+      ResponseViewMode.headers => _HeadersView(
+        executionResult: executionResult,
+      ),
       ResponseViewMode.body => _JsonViewer(body: _buildBodyText()),
     };
   }
@@ -360,7 +366,8 @@ class _ResponseActionBar extends StatelessWidget {
               onPressed: onFilterPressed,
               isEnabled:
                   state.parsedResponse != null &&
-                  state.parsedResponse!.bodyType != ParsedResponseBodyType.binary,
+                  state.parsedResponse!.bodyType !=
+                      ParsedResponseBodyType.binary,
             ),
           if (selectedMode == ResponseViewMode.body)
             const SizedBox(width: AppSpacing.small),
@@ -392,7 +399,6 @@ class _ResponseViewSelectorButton extends StatelessWidget {
         AppWidgetKeys.requestsResponseViewSelectorButton,
       ),
       tooltip: selectedMode.label,
-      color: colors.surface,
       onSelected: onSelected,
       itemBuilder: (context) => [
         for (final mode in ResponseViewMode.values)
@@ -421,9 +427,9 @@ class _ResponseViewSelectorButton extends StatelessWidget {
             children: [
               Text(
                 selectedMode.label,
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  color: colors.textOnPrimary,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleSmall?.copyWith(color: colors.textOnPrimary),
               ),
               const SizedBox(width: AppSpacing.xxxSmall),
               Icon(
@@ -519,9 +525,9 @@ class _RequestSnapshotView extends StatelessWidget {
         _InfoCard(
           child: Text(
             '${snapshot.method} ${snapshot.url}',
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              fontFamily: 'monospace',
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleSmall?.copyWith(fontFamily: 'monospace'),
           ),
         ),
         const SizedBox(height: AppSpacing.small),
@@ -597,7 +603,9 @@ class _MetricsView extends StatelessWidget {
       separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.small),
       itemBuilder: (context, index) {
         final metric = metrics[index];
-        return _InfoCard(child: _NameValueRow(name: metric.key, value: metric.value));
+        return _InfoCard(
+          child: _NameValueRow(name: metric.key, value: metric.value),
+        );
       },
     );
   }
@@ -612,7 +620,9 @@ class _HeadersView extends StatelessWidget {
   Widget build(BuildContext context) {
     final headers = executionResult?.headers ?? const <KeyValueItem>[];
     if (headers.isEmpty) {
-      return const _CenteredEmptyState(title: AppStrings.requestResponseNoHeaders);
+      return const _CenteredEmptyState(
+        title: AppStrings.requestResponseNoHeaders,
+      );
     }
 
     final groupedHeaders = _groupHeaders(headers);
@@ -651,7 +661,9 @@ class _CookiesView extends StatelessWidget {
     final receivedCookies = _parseReceivedCookies(executionResult);
 
     if (sentCookies.isEmpty && receivedCookies.isEmpty) {
-      return const _CenteredEmptyState(title: AppStrings.requestResponseNoCookies);
+      return const _CenteredEmptyState(
+        title: AppStrings.requestResponseNoCookies,
+      );
     }
 
     return ListView(
@@ -868,11 +880,7 @@ class _JsonLineRow extends StatelessWidget {
                     ),
                     softWrap: softWrap,
                   )
-                : Text(
-                    content,
-                    style: baseStyle,
-                    softWrap: softWrap,
-                  ),
+                : Text(content, style: baseStyle, softWrap: softWrap),
           ),
         ],
       ),
@@ -905,7 +913,10 @@ class _JsonLineRow extends StatelessWidget {
       };
 
       spans.add(
-        TextSpan(text: token, style: baseStyle?.copyWith(color: color)),
+        TextSpan(
+          text: token,
+          style: baseStyle?.copyWith(color: color),
+        ),
       );
       currentIndex = match.end;
     }
@@ -1121,24 +1132,26 @@ class _ResponseFilterSheetState extends State<_ResponseFilterSheet> {
                   itemBuilder: (context) => [
                     const PopupMenuItem<_ResponseFilterMenuAction>(
                       value: _ResponseFilterMenuAction.saveQuery,
-                      child: Text(AppStrings.settingsResponseFilterSaveQuery),
+                      child: AppPopupMenuRow(
+                        icon: CupertinoIcons.square_arrow_down,
+                        label: AppStrings.settingsResponseFilterSaveQuery,
+                      ),
                     ),
                     const PopupMenuItem<_ResponseFilterMenuAction>(
                       value: _ResponseFilterMenuAction.manageQueries,
-                      child: Text(AppStrings.settingsResponseFilterManageQueries),
+                      child: AppPopupMenuRow(
+                        icon: CupertinoIcons.folder,
+                        label: AppStrings.settingsResponseFilterManageQueries,
+                      ),
                     ),
                     PopupMenuItem<_ResponseFilterMenuAction>(
                       value: _ResponseFilterMenuAction.wrapResponse,
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: const Text(
-                              AppStrings.settingsResponseFilterWrapResponse,
-                            ),
-                          ),
-                          if (_wrapResponse)
-                            const Icon(CupertinoIcons.check_mark, size: 16),
-                        ],
+                      child: AppPopupMenuRow(
+                        icon: CupertinoIcons.textformat,
+                        label: AppStrings.settingsResponseFilterWrapResponse,
+                        trailing: _wrapResponse
+                            ? const Icon(CupertinoIcons.check_mark, size: 16)
+                            : null,
                       ),
                     ),
                   ],
@@ -1175,7 +1188,8 @@ class _ResponseFilterSheetState extends State<_ResponseFilterSheet> {
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 itemCount: _quickInsertItems.length,
-                separatorBuilder: (_, _) => const SizedBox(width: AppSpacing.small),
+                separatorBuilder: (_, _) =>
+                    const SizedBox(width: AppSpacing.small),
                 itemBuilder: (context, index) {
                   final item = _quickInsertItems[index];
                   return ActionChip(
@@ -1350,9 +1364,9 @@ class _NameValueRow extends StatelessWidget {
       const SizedBox(height: AppSpacing.xxxSmall),
       Text(
         value,
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-          fontFamily: 'monospace',
-        ),
+        style: Theme.of(
+          context,
+        ).textTheme.bodyMedium?.copyWith(fontFamily: 'monospace'),
       ),
     ],
   );
@@ -1366,9 +1380,9 @@ class _BodyPreviewText extends StatelessWidget {
   @override
   Widget build(BuildContext context) => SelectableText(
     text,
-    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-      fontFamily: 'monospace',
-    ),
+    style: Theme.of(
+      context,
+    ).textTheme.bodyMedium?.copyWith(fontFamily: 'monospace'),
   );
 }
 
@@ -1383,9 +1397,9 @@ class _CookieDisplayTile extends StatelessWidget {
     children: [
       Text(
         '${cookie.name} = ${cookie.value}',
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-          fontFamily: 'monospace',
-        ),
+        style: Theme.of(
+          context,
+        ).textTheme.bodyMedium?.copyWith(fontFamily: 'monospace'),
       ),
       if (cookie.attributes.isNotEmpty) ...[
         const SizedBox(height: AppSpacing.xxxSmall),
@@ -1547,9 +1561,7 @@ List<_CookieDisplay> _parseSentCookies(ExecutedRequestSnapshot? snapshot) {
     }
     final separatorIndex = trimmed.indexOf('=');
     if (separatorIndex <= 0) {
-      cookies.add(
-        _CookieDisplay(name: trimmed, value: '', rawValue: trimmed),
-      );
+      cookies.add(_CookieDisplay(name: trimmed, value: '', rawValue: trimmed));
       continue;
     }
 
@@ -1579,10 +1591,7 @@ List<_CookieDisplay> _parseReceivedCookies(RequestExecutionResult? result) {
           (cookie) => _CookieDisplay(
             name: cookie.name,
             value: cookie.value,
-            attributes: {
-              'Domain': cookie.domain,
-              'Path': cookie.path,
-            },
+            attributes: {'Domain': cookie.domain, 'Path': cookie.path},
           ),
         )
         .toList(growable: false);
@@ -1604,11 +1613,7 @@ _CookieDisplay _parseSetCookieHeader(String rawHeader) {
   final firstSegment = segments.first;
   final separatorIndex = firstSegment.indexOf('=');
   if (separatorIndex <= 0) {
-    return _CookieDisplay(
-      name: firstSegment,
-      value: '',
-      rawValue: rawHeader,
-    );
+    return _CookieDisplay(name: firstSegment, value: '', rawValue: rawHeader);
   }
 
   final attributes = <String, String>{};
@@ -1618,8 +1623,9 @@ _CookieDisplay _parseSetCookieHeader(String rawHeader) {
       attributes[segment] = 'true';
       continue;
     }
-    attributes[segment.substring(0, attributeSeparatorIndex).trim()] =
-        segment.substring(attributeSeparatorIndex + 1).trim();
+    attributes[segment.substring(0, attributeSeparatorIndex).trim()] = segment
+        .substring(attributeSeparatorIndex + 1)
+        .trim();
   }
 
   return _CookieDisplay(

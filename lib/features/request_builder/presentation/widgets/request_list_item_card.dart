@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_theme_context.dart';
+import '../../../../core/widgets/app_popup_menu.dart';
 import '../models/request_list_item.dart';
 
 enum RequestListItemAction {
@@ -25,6 +26,16 @@ extension RequestListItemActionLabel on RequestListItemAction {
     RequestListItemAction.favourite =>
       isFavourite ? 'Unfavourite' : 'Favourite',
     RequestListItemAction.delete => 'Delete',
+  };
+
+  IconData get icon => switch (this) {
+    RequestListItemAction.edit => CupertinoIcons.pencil,
+    RequestListItemAction.duplicate => CupertinoIcons.doc_on_doc,
+    RequestListItemAction.viewCurl =>
+      CupertinoIcons.chevron_left_slash_chevron_right,
+    RequestListItemAction.exportHar => CupertinoIcons.arrow_up_doc,
+    RequestListItemAction.favourite => CupertinoIcons.star,
+    RequestListItemAction.delete => CupertinoIcons.trash,
   };
 }
 
@@ -48,10 +59,14 @@ class RequestListItemCard extends StatelessWidget {
 
     return Material(
       color: colors.surface,
-      borderRadius: const BorderRadius.all(Radius.circular(AppRadius.large)),
+      borderRadius: const BorderRadius.all(
+        Radius.circular(AppRadius.large),
+      ),
       child: InkWell(
         onTap: onTap,
-        borderRadius: const BorderRadius.all(Radius.circular(AppRadius.large)),
+        borderRadius: const BorderRadius.all(
+          Radius.circular(AppRadius.large),
+        ),
         splashFactory: NoSplash.splashFactory,
         highlightColor: colors.primarySoft,
         child: Padding(
@@ -65,9 +80,15 @@ class RequestListItemCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(item.title, style: theme.textTheme.titleMedium),
+                    Text(
+                      item.title,
+                      style: theme.textTheme.titleMedium,
+                    ),
                     const SizedBox(height: AppSpacing.xSmall),
-                    Text(item.url, style: theme.textTheme.bodySmall),
+                    Text(
+                      item.url,
+                      style: theme.textTheme.bodySmall,
+                    ),
                   ],
                 ),
               ),
@@ -94,27 +115,27 @@ class _RequestListItemMoreButton extends StatelessWidget {
   final ValueChanged<RequestListItemAction> onSelected;
 
   @override
-  Widget build(BuildContext context) => PopupMenuButton<RequestListItemAction>(
-    tooltip: 'More request actions',
-    icon: const Icon(CupertinoIcons.ellipsis),
-    color: context.appColors.surface,
-    elevation: 12,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-    constraints: const BoxConstraints(minWidth: 180),
-    position: PopupMenuPosition.under,
-    onSelected: onSelected,
-    itemBuilder: (context) => RequestListItemAction.values
-        .map(
-          (action) => PopupMenuItem<RequestListItemAction>(
+  Widget build(BuildContext context) {
+    return PopupMenuButton<RequestListItemAction>(
+      tooltip: 'More request actions',
+      icon: const Icon(CupertinoIcons.ellipsis),
+      constraints: const BoxConstraints(minWidth: 180),
+      onSelected: onSelected,
+      itemBuilder: (context) => [
+        for (final action in RequestListItemAction.values) ...[
+          if (action == RequestListItemAction.delete)
+            const PopupMenuDivider(),
+          PopupMenuItem<RequestListItemAction>(
             value: action,
             child: _RequestListItemActionRow(
               action: action,
               isFavourite: isFavourite,
             ),
           ),
-        )
-        .toList(growable: false),
-  );
+        ],
+      ],
+    );
+  }
 }
 
 class _RequestListItemActionRow extends StatelessWidget {
@@ -128,16 +149,10 @@ class _RequestListItemActionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.appColors;
-
-    return Text(
-      action.labelFor(isFavourite: isFavourite),
-      style: TextStyle(
-        color: action == RequestListItemAction.delete
-            ? colors.methodDelete
-            : colors.textPrimary,
-        fontWeight: FontWeight.w600,
-      ),
+    return AppPopupMenuRow(
+      icon: action.icon,
+      label: action.labelFor(isFavourite: isFavourite),
+      destructive: action == RequestListItemAction.delete,
     );
   }
 }
@@ -162,7 +177,9 @@ class _RequestMethodBadge extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: colors.methodColor(method),
-        borderRadius: const BorderRadius.all(Radius.circular(AppRadius.pill)),
+        borderRadius: const BorderRadius.all(
+          Radius.circular(AppRadius.pill),
+        ),
       ),
       child: Text(
         method,
