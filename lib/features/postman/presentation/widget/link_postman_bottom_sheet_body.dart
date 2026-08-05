@@ -5,6 +5,7 @@ import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_theme_context.dart';
 import '../cubit/postman_cubit.dart';
+import '../cubit/postman_state.dart';
 import 'workspace_collection_picker_screen.dart';
 
 class LinkPostmanBottomSheetBody extends StatefulWidget {
@@ -18,47 +19,38 @@ class LinkPostmanBottomSheetBody extends StatefulWidget {
 class _LinkPostmanBottomSheetBodyState
     extends State<LinkPostmanBottomSheetBody> {
   final TextEditingController _apiKeyController = TextEditingController();
-  bool _isSubmitting = false;
-
   Future<void> _submit() async {
-    if (_isSubmitting) return;
+    final cubit = context.read<PostmanCubit>();
+    if (cubit.state.isLoadingCollections) return;
 
     final apiKey = _apiKeyController.text.trim();
     if (apiKey.isEmpty) return;
 
-    final cubit = context.read<PostmanCubit>();
-    setState(() => _isSubmitting = true);
-    try {
-      final didLink = await cubit.linkPostman(apiKey: apiKey);
-      if (!mounted) return;
-      if (!didLink) {
-        await showDialog<void>(
-          context: context,
-          barrierDismissible: true,
-          builder: (_) => const _PostmanLinkErrorDialog(),
-        );
-        return;
-      }
-      final rootContext = Navigator.of(context, rootNavigator: true).context;
-      if (!rootContext.mounted) return;
-      Navigator.pop(context);
-      await showModalBottomSheet<void>(
-        context: rootContext,
-        useRootNavigator: true,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        builder: (_) {
-          return BlocProvider.value(
-            value: cubit,
-            child: const WorkspaceCollectionPickerScreen(),
-          );
-        },
+    final didLink = await cubit.linkPostman(apiKey: apiKey);
+    if (!mounted) return;
+    if (!didLink) {
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: true,
+        builder: (_) => const _PostmanLinkErrorDialog(),
       );
-    } finally {
-      if (mounted) {
-        setState(() => _isSubmitting = false);
-      }
+      return;
     }
+    final rootContext = Navigator.of(context, rootNavigator: true).context;
+    if (!rootContext.mounted) return;
+    Navigator.pop(context);
+    await showModalBottomSheet<void>(
+      context: rootContext,
+      useRootNavigator: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) {
+        return BlocProvider.value(
+          value: cubit,
+          child: const WorkspaceCollectionPickerScreen(),
+        );
+      },
+    );
   }
 
   @override
@@ -144,21 +136,28 @@ class _LinkPostmanBottomSheetBodyState
                               ),
                             ),
                             const SizedBox(width: AppSpacing.xSmall),
-                            FilledButton(
-                              onPressed: _isSubmitting ? null : _submit,
-                              style: FilledButton.styleFrom(
-                                minimumSize: const Size(80, 48),
-                                shape: const StadiumBorder(),
+                            BlocBuilder<PostmanCubit, PostmanState>(
+                              buildWhen: (previous, current) =>
+                                  previous.isLoadingCollections !=
+                                  current.isLoadingCollections,
+                              builder: (context, state) => FilledButton(
+                                onPressed: state.isLoadingCollections
+                                    ? null
+                                    : _submit,
+                                style: FilledButton.styleFrom(
+                                  minimumSize: const Size(80, 48),
+                                  shape: const StadiumBorder(),
+                                ),
+                                child: state.isLoadingCollections
+                                    ? const SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Text('Link'),
                               ),
-                              child: _isSubmitting
-                                  ? const SizedBox(
-                                      width: 16,
-                                      height: 16,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : const Text('Link'),
                             ),
                           ],
                         ),

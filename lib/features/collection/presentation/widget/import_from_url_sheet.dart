@@ -157,7 +157,10 @@ class _ImportDialogButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppRadius.xLarge),
         onTap: onTap,
         child: Ink(
-          height: 60,
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.medium,
+            vertical: AppSpacing.medium,
+          ),
           decoration: BoxDecoration(
             color: colors.surfaceMuted,
             borderRadius: BorderRadius.circular(AppRadius.xLarge),

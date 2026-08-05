@@ -9,6 +9,7 @@ import '../../../../core/keys/widget_keys.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_theme_context.dart';
+import '../../../../core/widgets/app_popup_menu.dart';
 import '../../../../injection/injection.dart';
 import '../../domain/entities/saved_credential.dart';
 import '../../domain/usecases/apply_api_key_credential_to_auth_use_case.dart';
@@ -83,7 +84,8 @@ class SavedCredentialsView extends StatelessWidget {
           _Header(
             mode: mode,
             onClose: () => Navigator.of(context).maybePop(),
-            onDeleteAll: () => context.read<ManageCredentialsCubit>().deleteAll(),
+            onDeleteAll: () =>
+                context.read<ManageCredentialsCubit>().deleteAll(),
             onAdd: () => _openCreateAuth(context),
           ),
           const SizedBox(height: AppSpacing.large),
@@ -97,7 +99,10 @@ class SavedCredentialsView extends StatelessWidget {
                 if (state.credentials.isEmpty) {
                   return const _EmptyState();
                 }
-                return _CredentialsList(mode: mode, credentials: state.credentials);
+                return _CredentialsList(
+                  mode: mode,
+                  credentials: state.credentials,
+                );
               },
             ),
           ),
@@ -161,18 +166,14 @@ class _Header extends StatelessWidget {
           key: const ValueKey<String>(AppWidgetKeys.savedCredentialsMoreButton),
           tooltip: 'More credential actions',
           icon: const Icon(CupertinoIcons.ellipsis),
-          color: colors.surface,
-          position: PopupMenuPosition.under,
           onSelected: (_) => onDeleteAll(),
-          itemBuilder: (context) => [
+          itemBuilder: (context) => const [
             PopupMenuItem<String>(
               value: 'delete_all',
-              child: Text(
-                AppStrings.savedCredentialsDeleteAll,
-                style: TextStyle(
-                  color: colors.methodDelete,
-                  fontWeight: FontWeight.w600,
-                ),
+              child: AppPopupMenuRow(
+                icon: CupertinoIcons.trash,
+                label: AppStrings.savedCredentialsDeleteAll,
+                destructive: true,
               ),
             ),
           ],

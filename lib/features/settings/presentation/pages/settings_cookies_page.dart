@@ -8,10 +8,7 @@ import '../../../../core/theme/app_theme_context.dart';
 import '../../../request_builder/presentation/widgets/request_cookies_sheet.dart';
 
 class SettingsCookiesPage extends StatelessWidget {
-  const SettingsCookiesPage({
-    super.key,
-    required this.controller,
-  });
+  const SettingsCookiesPage({super.key, required this.controller});
 
   final SettingsCookiesController controller;
 
@@ -35,7 +32,6 @@ class SettingsCookiesPage extends StatelessWidget {
                 AppWidgetKeys.requestsCookiesFilterButton,
               ),
               tooltip: AppStrings.cookiesAllDomains,
-              color: context.appColors.surface,
               onSelected: controller.selectDomain,
               itemBuilder: (context) => [
                 const PopupMenuItem<String?>(
@@ -43,10 +39,7 @@ class SettingsCookiesPage extends StatelessWidget {
                   child: Text(AppStrings.cookiesAllDomains),
                 ),
                 for (final domain in controller.availableDomains)
-                  PopupMenuItem<String?>(
-                    value: domain,
-                    child: Text(domain),
-                  ),
+                  PopupMenuItem<String?>(value: domain, child: Text(domain)),
               ],
               child: DecoratedBox(
                 decoration: BoxDecoration(

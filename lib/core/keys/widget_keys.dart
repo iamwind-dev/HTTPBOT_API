@@ -95,6 +95,7 @@ abstract final class AppWidgetKeys {
   static const filterResponseMoreButton = 'filter_response_more_button';
   static const filterResponseQueryField = 'filter_response_query_field';
   static const filterResponseModePicker = 'filter_response_mode_picker';
+  static const requestsResponseFilterMenuButton = filterResponseMoreButton;
 
   static String filterResponseModeOption(String mode) =>
       'filter_response_mode_option_$mode';

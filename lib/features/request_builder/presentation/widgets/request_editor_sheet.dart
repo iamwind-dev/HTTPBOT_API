@@ -12,6 +12,7 @@ import '../../../../core/services/oauth2_callback_service.dart';
 import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_theme_context.dart';
+import '../../../../core/widgets/app_popup_menu.dart';
 import '../../../../injection/injection.dart';
 import '../../domain/entities/request_auth_draft.dart';
 import '../../domain/entities/api_key_auth_options.dart';
@@ -590,6 +591,17 @@ extension _RequestEditorMoreActionLabel on _RequestEditorMoreAction {
     _RequestEditorMoreAction.tests => 'Tests',
     _RequestEditorMoreAction.settings => 'Settings',
   };
+
+  IconData get icon => switch (this) {
+    _RequestEditorMoreAction.environment => CupertinoIcons.globe,
+    _RequestEditorMoreAction.useGraphQl => CupertinoIcons.link,
+    _RequestEditorMoreAction.viewCurl =>
+      CupertinoIcons.chevron_left_slash_chevron_right,
+    _RequestEditorMoreAction.exportHar => CupertinoIcons.arrow_up_doc,
+    _RequestEditorMoreAction.cookies => Icons.cookie_outlined,
+    _RequestEditorMoreAction.tests => CupertinoIcons.checkmark_seal,
+    _RequestEditorMoreAction.settings => CupertinoIcons.settings,
+  };
 }
 
 class _SheetHandle extends StatelessWidget {
@@ -681,18 +693,15 @@ class _RequestEditorMoreButton extends StatelessWidget {
         key: const ValueKey<String>(AppWidgetKeys.requestsEditorMoreButton),
         tooltip: 'More request actions',
         icon: const Icon(CupertinoIcons.ellipsis),
-        color: context.appColors.surface,
-        elevation: 12,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         constraints: const BoxConstraints(minWidth: 196),
-        position: PopupMenuPosition.under,
         onSelected: onSelected,
         itemBuilder: (context) => [
           PopupMenuItem<_RequestEditorMoreAction>(
             value: _RequestEditorMoreAction.environment,
-            child: const _RequestEditorMoreMenuRow(
+            child: const AppPopupMenuRow(
+              icon: CupertinoIcons.globe,
               label: 'Environment',
-              showChevron: true,
+              trailing: Icon(CupertinoIcons.chevron_right, size: 14),
             ),
           ),
           for (final action in [
@@ -705,41 +714,10 @@ class _RequestEditorMoreButton extends StatelessWidget {
           ])
             PopupMenuItem<_RequestEditorMoreAction>(
               value: action,
-              child: _RequestEditorMoreMenuRow(label: action.label),
+              child: AppPopupMenuRow(icon: action.icon, label: action.label),
             ),
         ],
       );
-}
-
-class _RequestEditorMoreMenuRow extends StatelessWidget {
-  const _RequestEditorMoreMenuRow({
-    required this.label,
-    this.showChevron = false,
-  });
-
-  final String label;
-  final bool showChevron;
-
-  @override
-  Widget build(BuildContext context) => Row(
-    children: [
-      Expanded(
-        child: Text(
-          label,
-          style: TextStyle(
-            color: context.appColors.textPrimary,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
-      if (showChevron)
-        Icon(
-          CupertinoIcons.chevron_right,
-          size: AppSpacing.large,
-          color: context.appColors.textSecondary,
-        ),
-    ],
-  );
 }
 
 class _MethodBadge extends StatelessWidget {
@@ -2836,20 +2814,25 @@ class _GraphQlEditorSheetState extends State<_GraphQlEditorSheet> {
                   itemBuilder: (context) => [
                     const PopupMenuItem<_GraphQlEditorMenuAction>(
                       value: _GraphQlEditorMenuAction.viewSchema,
-                      child: Text('View Schema'),
+                      child: AppPopupMenuRow(
+                        icon: CupertinoIcons.doc_text_search,
+                        label: 'View Schema',
+                      ),
                     ),
                     PopupMenuItem<_GraphQlEditorMenuAction>(
                       value: _GraphQlEditorMenuAction.saveCurrent,
-                      child: Text(
-                        _currentTab == _GraphQlEditorTab.query
+                      child: AppPopupMenuRow(
+                        icon: CupertinoIcons.square_arrow_down,
+                        label: _currentTab == _GraphQlEditorTab.query
                             ? 'Save Query'
                             : 'Save Variables',
                       ),
                     ),
                     PopupMenuItem<_GraphQlEditorMenuAction>(
                       value: _GraphQlEditorMenuAction.loadCurrent,
-                      child: Text(
-                        _currentTab == _GraphQlEditorTab.query
+                      child: AppPopupMenuRow(
+                        icon: CupertinoIcons.square_arrow_up,
+                        label: _currentTab == _GraphQlEditorTab.query
                             ? 'Load Query'
                             : 'Load Variables',
                       ),
@@ -3974,8 +3957,6 @@ class _AuthSection extends StatelessWidget {
                 ),
                 tooltip: 'Auth actions',
                 icon: const Icon(CupertinoIcons.ellipsis),
-                color: context.appColors.surface,
-                position: PopupMenuPosition.under,
                 onSelected: (value) {
                   switch (value) {
                     case 'manage_credentials':
@@ -3994,13 +3975,17 @@ class _AuthSection extends StatelessWidget {
                 itemBuilder: (context) => [
                   const PopupMenuItem<String>(
                     value: 'manage_credentials',
-                    child: Text(
-                      AppStrings.requestEditorApiKeyManageCredentials,
+                    child: AppPopupMenuRow(
+                      icon: CupertinoIcons.person_2,
+                      label: AppStrings.requestEditorApiKeyManageCredentials,
                     ),
                   ),
                   const PopupMenuItem<String>(
                     value: 'save_current_auth',
-                    child: Text('Save Current Auth as Credential'),
+                    child: AppPopupMenuRow(
+                      icon: CupertinoIcons.square_arrow_down,
+                      label: 'Save Current Auth as Credential',
+                    ),
                   ),
                 ],
               ),

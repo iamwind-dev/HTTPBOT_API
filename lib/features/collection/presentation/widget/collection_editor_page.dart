@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:httpbot_api/core/keys/widget_keys.dart';
 import 'package:httpbot_api/core/theme/app_theme_context.dart';
 import 'package:httpbot_api/features/collection/domain/entities/collection_import_type.dart';
 import 'package:httpbot_api/features/collection/domain/entities/imported_collection_entity.dart';
 import 'package:httpbot_api/features/request_builder/domain/entities/request_auth_draft.dart';
 import 'package:httpbot_api/features/request_builder/presentation/widgets/variable_rows_editor.dart';
+
+import '../cubits/collection_ui_cubits.dart';
 
 class CollectionEditorPage extends StatefulWidget {
   const CollectionEditorPage({
@@ -34,16 +37,23 @@ class CollectionEditorPage extends StatefulWidget {
 
 class _CollectionEditorPageState extends State<CollectionEditorPage> {
   late final TextEditingController _nameController;
-  late final List<VariableRowData> _variableRows;
-  late RequestAuthDraft _auth;
-  bool _isCompleting = false;
+  late final CollectionEditorFormCubit _formCubit;
+
+  List<VariableRowData> get _variableRows => _formCubit.state.variableRows;
+  RequestAuthDraft get _auth => _formCubit.state.auth;
+  set _auth(RequestAuthDraft value) => _formCubit.updateAuth(value);
+  bool get _isCompleting => _formCubit.state.isCompleting;
+  set _isCompleting(bool value) {
+    if (value) _formCubit.markCompleting();
+  }
 
   @override
   void initState() {
     super.initState();
-    _nameController = TextEditingController(text: widget.initialCollection.name);
-    _auth = widget.initialCollection.auth;
-    _variableRows = widget.initialCollection.variables
+    _nameController = TextEditingController(
+      text: widget.initialCollection.name,
+    );
+    final variableRows = widget.initialCollection.variables
         .map(
           (item) => VariableRowData()
             ..keyController.text = item.name
@@ -51,14 +61,16 @@ class _CollectionEditorPageState extends State<CollectionEditorPage> {
             ..isEnabled = item.isEnabled,
         )
         .toList(growable: true);
+    _formCubit = CollectionEditorFormCubit(
+      auth: widget.initialCollection.auth,
+      variableRows: variableRows,
+    );
   }
 
   @override
   void dispose() {
     _nameController.dispose();
-    for (final row in _variableRows) {
-      row.dispose();
-    }
+    _formCubit.close();
     super.dispose();
   }
 
@@ -92,144 +104,142 @@ class _CollectionEditorPageState extends State<CollectionEditorPage> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.appColors;
+    return BlocBuilder<CollectionEditorFormCubit, CollectionEditorFormState>(
+      bloc: _formCubit,
+      builder: (context, state) {
+        final colors = context.appColors;
 
-    return PopScope(
-      canPop: true,
-      onPopInvokedWithResult: (didPop, __) async {
-        if (didPop || _isCompleting) {
-          return;
-        }
-        await _close();
-      },
-      child: Scaffold(
-        backgroundColor: colors.background,
-        body: SafeArea(
-          child: ListView(
-            padding: EdgeInsets.fromLTRB(
-              16,
-              12,
-              16,
-              32 + MediaQuery.viewInsetsOf(context).bottom,
-            ),
-            children: [
-              Row(
+        return PopScope(
+          canPop: true,
+          onPopInvokedWithResult: (didPop, __) async {
+            if (didPop || _isCompleting) {
+              return;
+            }
+            await _close();
+          },
+          child: Scaffold(
+            backgroundColor: colors.background,
+            body: SafeArea(
+              child: ListView(
+                padding: EdgeInsets.fromLTRB(
+                  16,
+                  12,
+                  16,
+                  32 + MediaQuery.viewInsetsOf(context).bottom,
+                ),
                 children: [
-                  _HeaderCircleButton(
-                    buttonKey: const ValueKey<String>(
-                      AppWidgetKeys.collectionsNewCollectionCloseButton,
-                    ),
-                    icon: Icons.close_rounded,
-                    onTap: _close,
+                  Row(
+                    children: [
+                      _HeaderCircleButton(
+                        buttonKey: const ValueKey<String>(
+                          AppWidgetKeys.collectionsNewCollectionCloseButton,
+                        ),
+                        icon: Icons.close_rounded,
+                        onTap: _close,
+                      ),
+                      Expanded(
+                        child: Text(
+                          'Collection',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: colors.textPrimary,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      _HeaderCircleButton(
+                        buttonKey: const ValueKey<String>(
+                          AppWidgetKeys.collectionsNewCollectionSaveButton,
+                        ),
+                        icon: Icons.check_rounded,
+                        filled: true,
+                        onTap: _save,
+                      ),
+                    ],
                   ),
-                  Expanded(
-                    child: Text(
-                      'Collection',
-                      textAlign: TextAlign.center,
+                  const SizedBox(height: 28),
+                  _EditorCard(
+                    child: TextField(
+                      key: const ValueKey<String>(
+                        AppWidgetKeys.collectionsNewCollectionNameField,
+                      ),
+                      controller: _nameController,
+                      autofocus: widget.isCreating,
                       style: TextStyle(
                         color: colors.textPrimary,
                         fontSize: 20,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      decoration: const InputDecoration(
+                        border: InputBorder.none,
+                        hintText: 'Collection name',
                       ),
                     ),
                   ),
-                  _HeaderCircleButton(
-                    buttonKey: const ValueKey<String>(
-                      AppWidgetKeys.collectionsNewCollectionSaveButton,
+                  const SizedBox(height: 28),
+                  Text(
+                    'Variables',
+                    style: TextStyle(
+                      color: colors.textSecondary,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
                     ),
-                    icon: Icons.check_rounded,
-                    filled: true,
-                    onTap: _save,
                   ),
+                  const SizedBox(height: 14),
+                  _EditorCard(
+                    child: VariableRowsEditor(
+                      rows: _variableRows,
+                      onAddRow: _formCubit.addVariableRow,
+                      onRemoveRow: _formCubit.removeVariableRow,
+                      onChanged: _formCubit.variableChanged,
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+                  Text(
+                    'Auth',
+                    style: TextStyle(
+                      color: colors.textSecondary,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  _EditorCard(
+                    child: DropdownButtonFormField<AuthType>(
+                      key: const ValueKey<String>(
+                        AppWidgetKeys.collectionsNewCollectionAuthTypeField,
+                      ),
+                      initialValue: _auth.type,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        border: InputBorder.none,
+                        labelText: 'Auth',
+                      ),
+                      items: AuthType.values
+                          .map(
+                            (type) => DropdownMenuItem<AuthType>(
+                              value: type,
+                              child: Text(_authLabel(type)),
+                            ),
+                          )
+                          .toList(growable: false),
+                      onChanged: (type) {
+                        if (type == null) {
+                          return;
+                        }
+                        _auth = _auth.copyWith(type: type);
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  _buildAuthConfiguration(),
                 ],
               ),
-              const SizedBox(height: 28),
-              _EditorCard(
-                child: TextField(
-                  key: const ValueKey<String>(
-                    AppWidgetKeys.collectionsNewCollectionNameField,
-                  ),
-                  controller: _nameController,
-                  autofocus: widget.isCreating,
-                  style: TextStyle(
-                    color: colors.textPrimary,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w500,
-                  ),
-                  decoration: const InputDecoration(
-                    border: InputBorder.none,
-                    hintText: 'Collection name',
-                  ),
-                ),
-              ),
-              const SizedBox(height: 28),
-              Text(
-                'Variables',
-                style: TextStyle(
-                  color: colors.textSecondary,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 14),
-              _EditorCard(
-                child: VariableRowsEditor(
-                  rows: _variableRows,
-                  onAddRow: () => setState(() {
-                    _variableRows.add(VariableRowData());
-                  }),
-                  onRemoveRow: (index) => setState(() {
-                    final row = _variableRows.removeAt(index);
-                    row.dispose();
-                  }),
-                  onChanged: () => setState(() {}),
-                ),
-              ),
-              const SizedBox(height: 28),
-              Text(
-                'Auth',
-                style: TextStyle(
-                  color: colors.textSecondary,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 14),
-              _EditorCard(
-                child: DropdownButtonFormField<AuthType>(
-                  key: const ValueKey<String>(
-                    AppWidgetKeys.collectionsNewCollectionAuthTypeField,
-                  ),
-                  initialValue: _auth.type,
-                  isExpanded: true,
-                  decoration: const InputDecoration(
-                    border: InputBorder.none,
-                    labelText: 'Auth',
-                  ),
-                  items: AuthType.values
-                      .map(
-                        (type) => DropdownMenuItem<AuthType>(
-                          value: type,
-                          child: Text(_authLabel(type)),
-                        ),
-                      )
-                      .toList(growable: false),
-                  onChanged: (type) {
-                    if (type == null) {
-                      return;
-                    }
-                    setState(() {
-                      _auth = _auth.copyWith(type: type);
-                    });
-                  },
-                ),
-              ),
-              const SizedBox(height: 14),
-              _buildAuthConfiguration(),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -295,7 +305,7 @@ class _CollectionEditorPageState extends State<CollectionEditorPage> {
             value: _auth.apiKey.location,
             items: ApiKeyLocation.values,
             itemLabel: (item) => item.label,
-            onChanged: (value) => setState(() {
+            onChanged: (value) {
               _auth = _auth.copyWith(
                 apiKey: ApiKeyAuthDraft(
                   name: _auth.apiKey.name,
@@ -303,7 +313,7 @@ class _CollectionEditorPageState extends State<CollectionEditorPage> {
                   location: value,
                 ),
               );
-            }),
+            },
           ),
         ],
       ),
@@ -408,9 +418,9 @@ class _CollectionEditorPageState extends State<CollectionEditorPage> {
           _AuthSwitchField(
             label: 'Include payload hash',
             value: _auth.hawk.includePayloadHash,
-            onChanged: (value) => setState(() {
+            onChanged: (value) {
               _updateHawk(includePayloadHash: value);
-            }),
+            },
           ),
         ],
       ),
@@ -450,9 +460,9 @@ class _CollectionEditorPageState extends State<CollectionEditorPage> {
           _AuthSwitchField(
             label: 'Send as header',
             value: _auth.jwt.sendAsHeader,
-            onChanged: (value) => setState(() {
+            onChanged: (value) {
               _updateJwt(sendAsHeader: value);
-            }),
+            },
           ),
         ],
       ),
@@ -555,9 +565,9 @@ class _CollectionEditorPageState extends State<CollectionEditorPage> {
           _AuthSwitchField(
             label: 'Send as header',
             value: _auth.oauth1.asHeader,
-            onChanged: (value) => setState(() {
+            onChanged: (value) {
               _updateOAuth1(asHeader: value);
-            }),
+            },
           ),
         ],
       ),
@@ -568,9 +578,9 @@ class _CollectionEditorPageState extends State<CollectionEditorPage> {
             value: _auth.oauth2.grantType,
             items: OAuth2GrantType.values,
             itemLabel: (item) => item.label,
-            onChanged: (value) => setState(() {
+            onChanged: (value) {
               _updateOAuth2(grantType: value);
-            }),
+            },
           ),
           const SizedBox(height: 10),
           _AuthTextField(
@@ -613,9 +623,9 @@ class _CollectionEditorPageState extends State<CollectionEditorPage> {
           _AuthSwitchField(
             label: 'Add token to header',
             value: _auth.oauth2.addTokenToHeader,
-            onChanged: (value) => setState(() {
+            onChanged: (value) {
               _updateOAuth2(addTokenToHeader: value);
-            }),
+            },
           ),
         ],
       ),
@@ -876,10 +886,7 @@ class _AuthTextField extends StatelessWidget {
           fontSize: 16,
           fontWeight: FontWeight.w500,
         ),
-        decoration: InputDecoration(
-          border: InputBorder.none,
-          labelText: label,
-        ),
+        decoration: InputDecoration(border: InputBorder.none, labelText: label),
       ),
     );
   }
@@ -906,10 +913,7 @@ class _AuthDropdownField<T> extends StatelessWidget {
       child: DropdownButtonFormField<T>(
         initialValue: value,
         isExpanded: true,
-        decoration: InputDecoration(
-          border: InputBorder.none,
-          labelText: label,
-        ),
+        decoration: InputDecoration(border: InputBorder.none, labelText: label),
         items: items
             .map(
               (item) => DropdownMenuItem<T>(
