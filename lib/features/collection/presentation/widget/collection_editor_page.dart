@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
+
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:httpbot_api/core/keys/widget_keys.dart';
-import 'package:httpbot_api/core/theme/app_theme_context.dart';
-import 'package:httpbot_api/features/collection/domain/entities/collection_import_type.dart';
-import 'package:httpbot_api/features/collection/domain/entities/imported_collection_entity.dart';
-import 'package:httpbot_api/features/request_builder/domain/entities/request_auth_draft.dart';
-import 'package:httpbot_api/features/request_builder/presentation/widgets/variable_rows_editor.dart';
+import '../../../../core/keys/widget_keys.dart';
+import '../../../../core/theme/app_theme_context.dart';
+import '../../../request_builder/domain/entities/request_auth_draft.dart';
+import '../../../request_builder/presentation/widgets/variable_rows_editor.dart';
+import '../../domain/entities/collection_import_type.dart';
+import '../../domain/entities/imported_collection_entity.dart';
 
 import '../cubits/collection_ui_cubits.dart';
 

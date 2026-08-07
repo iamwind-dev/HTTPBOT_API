@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:httpbot_api/core/theme/app_theme_context.dart';
-import 'package:httpbot_api/features/postman/domain/entities/postman_request_entity.dart';
-import 'package:httpbot_api/features/postman/presentation/mappers/postman_request_to_request_draft_mapper.dart';
-import 'package:httpbot_api/features/postman/presentation/widget/postman_request_method_chip.dart';
-import 'package:httpbot_api/features/request_builder/domain/entities/request_variable_store.dart';
-import 'package:httpbot_api/features/request_builder/presentation/widgets/request_editor_sheet.dart';
+
+import '../../../../core/theme/app_theme_context.dart';
+import '../../../request_builder/domain/entities/request_variable_store.dart';
+import '../../../request_builder/presentation/widgets/request_editor_sheet.dart';
+import '../../domain/entities/postman_request_entity.dart';
+import '../mappers/postman_request_to_request_draft_mapper.dart';
+import 'postman_request_method_chip.dart';
 
 class PostmanRequestItem extends StatelessWidget {
   const PostmanRequestItem({

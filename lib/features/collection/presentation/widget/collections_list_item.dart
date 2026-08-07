@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:httpbot_api/core/theme/app_theme_context.dart';
-import 'package:httpbot_api/features/collection/presentation/model/list_collections.dart';
-import 'package:httpbot_api/generated/assets.gen.dart';
+
+import '../../../../core/theme/app_theme_context.dart';
+import '../../../../generated/assets.gen.dart';
+import '../model/list_collections.dart';
 
 class CollectionsListItem extends StatelessWidget {
   const CollectionsListItem({

@@ -2,31 +2,32 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:httpbot_api/core/keys/widget_keys.dart';
-import 'package:httpbot_api/core/widgets/body_empty.dart';
-import 'package:httpbot_api/features/collection/presentation/model/list_collections.dart';
-import 'package:httpbot_api/features/collection/presentation/widget/collection_editor_page.dart';
-import 'package:httpbot_api/features/collection/presentation/widget/collections_list_item.dart';
-import 'package:httpbot_api/features/request_builder/domain/entities/request_body_draft.dart';
-import 'package:httpbot_api/features/request_builder/domain/entities/request_draft.dart';
-import 'package:httpbot_api/features/request_builder/domain/entities/request_key_value.dart';
-import 'package:httpbot_api/features/request_builder/domain/entities/request_variable.dart';
-import 'package:httpbot_api/features/request_builder/domain/entities/request_variable_store.dart';
-import 'package:httpbot_api/features/request_builder/domain/entities/requests_method.dart';
-import 'package:httpbot_api/features/request_builder/domain/helpers/curl_command_builder.dart';
-import 'package:httpbot_api/features/request_builder/domain/helpers/simple_curl_request_parser.dart';
-import 'package:httpbot_api/features/request_builder/domain/usecases/get_request_variable_store_use_case.dart';
-import 'package:httpbot_api/features/request_builder/presentation/models/request_editor_result.dart';
-import 'package:httpbot_api/features/request_builder/presentation/widgets/view_curl_sheet.dart';
-import 'package:httpbot_api/features/request_builder/presentation/widgets/request_editor_sheet.dart';
+
 import 'package:share_plus/share_plus.dart';
 
+import '../../../../core/keys/widget_keys.dart';
 import '../../../../core/theme/app_theme_context.dart';
+import '../../../../core/widgets/body_empty.dart';
 import '../../../../injection/injection.dart';
+import '../../../request_builder/domain/entities/request_body_draft.dart';
+import '../../../request_builder/domain/entities/request_draft.dart';
+import '../../../request_builder/domain/entities/request_key_value.dart';
+import '../../../request_builder/domain/entities/request_variable.dart';
+import '../../../request_builder/domain/entities/request_variable_store.dart';
+import '../../../request_builder/domain/entities/requests_method.dart';
+import '../../../request_builder/domain/helpers/curl_command_builder.dart';
+import '../../../request_builder/domain/helpers/simple_curl_request_parser.dart';
+import '../../../request_builder/domain/usecases/get_request_variable_store_use_case.dart';
+import '../../../request_builder/presentation/models/request_editor_result.dart';
+import '../../../request_builder/presentation/widgets/request_editor_sheet.dart';
+import '../../../request_builder/presentation/widgets/view_curl_sheet.dart';
 import '../../domain/entities/imported_collection_entity.dart';
 import '../cubits/collection_cubit.dart';
 import '../cubits/collection_state.dart';
 import '../cubits/collection_ui_cubits.dart';
+import '../model/list_collections.dart';
+import '../widget/collection_editor_page.dart';
+import '../widget/collections_list_item.dart';
 
 class CollectionScreen extends StatelessWidget {
   const CollectionScreen({super.key});

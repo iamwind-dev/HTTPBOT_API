@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:httpbot_api/core/theme/app_theme_context.dart';
-import 'package:httpbot_api/features/postman/presentation/model/postman_list_item_model.dart';
-import 'package:httpbot_api/generated/assets.gen.dart';
+
+import '../../../../core/theme/app_theme_context.dart';
+import '../../../../generated/assets.gen.dart';
+import '../model/postman_list_item_model.dart';
 
 class PostmanListItem extends StatelessWidget {
   const PostmanListItem({

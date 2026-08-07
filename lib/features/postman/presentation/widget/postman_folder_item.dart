@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:httpbot_api/core/theme/app_theme_context.dart';
-import 'package:httpbot_api/features/postman/domain/entities/postman_folder_entity.dart';
-import 'package:httpbot_api/features/postman/presentation/widget/postman_request_item.dart';
+import '../../../../core/theme/app_theme_context.dart';
+import '../../domain/entities/postman_folder_entity.dart';
+import 'postman_request_item.dart';
 
 import '../cubit/postman_ui_cubits.dart';
 

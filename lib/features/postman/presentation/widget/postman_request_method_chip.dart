@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:httpbot_api/core/theme/app_theme_context.dart';
+
+import '../../../../core/theme/app_theme_context.dart';
 
 class PostmanRequestMethodChip extends StatelessWidget {
   const PostmanRequestMethodChip({

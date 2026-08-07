@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:httpbot_api/core/theme/app_spacing.dart';
-import 'package:httpbot_api/core/theme/app_theme_context.dart';
 
+import '../../../../core/theme/app_spacing.dart';
+import '../../../../core/theme/app_theme_context.dart';
 import '../../domain/entities/postman_collection_entity.dart';
 import '../widget/search_postman.dart';
 import '../widget/postman_folder_item.dart';

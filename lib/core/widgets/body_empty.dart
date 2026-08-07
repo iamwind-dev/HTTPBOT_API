@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:httpbot_api/generated/assets.gen.dart';
+
+import '../../generated/assets.gen.dart';
 
 class BodyEmpty extends StatelessWidget {
   const BodyEmpty({super.key, required this.title, required this.subtitle});
