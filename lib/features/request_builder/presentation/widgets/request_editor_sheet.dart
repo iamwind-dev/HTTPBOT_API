@@ -554,18 +554,16 @@ class _RequestEditorSheetState extends State<_RequestEditorSheet> {
                         sectionId: 'query',
                         items: draft.queryParameters,
                       ),
-                      const SizedBox(height: AppSpacing.large),
+                      const SizedBox(height: AppSpacing.medium),
                       _KeyValueSection(
                         title: AppStrings.requestEditorHeaders,
                         sectionId: 'headers',
                         items: draft.headers,
                       ),
-                      const SizedBox(height: AppSpacing.large),
                       _BodySection(
                         draft: draft,
                         variableStore: widget.variableStore,
                       ),
-                      const SizedBox(height: AppSpacing.large),
                       _AuthSection(
                         auth: draft.auth,
                         queryParameters: draft.queryParameters,
@@ -899,7 +897,6 @@ class _KeyValueSection extends StatelessWidget {
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       _EditorSectionTitle(title: title),
-      const SizedBox(height: AppSpacing.small),
       _KeyValueCard(
         sectionId: sectionId,
         items: items,
@@ -940,27 +937,24 @@ class _KeyValueCard extends StatelessWidget {
 
     return DecoratedBox(
       decoration: _buildCardDecoration(context),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.xSmall),
-        child: Column(
-          children: [
-            for (var rowIndex = 0; rowIndex < rowCount; rowIndex++) ...[
-              if (rowIndex < items.length)
-                _KeyValueRow(
-                  sectionId: sectionId,
-                  index: rowIndex,
-                  item: items[rowIndex],
-                  onChanged: (item) => onItemChanged(rowIndex, item),
-                  onDelete: onItemDeleted == null
-                      ? null
-                      : () => onItemDeleted!(rowIndex),
-                )
-              else
-                _AddKeyValueRow(sectionId: sectionId, onPressed: onAddPressed),
-              if (rowIndex < rowCount - 1) const _KeyValueDivider(),
-            ],
+      child: Column(
+        children: [
+          for (var rowIndex = 0; rowIndex < rowCount; rowIndex++) ...[
+            if (rowIndex < items.length)
+              _KeyValueRow(
+                sectionId: sectionId,
+                index: rowIndex,
+                item: items[rowIndex],
+                onChanged: (item) => onItemChanged(rowIndex, item),
+                onDelete: onItemDeleted == null
+                    ? null
+                    : () => onItemDeleted!(rowIndex),
+              )
+            else
+              _AddKeyValueRow(sectionId: sectionId, onPressed: onAddPressed),
+            if (rowIndex < rowCount - 1) const _KeyValueDivider(),
           ],
-        ),
+        ],
       ),
     );
   }
@@ -1101,7 +1095,7 @@ class _KeyValueRow extends StatelessWidget {
     child: Padding(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.large,
-        vertical: AppSpacing.small,
+        vertical: AppSpacing.xxSmall,
       ),
       child: ConstrainedBox(
         constraints: const BoxConstraints(minHeight: AppSpacing.xxxLarge),
@@ -1488,7 +1482,7 @@ class _AddKeyValueRow extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.large,
-            vertical: AppSpacing.medium,
+            vertical: AppSpacing.small,
           ),
           child: Row(
             children: [
@@ -1549,13 +1543,12 @@ class _BodySection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const _EditorSectionTitle(title: AppStrings.requestEditorBody),
-        const SizedBox(height: AppSpacing.small),
+        const SizedBox(height: AppSpacing.xxxSmall),
         if (!methodSupportsRequestBody(draft.method)) ...[
           _InfoCard(
             message:
                 'Body will not be sent for ${draft.method.wireName} in this version.',
           ),
-          const SizedBox(height: AppSpacing.small),
         ],
         _BodyModeCard(
           draft: draft,
@@ -1669,71 +1662,68 @@ class _BodyModeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => DecoratedBox(
     decoration: _buildCardDecoration(context),
-    child: Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.small),
-      child: Column(
-        children: [
-          _BodyTypeRow(value: body.type, onChanged: onTypeChanged),
-          ...switch (body.type) {
-            RequestBodyType.none => const <Widget>[],
-            RequestBodyType.xWwwFormUrlEncoded => <Widget>[
-              const _KeyValueDivider(),
-              _BodyUrlEncodedList(
-                items: body.urlEncoded,
-                onChanged: onUrlEncodedChanged,
+    child: Column(
+      children: [
+        _BodyTypeRow(value: body.type, onChanged: onTypeChanged),
+        ...switch (body.type) {
+          RequestBodyType.none => const <Widget>[],
+          RequestBodyType.xWwwFormUrlEncoded => <Widget>[
+            const _KeyValueDivider(),
+            _BodyUrlEncodedList(
+              items: body.urlEncoded,
+              onChanged: onUrlEncodedChanged,
+            ),
+          ],
+          RequestBodyType.formData => <Widget>[
+            const _KeyValueDivider(),
+            _BodyFormDataList(
+              items: body.formData,
+              onChanged: onFormDataChanged,
+            ),
+          ],
+          RequestBodyType.raw => <Widget>[
+            const _KeyValueDivider(),
+            _BodyActionRow(
+              fieldKey: AppWidgetKeys.requestsEditorRawBodyAction,
+              label: 'Update Body',
+              value: _rawBodySummary(body.raw),
+              onTap: () => _openRawBodyEditor(context),
+            ),
+          ],
+          RequestBodyType.graphql => <Widget>[
+            const _KeyValueDivider(),
+            _BodyActionRow(
+              fieldKey: AppWidgetKeys.requestsEditorGraphQlQueryField,
+              label: 'Query',
+              value: _graphQlSummary(body.graphQl.query),
+              onTap: () => _openGraphQlEditor(
+                context,
+                initialTab: _GraphQlEditorTab.query,
               ),
-            ],
-            RequestBodyType.formData => <Widget>[
-              const _KeyValueDivider(),
-              _BodyFormDataList(
-                items: body.formData,
-                onChanged: onFormDataChanged,
+            ),
+            const _KeyValueDivider(),
+            _BodyActionRow(
+              fieldKey: AppWidgetKeys.requestsEditorGraphQlVariablesField,
+              label: 'Variables',
+              value: _graphQlSummary(body.graphQl.variables),
+              onTap: () => _openGraphQlEditor(
+                context,
+                initialTab: _GraphQlEditorTab.variables,
               ),
-            ],
-            RequestBodyType.raw => <Widget>[
-              const _KeyValueDivider(),
-              _BodyActionRow(
-                fieldKey: AppWidgetKeys.requestsEditorRawBodyAction,
-                label: 'Update Body',
-                value: _rawBodySummary(body.raw),
-                onTap: () => _openRawBodyEditor(context),
+            ),
+            const _KeyValueDivider(),
+            _BodyActionRow(
+              fieldKey: 'requests_editor_graphql_operation_name_field',
+              label: 'Operation Name',
+              value: _graphQlSummary(body.graphQl.operationName ?? ''),
+              onTap: () => _openGraphQlEditor(
+                context,
+                initialTab: _GraphQlEditorTab.query,
               ),
-            ],
-            RequestBodyType.graphql => <Widget>[
-              const _KeyValueDivider(),
-              _BodyActionRow(
-                fieldKey: AppWidgetKeys.requestsEditorGraphQlQueryField,
-                label: 'Query',
-                value: _graphQlSummary(body.graphQl.query),
-                onTap: () => _openGraphQlEditor(
-                  context,
-                  initialTab: _GraphQlEditorTab.query,
-                ),
-              ),
-              const _KeyValueDivider(),
-              _BodyActionRow(
-                fieldKey: AppWidgetKeys.requestsEditorGraphQlVariablesField,
-                label: 'Variables',
-                value: _graphQlSummary(body.graphQl.variables),
-                onTap: () => _openGraphQlEditor(
-                  context,
-                  initialTab: _GraphQlEditorTab.variables,
-                ),
-              ),
-              const _KeyValueDivider(),
-              _BodyActionRow(
-                fieldKey: 'requests_editor_graphql_operation_name_field',
-                label: 'Operation Name',
-                value: _graphQlSummary(body.graphQl.operationName ?? ''),
-                onTap: () => _openGraphQlEditor(
-                  context,
-                  initialTab: _GraphQlEditorTab.query,
-                ),
-              ),
-            ],
-          },
-        ],
-      ),
+            ),
+          ],
+        },
+      ],
     ),
   );
 }
@@ -1748,7 +1738,7 @@ class _BodyTypeRow extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.symmetric(
       horizontal: AppSpacing.large,
-      vertical: AppSpacing.medium,
+      vertical: AppSpacing.xxSmall,
     ),
     child: Row(
       children: [
@@ -4034,30 +4024,23 @@ class _AuthSection extends StatelessWidget {
               ),
           ],
         ),
-        const SizedBox(height: AppSpacing.small),
-        DecoratedBox(
-          decoration: _buildCardDecoration(context),
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.medium),
-            child: _EditorDropdownField<AuthType>(
-              fieldKey: AppWidgetKeys.requestsEditorAuthTypeField,
-              label: AppStrings.requestEditorAuth,
-              value: auth.type,
-              items: AuthType.values
-                  .map(
-                    (type) => DropdownMenuItem<AuthType>(
-                      value: type,
-                      child: Text(type.label),
-                    ),
-                  )
-                  .toList(growable: false),
-              onChanged: (type) {
-                if (type != null) {
-                  editorCubit.updateAuth(auth.copyWith(type: type));
-                }
-              },
-            ),
-          ),
+        _EditorDropdownField<AuthType>(
+          fieldKey: AppWidgetKeys.requestsEditorAuthTypeField,
+          label: AppStrings.requestEditorAuth,
+          value: auth.type,
+          items: AuthType.values
+              .map(
+                (type) => DropdownMenuItem<AuthType>(
+                  value: type,
+                  child: Text(type.label),
+                ),
+              )
+              .toList(growable: false),
+          onChanged: (type) {
+            if (type != null) {
+              editorCubit.updateAuth(auth.copyWith(type: type));
+            }
+          },
         ),
         const SizedBox(height: AppSpacing.small),
         switch (auth.type) {
@@ -7066,45 +7049,32 @@ class _SendButton extends StatelessWidget {
   final bool isLoading;
   final VoidCallback onPressed;
 
-  /// Draws the floating send affordance at the bottom of the editor.
+  /// Draws the send action as an extended floating action button.
   @override
-  Widget build(BuildContext context) => Material(
+  Widget build(BuildContext context) => FloatingActionButton.extended(
     key: const ValueKey<String>(AppWidgetKeys.requestsEditorSendButton),
-    color: context.appColors.methodGet,
-    borderRadius: const BorderRadius.all(Radius.circular(AppRadius.xxLarge)),
-    child: InkWell(
-      onTap: isLoading ? null : onPressed,
-      borderRadius: const BorderRadius.all(Radius.circular(AppRadius.xxLarge)),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.large,
-          vertical: AppSpacing.medium,
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (isLoading) ...[
-              SizedBox(
-                width: AppSpacing.medium,
-                height: AppSpacing.medium,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    context.appColors.textOnPrimary,
-                  ),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.small),
-            ],
-            Text(
-              AppStrings.requestEditorSend,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color: context.appColors.textOnPrimary,
+    heroTag: AppWidgetKeys.requestsEditorSendButton,
+    tooltip: AppStrings.requestEditorSend,
+    onPressed: isLoading ? null : onPressed,
+    backgroundColor: context.appColors.methodGet,
+    foregroundColor: context.appColors.textOnPrimary,
+    icon: isLoading
+        ? SizedBox(
+            width: AppSpacing.medium,
+            height: AppSpacing.medium,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              valueColor: AlwaysStoppedAnimation<Color>(
+                context.appColors.textOnPrimary,
               ),
             ),
-          ],
-        ),
-      ),
+          )
+        : const Icon(Icons.send_rounded),
+    label: Text(
+      AppStrings.requestEditorSend,
+      style: Theme.of(
+        context,
+      ).textTheme.titleLarge?.copyWith(color: context.appColors.textOnPrimary),
     ),
   );
 }
@@ -7255,16 +7225,11 @@ class _InfoCard extends StatelessWidget {
 
   /// Shows passive guidance for modes that do not need active form inputs yet.
   @override
-  Widget build(BuildContext context) => DecoratedBox(
-    decoration: _buildCardDecoration(context),
-    child: Padding(
-      padding: const EdgeInsets.all(AppSpacing.medium),
-      child: Text(
-        message,
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-          color: context.appColors.textSecondary,
-        ),
-      ),
+  Widget build(BuildContext context) => Text(
+    message,
+    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+      color: context.appColors.textSecondary,
+      fontStyle: FontStyle.italic,
     ),
   );
 }
@@ -7272,7 +7237,8 @@ class _InfoCard extends StatelessWidget {
 /// Returns the shared editor card decoration used by row groups and hint surfaces.
 BoxDecoration _buildCardDecoration(BuildContext context) => BoxDecoration(
   color: context.appColors.surface,
-  borderRadius: const BorderRadius.all(Radius.circular(AppRadius.xxLarge)),
+  border: Border.all(color: context.appColors.border, width: 0.5),
+  borderRadius: const BorderRadius.all(Radius.circular(AppRadius.medium)),
 );
 
 /// Returns the shared field decoration used by request-editor text fields and dropdowns.

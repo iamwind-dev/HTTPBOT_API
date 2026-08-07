@@ -159,7 +159,7 @@ class _CollectionEditorPageState extends State<CollectionEditorPage> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 4),
                   _EditorCard(
                     child: TextField(
                       key: const ValueKey<String>(
@@ -178,7 +178,7 @@ class _CollectionEditorPageState extends State<CollectionEditorPage> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 4),
                   Text(
                     'Variables',
                     style: TextStyle(
@@ -187,7 +187,7 @@ class _CollectionEditorPageState extends State<CollectionEditorPage> {
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 4),
                   _EditorCard(
                     child: VariableRowsEditor(
                       rows: _variableRows,
@@ -196,7 +196,7 @@ class _CollectionEditorPageState extends State<CollectionEditorPage> {
                       onChanged: _formCubit.variableChanged,
                     ),
                   ),
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 4),
                   Text(
                     'Auth',
                     style: TextStyle(
@@ -205,7 +205,7 @@ class _CollectionEditorPageState extends State<CollectionEditorPage> {
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 4),
                   _EditorCard(
                     child: DropdownButtonFormField<AuthType>(
                       key: const ValueKey<String>(
@@ -233,7 +233,7 @@ class _CollectionEditorPageState extends State<CollectionEditorPage> {
                       },
                     ),
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 8),
                   _buildAuthConfiguration(),
                 ],
               ),
@@ -853,9 +853,9 @@ class _EditorCard extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     decoration: BoxDecoration(
       color: context.appColors.surface,
-      borderRadius: BorderRadius.circular(26),
+      borderRadius: BorderRadius.circular(16),
     ),
-    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
     child: child,
   );
 }
@@ -1019,8 +1019,8 @@ class _HeaderCircleButton extends StatelessWidget {
         customBorder: const CircleBorder(),
         onTap: onTap,
         child: Ink(
-          width: 56,
-          height: 56,
+          width: 40,
+          height: 40,
           decoration: BoxDecoration(
             color: filled ? colors.methodGet : colors.surface,
             shape: BoxShape.circle,

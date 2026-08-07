@@ -65,7 +65,7 @@ class VariableRowsEditor extends StatelessWidget {
       children: [
         for (var index = 0; index < rows.length; index++)
           Padding(
-            padding: const EdgeInsets.only(bottom: AppSpacing.small),
+            padding: const EdgeInsets.only(bottom: AppSpacing.xSmall),
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
               onLongPress: () => _showDeleteAction(context, index),

@@ -127,7 +127,9 @@ class _LinkPostmanBottomSheetBodyState
                               shape: const CircleBorder(),
                               child: InkWell(
                                 customBorder: const CircleBorder(),
-                                onTap: () {},
+                                onTap: () {
+                                  //TODO:
+                                },
                                 child: const SizedBox(
                                   width: 48,
                                   height: 48,
@@ -196,6 +198,9 @@ class _LinkPostmanBottomSheetBodyState
                           ),
                           decoration: InputDecoration(
                             border: InputBorder.none,
+                            focusedBorder: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            disabledBorder: InputBorder.none,
                             hintText: 'Enter Value',
                             hintStyle: theme.textTheme.titleMedium?.copyWith(
                               color: colors.textSecondary.withValues(

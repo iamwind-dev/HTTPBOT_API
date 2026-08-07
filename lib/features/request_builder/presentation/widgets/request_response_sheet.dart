@@ -372,9 +372,13 @@ class _ResponseActionBar extends StatelessWidget {
           if (selectedMode == ResponseViewMode.body)
             const SizedBox(width: AppSpacing.small),
           const SizedBox(width: AppSpacing.small),
-          const _CircularActionButton(icon: CupertinoIcons.square_arrow_up),
+           _CircularActionButton(icon: CupertinoIcons.square_arrow_up, onPressed: () {
+            //TODO: 
+           }),
           const SizedBox(width: AppSpacing.small),
-          const _CircularActionButton(icon: CupertinoIcons.ellipsis),
+           _CircularActionButton(icon: CupertinoIcons.ellipsis, onPressed: () {
+            //TODO: 
+           }),
         ],
       ),
     ),
@@ -1425,20 +1429,24 @@ class _CookieDisplayTile extends StatelessWidget {
 }
 
 class _CircularActionButton extends StatelessWidget {
-  const _CircularActionButton({required this.icon});
+  const _CircularActionButton({required this.icon, required this.onPressed});
 
   final IconData icon;
+  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.appColors;
 
-    return DecoratedBox(
-      decoration: BoxDecoration(color: colors.surface, shape: BoxShape.circle),
-      child: SizedBox(
-        width: AppSpacing.xLarge + AppSpacing.small,
-        height: AppSpacing.xLarge + AppSpacing.small,
-        child: Icon(icon, color: colors.iconPrimary),
+    return GestureDetector(
+      onTap: onPressed,
+      child: DecoratedBox(
+        decoration: BoxDecoration(color: colors.surface, shape: BoxShape.circle),
+        child: SizedBox(
+          width: AppSpacing.xLarge + AppSpacing.small,
+          height: AppSpacing.xLarge + AppSpacing.small,
+          child: Icon(icon, color: colors.iconPrimary),
+        ),
       ),
     );
   }

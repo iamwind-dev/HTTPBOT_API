@@ -7,10 +7,7 @@ import '../widget/search_postman.dart';
 import '../widget/postman_folder_item.dart';
 
 class PostmanCollectionDetailPage extends StatelessWidget {
-  const PostmanCollectionDetailPage({
-    super.key,
-    required this.collection,
-  });
+  const PostmanCollectionDetailPage({super.key, required this.collection});
 
   final PostmanCollectionEntity collection;
 
@@ -48,7 +45,12 @@ class PostmanCollectionDetailPage extends StatelessWidget {
                         ),
                       ),
                     ),
-                    const _CircleAction(icon: Icons.more_horiz_rounded),
+                    _CircleAction(
+                      icon: Icons.more_horiz_rounded,
+                      onTap: () {
+                        //TODO:
+                      },
+                    ),
                   ],
                 ),
               ),
@@ -59,7 +61,8 @@ class PostmanCollectionDetailPage extends StatelessWidget {
                 child: ListView.separated(
                   padding: const EdgeInsets.only(top: AppSpacing.xSmall),
                   itemCount: collection.folders.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.xSmall),
+                  separatorBuilder: (_, __) =>
+                      const SizedBox(height: AppSpacing.xSmall),
                   itemBuilder: (context, index) {
                     final folder = collection.folders[index];
                     return PostmanFolderItem(folder: folder);

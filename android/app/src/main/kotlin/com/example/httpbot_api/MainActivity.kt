@@ -1,4 +1,4 @@
-package com.example.httpbot_api
+package com.thienanstudio.httpclient
 
 import io.flutter.embedding.android.FlutterActivity
 
