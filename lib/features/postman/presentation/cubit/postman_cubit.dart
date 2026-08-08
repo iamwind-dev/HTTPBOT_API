@@ -22,17 +22,14 @@ class PostmanCubit extends Cubit<PostmanState> {
   final GetPostmanWorkspaceDetailUseCase getPostmanWorkspaceDetailUseCase;
   final GetPostmanCollectionsUseCase getPostmanCollectionsUseCase;
   final GetPostmanCollectionDetailUseCase getPostmanCollectionDetailUseCase;
-  final GetPostmanAuthenticatedUserUseCase
-  getPostmanAuthenticatedUserUseCase;
+  final GetPostmanAuthenticatedUserUseCase getPostmanAuthenticatedUserUseCase;
   final LoadPostmanApiKeyUseCase loadPostmanApiKeyUseCase;
   final LoadCachedPostmanWorkspacesUseCase loadCachedPostmanWorkspacesUseCase;
-  final LoadCachedPostmanCollectionsUseCase
-      loadCachedPostmanCollectionsUseCase;
+  final LoadCachedPostmanCollectionsUseCase loadCachedPostmanCollectionsUseCase;
   final SavePostmanAccountUseCase savePostmanAccountUseCase;
   final SavePostmanApiKeyUseCase savePostmanApiKeyUseCase;
   final SaveCachedPostmanWorkspacesUseCase saveCachedPostmanWorkspacesUseCase;
-  final SaveCachedPostmanCollectionsUseCase
-      saveCachedPostmanCollectionsUseCase;
+  final SaveCachedPostmanCollectionsUseCase saveCachedPostmanCollectionsUseCase;
 
   PostmanCubit({
     required this.getPostmanWorkspacesUseCase,
@@ -50,12 +47,7 @@ class PostmanCubit extends Cubit<PostmanState> {
   }) : super(const PostmanState());
 
   Future<void> load() async {
-    emit(
-      state.copyWith(
-        isLoadingCollections: true,
-        clearErrorMessage: true,
-      ),
-    );
+    emit(state.copyWith(isLoadingCollections: true, clearErrorMessage: true));
 
     try {
       final apiKey = await loadPostmanApiKeyUseCase() ?? '';
@@ -75,17 +67,12 @@ class PostmanCubit extends Cubit<PostmanState> {
       );
     } catch (e) {
       emit(
-        state.copyWith(
-          isLoadingCollections: false,
-          errorMessage: e.toString(),
-        ),
+        state.copyWith(isLoadingCollections: false, errorMessage: e.toString()),
       );
     }
   }
 
-  Future<bool> linkPostman({
-    required String apiKey,
-  }) async {
+  Future<bool> linkPostman({required String apiKey}) async {
     final existingCollections = List<PostmanCollectionEntity>.from(
       state.collections,
     );
@@ -134,8 +121,9 @@ class PostmanCubit extends Cubit<PostmanState> {
         }
       }
 
-      final initialWorkspaceId =
-          _resolveInitialWorkspaceId(workspacesWithCollections);
+      final initialWorkspaceId = _resolveInitialWorkspaceId(
+        workspacesWithCollections,
+      );
 
       emit(
         state.copyWith(
@@ -157,77 +145,21 @@ class PostmanCubit extends Cubit<PostmanState> {
       return true;
     } catch (e) {
       emit(
-        state.copyWith(
-          isLoadingCollections: false,
-          errorMessage: e.toString(),
-        ),
+        state.copyWith(isLoadingCollections: false, errorMessage: e.toString()),
       );
       return false;
     }
   }
 
-  Future<void> loadCollectionDetail({
-    required PostmanCollectionEntity collection,
-  }) async {
-    final hasCachedDetail =
-        collection.folders.isNotEmpty ||
-        collection.requests.isNotEmpty ||
-        collection.variables.isNotEmpty ||
-        collection.description.trim().isNotEmpty;
-
-    if (state.apiKey.trim().isEmpty) {
-      emit(
-        state.copyWith(
-          isLoadingCollectionDetail: false,
-          selectedCollection: collection,
-          clearErrorMessage: true,
-        ),
-      );
-      return;
-    }
-
+  /// Selects a fully imported collection from local storage for viewing.
+  void selectImportedCollection(PostmanCollectionEntity collection) {
     emit(
       state.copyWith(
-        isLoadingCollectionDetail: true,
+        isLoadingCollectionDetail: false,
+        selectedCollection: collection,
         clearErrorMessage: true,
-        clearSelectedCollection: true,
       ),
     );
-
-    try {
-      final result = await getPostmanCollectionDetailUseCase(
-        apiKey: state.apiKey,
-        collectionId: collection.id,
-      );
-      final nextCollections = _upsertImportedCollection(result);
-
-      emit(
-        state.copyWith(
-          isLoadingCollectionDetail: false,
-          selectedCollection: result,
-          collections: nextCollections,
-        ),
-      );
-      await saveCachedPostmanCollectionsUseCase(nextCollections);
-    } catch (e) {
-      if (hasCachedDetail) {
-        emit(
-          state.copyWith(
-            isLoadingCollectionDetail: false,
-            selectedCollection: collection,
-            errorMessage: 'Opened cached collection data.',
-          ),
-        );
-        return;
-      }
-
-      emit(
-        state.copyWith(
-          isLoadingCollectionDetail: false,
-          errorMessage: e.toString(),
-        ),
-      );
-    }
   }
 
   void clearError() {
@@ -262,6 +194,7 @@ class PostmanCubit extends Cubit<PostmanState> {
     );
   }
 
+  /// Imports the selected remote collection and persists its full local copy.
   Future<bool> importSelectedCollection() async {
     final pickerCollection = state.pickerSelectedCollection;
     if (pickerCollection == null) {
@@ -269,10 +202,7 @@ class PostmanCubit extends Cubit<PostmanState> {
     }
 
     emit(
-      state.copyWith(
-        isLoadingCollectionDetail: true,
-        clearErrorMessage: true,
-      ),
+      state.copyWith(isLoadingCollectionDetail: true, clearErrorMessage: true),
     );
 
     try {
@@ -286,7 +216,7 @@ class PostmanCubit extends Cubit<PostmanState> {
         state.copyWith(
           isLoadingCollectionDetail: false,
           collections: nextCollections,
-          selectedCollection: result,
+          clearSelectedCollection: true,
           clearPickerSelection: true,
         ),
       );
@@ -330,8 +260,7 @@ class PostmanCubit extends Cubit<PostmanState> {
     emit(
       state.copyWith(
         collections: nextCollections,
-        clearSelectedCollection:
-            state.selectedCollection?.id == collectionId,
+        clearSelectedCollection: state.selectedCollection?.id == collectionId,
       ),
     );
     await saveCachedPostmanCollectionsUseCase(nextCollections);
@@ -372,9 +301,12 @@ class PostmanCubit extends Cubit<PostmanState> {
   List<PostmanCollectionEntity> _upsertImportedCollection(
     PostmanCollectionEntity collection,
   ) {
-    final nextCollections = List<PostmanCollectionEntity>.from(state.collections);
-    final existingIndex =
-        nextCollections.indexWhere((item) => item.id == collection.id);
+    final nextCollections = List<PostmanCollectionEntity>.from(
+      state.collections,
+    );
+    final existingIndex = nextCollections.indexWhere(
+      (item) => item.id == collection.id,
+    );
 
     if (existingIndex >= 0) {
       nextCollections[existingIndex] = collection;

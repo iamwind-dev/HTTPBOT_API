@@ -26,6 +26,17 @@ abstract final class AppWidgetKeys {
       'collections_new_collection_action';
   static const collectionsNewCollectionAuthTypeField =
       'collections_new_collection_auth_type_field';
+  static const collectionsMoreButton = 'collections_more_button';
+  static const collectionsHelpMenuAction = 'collections_help_menu_action';
+  static const postmanMoreButton = 'postman_more_button';
+  static const postmanHelpMenuAction = 'postman_help_menu_action';
+  static const helpCloseButton = 'help_close_button';
+  static const helpProBadge = 'help_pro_badge';
+  static const helpProCallout = 'help_pro_callout';
+
+  static String helpPage(String topic) => 'help_page_$topic';
+
+  static String helpScrollView(String topic) => 'help_scroll_view_$topic';
   static const collectionsDetailMenuSheet = 'collections_detail_menu_sheet';
   static const collectionsDetailNewFolderAction =
       'collections_detail_new_folder_action';

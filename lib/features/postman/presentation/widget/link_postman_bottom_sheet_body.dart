@@ -122,23 +122,7 @@ class _LinkPostmanBottomSheetBodyState
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Material(
-                              color: colors.headerActionSurface,
-                              shape: const CircleBorder(),
-                              child: InkWell(
-                                customBorder: const CircleBorder(),
-                                onTap: () {
-                                  //TODO:
-                                },
-                                child: const SizedBox(
-                                  width: 48,
-                                  height: 48,
-                                  child: Icon(Icons.more_horiz_rounded),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: AppSpacing.xSmall),
-                            BlocBuilder<PostmanCubit, PostmanState>(
+                          BlocBuilder<PostmanCubit, PostmanState>(
                               buildWhen: (previous, current) =>
                                   previous.isLoadingCollections !=
                                   current.isLoadingCollections,
