@@ -273,6 +273,11 @@ abstract final class AppStrings {
   static const credentialsOnlyApiKeySupported =
       'Only API Key credentials are supported in this version.';
   static const requestResponseCloseTooltip = 'Close response viewer';
+  static const requestResponseHistoryTooltip = 'Open response history';
+  static const requestEditorResponseBadgeTooltip = 'Open latest response';
+  static const requestResponseShareTooltip = 'Share response';
+  static const requestResponseShareFailed = 'Unable to share response.';
+  static const requestResponseWrapTooltip = 'Wrap Response';
   static const requestResponseBodySelector = 'Body';
   static const requestsSoonMessage = 'This section is not available yet.';
   static const sectionUnavailableMessage = 'This section is not available yet.';

@@ -11,9 +11,11 @@ import '../../core/widgets/app_shell_scaffold.dart';
 import '../../features/collection/presentation/cubits/collection_cubit.dart';
 import '../../features/collection/presentation/cubits/collection_state.dart';
 import '../../features/collection/presentation/screens/collection_screens.dart';
+import '../../features/collection/presentation/widget/collections_more_button.dart';
 import '../../features/collection/presentation/widget/collections_search.dart';
 import '../../features/collection/presentation/widget/collections_shell_action_button.dart';
 import '../../features/postman/presentation/screens/postman_screens.dart';
+import '../../features/postman/presentation/widget/postman_more_button.dart';
 import '../../features/postman/presentation/widget/postman_shell_action_button.dart';
 import '../../features/postman/presentation/widget/search_postman.dart';
 import '../../features/request_builder/domain/entities/request_draft.dart';
@@ -660,6 +662,7 @@ class _CollectionsShell extends StatelessWidget {
 
   final ValueChanged<AppShellTab> onTabSelected;
 
+  /// Builds the Collections tab shell with its contextual header actions.
   @override
   Widget build(BuildContext context) =>
       BlocBuilder<CollectionCubit, CollectionState>(
@@ -674,7 +677,7 @@ class _CollectionsShell extends StatelessWidget {
                       context.read<CollectionCubit>().clearSelectedCollection(),
                   icon: const Icon(Icons.arrow_back_ios_new_rounded),
                 ),
-          trailing: const _CollectionsMoreButton(),
+          trailing: const CollectionsMoreButton(),
           bottomSlot: state.selectedCollection == null
               ? const CollectionSearch()
               : null,
@@ -692,7 +695,7 @@ class _PostmanShell extends StatelessWidget {
 
   final ValueChanged<AppShellTab> onTabSelected;
 
-  // Keep the Postman tab on the shared shell while leaving header actions disabled.
+  /// Builds the Postman tab shell with its contextual header actions.
   @override
   Widget build(BuildContext context) => BlocBuilder<PostmanCubit, PostmanState>(
     builder: (context, state) => AppShellScaffold(
@@ -705,7 +708,7 @@ class _PostmanShell extends StatelessWidget {
                   context.read<PostmanCubit>().clearSelectedCollection(),
               icon: const Icon(Icons.arrow_back_ios_new_rounded),
             ),
-      trailing: const _CollectionsMoreButton(),
+      trailing: const PostmanMoreButton(),
       bottomSlot: state.selectedCollection == null
           ? const PostmanSearch()
           : null,
@@ -790,31 +793,6 @@ class _RequestFavoriteButton extends StatelessWidget {
           ),
         ),
       );
-}
-
-class _CollectionsMoreButton extends StatelessWidget {
-  const _CollectionsMoreButton();
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.appColors;
-
-    return Material(
-      color: colors.headerActionSurface,
-      shape: const CircleBorder(),
-      child: InkWell(
-        customBorder: const CircleBorder(),
-        onTap: () {
-          //TODO:
-        },
-        child: SizedBox(
-          width: 48,
-          height: 48,
-          child: Icon(Icons.more_horiz_rounded, color: colors.iconPrimary),
-        ),
-      ),
-    );
-  }
 }
 
 class _SettingsBackButton extends StatelessWidget {

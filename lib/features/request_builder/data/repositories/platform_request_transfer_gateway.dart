@@ -69,4 +69,17 @@ class PlatformRequestTransferGateway implements RequestTransferGateway {
       return const HarShareFailure();
     }
   }
+
+  /// Shares plain text through the platform surface and maps its outcome.
+  @override
+  Future<TextShareResult> shareText(String text) async {
+    try {
+      final result = await _share(ShareParams(text: text));
+      return result.status == ShareResultStatus.dismissed
+          ? const TextShareCancelled()
+          : const TextShareSuccess();
+    } catch (_) {
+      return const TextShareFailure();
+    }
+  }
 }

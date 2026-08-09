@@ -60,9 +60,3 @@ class PostmanVariablesCubit extends Cubit<List<PostmanVariableEntity>> {
     ]),
   );
 }
-
-class ExpansionCubit extends Cubit<bool> {
-  ExpansionCubit() : super(false);
-
-  void toggle() => emit(!state);
-}

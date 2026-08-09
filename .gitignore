@@ -26,6 +26,26 @@ AGENTS.md
 docs/
 test/
 
+# Keep the shared Help regression tests while legacy tests remain local-only.
+!test/
+test/*
+!test/features/
+test/features/*
+!test/features/collection/
+test/features/collection/*
+!test/features/collection/presentation/
+test/features/collection/presentation/*
+!test/features/collection/presentation/widgets/
+test/features/collection/presentation/widgets/*
+!test/features/collection/presentation/widgets/collections_help_page_test.dart
+!test/features/postman/
+test/features/postman/*
+!test/features/postman/presentation/
+test/features/postman/presentation/*
+!test/features/postman/presentation/widgets/
+test/features/postman/presentation/widgets/*
+!test/features/postman/presentation/widgets/postman_sync_help_page_test.dart
+
 # IntelliJ related
 *.iml
 *.ipr

@@ -3,7 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/constants/app_strings.dart';
+import '../../../../core/help/help_topic.dart';
 import '../../../../core/keys/widget_keys.dart';
+import '../../../../core/router/help_router.dart';
 import '../../../../core/theme/app_theme_context.dart';
 import '../../data/services/collection_file_importer.dart';
 import '../../domain/entities/collection_import_type.dart';
@@ -32,6 +34,7 @@ class CollectionsShellActionButton extends StatelessWidget {
     );
   }
 
+  /// Shows the Collections action menu and dispatches the selected workflow.
   Future<void> _showActionMenu(BuildContext context) async {
     final selectedItem = await showGeneralDialog<CollectionActionMenuItem>(
       context: context,
@@ -65,6 +68,9 @@ class CollectionsShellActionButton extends StatelessWidget {
     }
 
     switch (selectedItem) {
+      case CollectionActionMenuItem.help:
+        await _showCollectionsHelp(context);
+        break;
       case CollectionActionMenuItem.importHar:
         await _importCollectionFile(context, CollectionImportType.har);
         break;
@@ -87,6 +93,11 @@ class CollectionsShellActionButton extends StatelessWidget {
         await _showNewCollectionEditor(context);
         break;
     }
+  }
+
+  /// Opens Collections Help above the application tab shell.
+  Future<void> _showCollectionsHelp(BuildContext context) {
+    return HelpRouter.open(context, HelpTopic.collectionsFolders);
   }
 
   Future<void> _showNewCollectionEditor(BuildContext context) async {

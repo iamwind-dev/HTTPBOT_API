@@ -6,6 +6,7 @@ import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_theme_context.dart';
 
 enum CollectionActionMenuItem {
+  help,
   importHar,
   importFromUrl,
   importFromDirectory,
@@ -19,6 +20,7 @@ class CollectionsActionMenu extends StatelessWidget {
 
   final ValueChanged<CollectionActionMenuItem> onSelected;
 
+  /// Builds the complete Collections creation and import action menu.
   @override
   Widget build(BuildContext context) {
     final colors = context.appColors;
@@ -40,8 +42,8 @@ class CollectionsActionMenu extends StatelessWidget {
             ),
             child: Material(
               color: Colors.transparent,
-                child: Container(
-                  decoration: BoxDecoration(
+              child: Container(
+                decoration: BoxDecoration(
                   color: colors.surface,
                   borderRadius: BorderRadius.circular(32),
                   border: Border.all(
@@ -67,7 +69,7 @@ class CollectionsActionMenu extends StatelessWidget {
                       _CollectionsActionRow(
                         icon: Icons.help_outline_rounded,
                         label: 'Help',
-                        onTap: null,
+                        onTap: () => onSelected(CollectionActionMenuItem.help),
                       ),
                       const SizedBox(height: AppSpacing.small),
                       const _CollectionsActionDivider(),
