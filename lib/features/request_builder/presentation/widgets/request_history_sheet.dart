@@ -4,23 +4,27 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/constants/app_strings.dart';
 import '../../../../core/keys/widget_keys.dart';
+import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../core/theme/app_theme_context.dart';
 import '../../../../injection/injection.dart';
+import '../../domain/entities/request_draft.dart';
 import '../../../request_history/domain/entities/request_history_entry.dart';
 import '../../../request_history/presentation/cubit/request_history_cubit.dart';
 import '../../../request_history/presentation/cubit/request_history_state.dart';
 import 'request_modal_sheet.dart';
 
 /// Opens the request History sheet; returns the entry the user selected, if any.
-Future<RequestHistoryEntry?> showRequestHistorySheet(BuildContext context) =>
-    showRequestModalSheet<RequestHistoryEntry>(
-      context,
-      builder: (context) => BlocProvider<RequestHistoryCubit>(
-        create: (_) => getIt<RequestHistoryCubit>()..load(),
-        child: const _RequestHistorySheet(),
-      ),
-    );
+Future<RequestHistoryEntry?> showRequestHistorySheet(
+  BuildContext context, {
+  required RequestDraft request,
+}) => showRequestModalSheet<RequestHistoryEntry>(
+  context,
+  builder: (context) => BlocProvider<RequestHistoryCubit>(
+    create: (_) => getIt<RequestHistoryCubit>()..load(request: request),
+    child: const _RequestHistorySheet(),
+  ),
+);
 
 class _RequestHistorySheet extends StatelessWidget {
   const _RequestHistorySheet();
@@ -57,9 +61,7 @@ class _RequestHistorySheet extends StatelessWidget {
     child: Row(
       children: [
         IconButton(
-          key: const ValueKey<String>(
-            AppWidgetKeys.requestHistoryCloseButton,
-          ),
+          key: const ValueKey<String>(AppWidgetKeys.requestHistoryCloseButton),
           tooltip: AppStrings.historyCloseTooltip,
           onPressed: () => Navigator.of(context).pop(),
           icon: const Icon(CupertinoIcons.xmark, size: AppSpacing.large),
@@ -85,32 +87,42 @@ class _HistoryList extends StatelessWidget {
   final List<RequestHistoryEntry> entries;
 
   @override
-  Widget build(BuildContext context) => ListView.separated(
-    padding: const EdgeInsets.fromLTRB(
-      AppSpacing.large,
-      0,
-      AppSpacing.large,
-      AppSpacing.large,
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.large),
+    child: DecoratedBox(
+      decoration: BoxDecoration(
+        color: context.appColors.card,
+        borderRadius: const BorderRadius.all(
+          Radius.circular(AppRadius.xxLarge),
+        ),
+      ),
+      child: ClipRRect(
+        borderRadius: const BorderRadius.all(
+          Radius.circular(AppRadius.xxLarge),
+        ),
+        child: ListView.separated(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.medium,
+            vertical: AppSpacing.small,
+          ),
+          itemCount: entries.length,
+          separatorBuilder: (_, __) => const Divider(height: AppSpacing.large),
+          itemBuilder: (context, index) {
+            final entry = entries[index];
+            return _HistoryTile(
+              key: ValueKey<String>(AppWidgetKeys.requestHistoryItemAt(index)),
+              entry: entry,
+              onTap: () => Navigator.of(context).pop(entry),
+            );
+          },
+        ),
+      ),
     ),
-    itemCount: entries.length,
-    separatorBuilder: (_, __) => const Divider(height: AppSpacing.large),
-    itemBuilder: (context, index) {
-      final entry = entries[index];
-      return _HistoryTile(
-        key: ValueKey<String>(AppWidgetKeys.requestHistoryItemAt(index)),
-        entry: entry,
-        onTap: () => Navigator.of(context).pop(entry),
-      );
-    },
   );
 }
 
 class _HistoryTile extends StatelessWidget {
-  const _HistoryTile({
-    super.key,
-    required this.entry,
-    required this.onTap,
-  });
+  const _HistoryTile({super.key, required this.entry, required this.onTap});
 
   final RequestHistoryEntry entry;
   final VoidCallback onTap;
@@ -134,7 +146,11 @@ class _HistoryTile extends StatelessWidget {
             Text(
               statusCode?.toString() ?? '—',
               style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                color: _statusColor(context, statusCode, entry.response.hasError),
+                color: _statusColor(
+                  context,
+                  statusCode,
+                  entry.response.hasError,
+                ),
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -161,9 +177,9 @@ class _HistoryFooter extends StatelessWidget {
       child: Text(
         AppStrings.historyFooter,
         textAlign: TextAlign.center,
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-          color: context.appColors.textSecondary,
-        ),
+        style: Theme.of(
+          context,
+        ).textTheme.bodySmall?.copyWith(color: context.appColors.textSecondary),
       ),
     ),
   );
@@ -190,9 +206,9 @@ Color _statusColor(BuildContext context, int? statusCode, bool hasError) {
     return colors.methodDelete;
   }
   if (statusCode >= 300) {
-    return colors.methodPost;
+    return colors.methodPut;
   }
-  return colors.methodGet;
+  return colors.methodPost;
 }
 
 String _formatTimestamp(DateTime dateTime) {
@@ -211,9 +227,8 @@ String _formatTimestamp(DateTime dateTime) {
     'Nov',
     'Dec',
   ];
-  final hour12 = local.hour % 12 == 0 ? 12 : local.hour % 12;
+  final hour = local.hour.toString().padLeft(2, '0');
   final minute = local.minute.toString().padLeft(2, '0');
-  final period = local.hour < 12 ? 'AM' : 'PM';
   return '${local.day} ${months[local.month - 1]} ${local.year} '
-      'at $hour12:$minute $period';
+      'at $hour:$minute';
 }

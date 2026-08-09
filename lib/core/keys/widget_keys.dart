@@ -99,6 +99,7 @@ abstract final class AppWidgetKeys {
   static const requestsResponseRawRequestCard =
       'requests_response_raw_request_card';
   static const requestsResponseShareButton = 'requests_response_share_button';
+  static const requestsResponseWrapButton = 'requests_response_wrap_button';
   static const requestsResponseFilterButton = 'requests_response_filter_button';
 
   static const filterResponseSheet = 'filter_response_sheet';

@@ -33,6 +33,8 @@ class SaveRequestHistoryEntryUseCase {
         contentType: parsedResponse.contentType,
         bodyType: parsedResponse.bodyType,
       ),
+      executionResult: executionResult,
+      parsedResponse: parsedResponse,
     );
 
     await _repository.saveRequestHistoryEntry(entry);
@@ -43,5 +45,6 @@ class SaveRequestHistoryEntryUseCase {
   String _buildEntryId(
     DateTime sentAt,
     RequestExecutionResult executionResult,
-  ) => '${sentAt.microsecondsSinceEpoch}_${executionResult.request.method.wireName}';
+  ) =>
+      '${sentAt.microsecondsSinceEpoch}_${executionResult.request.method.wireName}';
 }

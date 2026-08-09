@@ -7,6 +7,9 @@ abstract interface class RequestTransferGateway {
 
   /// Shares one in-memory HAR payload without retaining an export copy.
   Future<HarShareResult> shareHar(RequestHarExportPayload payload);
+
+  /// Shares one response body as plain text without retaining an export copy.
+  Future<TextShareResult> shareText(String text);
 }
 
 /// Describes a HAR file selection outcome without exposing platform details.
@@ -49,4 +52,24 @@ final class HarShareCancelled extends HarShareResult {
 /// Reports a platform share failure without exposing request content.
 final class HarShareFailure extends HarShareResult {
   const HarShareFailure();
+}
+
+/// Describes the outcome of sharing plain text without exposing platform details.
+sealed class TextShareResult {
+  const TextShareResult();
+}
+
+/// Indicates that the platform accepted the plain-text share action.
+final class TextShareSuccess extends TextShareResult {
+  const TextShareSuccess();
+}
+
+/// Indicates that the user dismissed the plain-text share surface.
+final class TextShareCancelled extends TextShareResult {
+  const TextShareCancelled();
+}
+
+/// Reports a plain-text share failure without exposing response content.
+final class TextShareFailure extends TextShareResult {
+  const TextShareFailure();
 }

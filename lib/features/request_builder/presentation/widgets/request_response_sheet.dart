@@ -11,6 +11,7 @@ import '../../../../core/theme/app_theme_colors.dart';
 import '../../../../core/theme/app_theme_context.dart';
 import '../../../../core/widgets/app_popup_menu.dart';
 import '../../../../injection/injection.dart';
+import '../../../request_history/domain/entities/request_history_entry.dart';
 import '../../domain/entities/executed_request_snapshot.dart';
 import '../../domain/entities/parsed_response.dart';
 import '../../domain/entities/response_filter.dart';
@@ -18,16 +19,19 @@ import '../../domain/entities/response_filter_run_result.dart';
 import '../../domain/entities/request_execution_result.dart';
 import '../../domain/entities/request_key_value.dart';
 import '../../domain/entities/request_variable_store.dart';
+import '../../domain/helpers/request_snapshot_formatter.dart';
 import '../../domain/helpers/response_filter_utils.dart';
 import '../../domain/usecases/apply_response_filter_use_case.dart';
 import '../../domain/usecases/get_saved_response_filters_use_case.dart';
 import '../../domain/usecases/save_saved_response_filters_use_case.dart';
+import '../../domain/repositories/request_transfer_gateway.dart';
 import '../bloc/request_send_bloc.dart';
 import '../bloc/request_send_event.dart';
 import '../bloc/request_send_state.dart';
 import '../cubit/request_editor_cubit.dart';
 import '../models/request_editor_response_badge_data.dart';
 import 'request_modal_sheet.dart';
+import 'request_history_sheet.dart';
 import 'saved_response_filters_sheet.dart';
 
 Future<RequestEditorResponseBadgeData?> showRequestResponseSheet(
@@ -35,6 +39,8 @@ Future<RequestEditorResponseBadgeData?> showRequestResponseSheet(
   required RequestEditorCubit requestEditorCubit,
   required RequestSendBloc requestSendBloc,
   required RequestVariableStore variableStore,
+  ResponseViewMode initialMode = ResponseViewMode.body,
+  RequestHistoryEntry? historyEntry,
 }) => showRequestModalSheet<RequestEditorResponseBadgeData>(
   context,
   builder: (context) => MultiBlocProvider(
@@ -42,59 +48,101 @@ Future<RequestEditorResponseBadgeData?> showRequestResponseSheet(
       BlocProvider<RequestEditorCubit>.value(value: requestEditorCubit),
       BlocProvider<RequestSendBloc>.value(value: requestSendBloc),
     ],
-    child: _RequestResponseSheet(variableStore: variableStore),
+    child: _RequestResponseSheet(
+      variableStore: variableStore,
+      initialMode: initialMode,
+      historyEntry: historyEntry,
+    ),
   ),
 );
 
 enum ResponseViewMode { request, metrics, tests, cookies, headers, body }
 
 class _RequestResponseSheet extends StatefulWidget {
-  const _RequestResponseSheet({required this.variableStore});
+  const _RequestResponseSheet({
+    required this.variableStore,
+    required this.initialMode,
+    this.historyEntry,
+  });
 
   final RequestVariableStore variableStore;
+  final ResponseViewMode initialMode;
+  final RequestHistoryEntry? historyEntry;
 
   @override
   State<_RequestResponseSheet> createState() => _RequestResponseSheetState();
 }
 
 class _RequestResponseSheetState extends State<_RequestResponseSheet> {
-  ResponseViewMode _selectedMode = ResponseViewMode.body;
+  late ResponseViewMode _selectedMode;
+  bool _wrapResponse = false;
 
+  @override
+  void initState() {
+    super.initState();
+    _selectedMode = widget.initialMode;
+  }
+
+  /// Builds the response sheet while keeping viewer preferences local to it.
   @override
   Widget build(BuildContext context) =>
       BlocBuilder<RequestSendBloc, RequestSendState>(
-        builder: (context, state) => RequestModalSheetCard(
-          key: const ValueKey<String>(AppWidgetKeys.requestsResponseSheet),
-          child: Column(
-            children: [
-              const SizedBox(height: AppSpacing.small),
-              _ResponseHeader(
-                summaryLabel: _summaryLabel(state),
-                onClose: () => _close(context, state),
-                onResend: () => _resend(context),
-                isSending: state.status == RequestSendStatus.sending,
-              ),
-              const SizedBox(height: AppSpacing.small),
-              Expanded(
-                child: _ResponseContent(
+        builder: (context, liveState) {
+          final state = _displayedState(liveState);
+
+          return RequestModalSheetCard(
+            key: const ValueKey<String>(AppWidgetKeys.requestsResponseSheet),
+            child: Column(
+              children: [
+                const SizedBox(height: AppSpacing.small),
+                _ResponseHeader(
+                  summaryLabel: _summaryLabel(state),
+                  onClose: () => _close(context, state),
+                  onResend: () => _resend(context),
+                  isSending: state.status == RequestSendStatus.sending,
+                  onHistoryPressed: () => _openHistory(context, state),
+                  showResend: widget.historyEntry == null,
+                ),
+                const SizedBox(height: AppSpacing.small),
+                Expanded(
+                  child: _ResponseContent(
+                    state: state,
+                    selectedMode: _selectedMode,
+                    softWrap: _wrapResponse,
+                  ),
+                ),
+                _ResponseActionBar(
                   state: state,
                   selectedMode: _selectedMode,
+                  onModeSelected: (mode) {
+                    setState(() {
+                      _selectedMode = mode;
+                    });
+                  },
+                  onFilterPressed: () => _openFilterResponse(context, state),
+                  wrapResponse: _wrapResponse,
+                  onToggleWrap: _toggleResponseWrap,
+                  onSharePressed: () =>
+                      unawaited(_shareResponse(context, state)),
                 ),
-              ),
-              _ResponseActionBar(
-                state: state,
-                selectedMode: _selectedMode,
-                onModeSelected: (mode) {
-                  setState(() {
-                    _selectedMode = mode;
-                  });
-                },
-                onFilterPressed: () => _openFilterResponse(context, state),
-              ),
-            ],
-          ),
-        ),
+              ],
+            ),
+          );
+        },
       );
+
+  /// Selects the live send state or the historical snapshot being inspected.
+  RequestSendState _displayedState(RequestSendState liveState) {
+    final historyEntry = widget.historyEntry;
+    if (historyEntry == null) {
+      return liveState;
+    }
+
+    return RequestSendState.history(
+      executionResult: historyEntry.executionResult,
+      parsedResponse: historyEntry.parsedResponse,
+    );
+  }
 
   void _resend(BuildContext context) {
     final draft = context.read<RequestEditorCubit>().state.draft;
@@ -112,6 +160,67 @@ class _RequestResponseSheetState extends State<_RequestResponseSheet> {
         : RequestEditorResponseBadgeData.fromExecutionResult(executionResult);
 
     Navigator.of(context).pop(badgeData);
+  }
+
+  /// Opens the current request's saved responses and then its selected detail.
+  Future<void> _openHistory(
+    BuildContext context,
+    RequestSendState state,
+  ) async {
+    final navigator = Navigator.of(context);
+    final requestEditorCubit = context.read<RequestEditorCubit>();
+    final requestSendBloc = context.read<RequestSendBloc>();
+    final variableStore = widget.variableStore;
+    final request = state.executionResult?.request ?? state.draft;
+    if (request == null) {
+      _showMessage(AppStrings.requestResponseNoRequestData);
+      return;
+    }
+
+    final selectedEntry = await showRequestHistorySheet(
+      context,
+      request: request,
+    );
+    if (selectedEntry == null || !context.mounted) {
+      return;
+    }
+
+    await navigator.maybePop();
+    if (!navigator.mounted) {
+      return;
+    }
+
+    await showRequestResponseSheet(
+      navigator.context,
+      requestEditorCubit: requestEditorCubit,
+      requestSendBloc: requestSendBloc,
+      variableStore: variableStore,
+      initialMode: ResponseViewMode.request,
+      historyEntry: selectedEntry,
+    );
+  }
+
+  /// Shares the same display text used by the body viewer and maps failures to
+  /// a short app-owned message without exposing platform details.
+  Future<void> _shareResponse(
+    BuildContext context,
+    RequestSendState state,
+  ) async {
+    final result = await getIt<RequestTransferGateway>().shareText(
+      _responseBodyText(state),
+    );
+    if (!context.mounted || result is! TextShareFailure) {
+      return;
+    }
+
+    _showMessage(AppStrings.requestResponseShareFailed);
+  }
+
+  /// Toggles horizontal overflow handling for the response body viewer.
+  void _toggleResponseWrap() {
+    setState(() {
+      _wrapResponse = !_wrapResponse;
+    });
   }
 
   String _summaryLabel(RequestSendState state) {
@@ -171,12 +280,16 @@ class _ResponseHeader extends StatelessWidget {
     required this.onClose,
     required this.onResend,
     required this.isSending,
+    required this.onHistoryPressed,
+    required this.showResend,
   });
 
   final String summaryLabel;
   final VoidCallback onClose;
   final VoidCallback onResend;
   final bool isSending;
+  final VoidCallback onHistoryPressed;
+  final bool showResend;
 
   @override
   Widget build(BuildContext context) {
@@ -200,15 +313,22 @@ class _ResponseHeader extends StatelessWidget {
             icon: const Icon(CupertinoIcons.xmark, size: AppSpacing.large),
           ),
           const SizedBox(width: AppSpacing.medium),
-          Expanded(child: _ResponseSummaryBadge(label: summaryLabel)),
-          const SizedBox(width: AppSpacing.medium),
-          _SheetSendButton(
-            key: const ValueKey<String>(
-              AppWidgetKeys.requestsResponseSendButton,
+          Expanded(
+            child: _ResponseSummaryBadge(
+              label: summaryLabel,
+              onTap: onHistoryPressed,
             ),
-            onPressed: onResend,
-            isLoading: isSending,
           ),
+          if (showResend) ...[
+            const SizedBox(width: AppSpacing.medium),
+            _SheetSendButton(
+              key: const ValueKey<String>(
+                AppWidgetKeys.requestsResponseSendButton,
+              ),
+              onPressed: onResend,
+              isLoading: isSending,
+            ),
+          ],
         ],
       ),
     );
@@ -216,45 +336,55 @@ class _ResponseHeader extends StatelessWidget {
 }
 
 class _ResponseSummaryBadge extends StatelessWidget {
-  const _ResponseSummaryBadge({required this.label});
+  const _ResponseSummaryBadge({required this.label, required this.onTap});
 
   final String label;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.appColors;
     final theme = Theme.of(context);
 
-    return DecoratedBox(
-      key: const ValueKey<String>(AppWidgetKeys.requestsResponseSummaryBadge),
-      decoration: BoxDecoration(
+    return Semantics(
+      button: true,
+      label: AppStrings.requestResponseHistoryTooltip,
+      child: Material(
         color: colors.surface,
         borderRadius: BorderRadius.all(Radius.circular(AppRadius.xxLarge)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.medium,
-          vertical: AppSpacing.small,
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: AppSpacing.small,
-              height: AppSpacing.small,
-              decoration: BoxDecoration(
-                color: colors.methodPost,
-                shape: BoxShape.circle,
-              ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          key: const ValueKey<String>(
+            AppWidgetKeys.requestsResponseSummaryBadge,
+          ),
+          onTap: onTap,
+          borderRadius: BorderRadius.all(Radius.circular(AppRadius.xxLarge)),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.medium,
+              vertical: AppSpacing.small,
             ),
-            const SizedBox(width: AppSpacing.small),
-            Text(
-              label,
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w500,
-              ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: AppSpacing.small,
+                  height: AppSpacing.small,
+                  decoration: BoxDecoration(
+                    color: colors.methodPost,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.small),
+                Text(
+                  label,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -262,11 +392,17 @@ class _ResponseSummaryBadge extends StatelessWidget {
 }
 
 class _ResponseContent extends StatelessWidget {
-  const _ResponseContent({required this.state, required this.selectedMode});
+  const _ResponseContent({
+    required this.state,
+    required this.selectedMode,
+    required this.softWrap,
+  });
 
   final RequestSendState state;
   final ResponseViewMode selectedMode;
+  final bool softWrap;
 
+  /// Selects the response sub-view and applies the shared body wrap setting.
   @override
   Widget build(BuildContext context) {
     final executionResult = state.executionResult;
@@ -287,49 +423,53 @@ class _ResponseContent extends StatelessWidget {
       ResponseViewMode.headers => _HeadersView(
         executionResult: executionResult,
       ),
-      ResponseViewMode.body => _JsonViewer(body: _buildBodyText()),
+      ResponseViewMode.body => _JsonViewer(
+        body: _responseBodyText(state),
+        softWrap: softWrap,
+      ),
     };
   }
+}
 
-  String _buildBodyText() {
-    if (state.status == RequestSendStatus.sending) {
-      return 'Sending request...';
-    }
-
-    final parsedResponse = state.parsedResponse;
-    if (parsedResponse != null &&
-        parsedResponse.formattedBody.trim().isNotEmpty) {
-      return parsedResponse.formattedBody;
-    }
-
-    final issueLines = <String>[
-      if (state.errorMessage.trim().isNotEmpty) state.errorMessage.trim(),
-      ...state.resolutionIssues.map(
-        (issue) =>
-            'Resolution issue: ${issue.placeholder} (${issue.type.name})',
-      ),
-      ...state.authIssues.map((issue) => 'Auth issue: ${issue.message}'),
-    ];
-
-    if (issueLines.isNotEmpty) {
-      return issueLines.join('\n');
-    }
-
-    if (parsedResponse != null) {
-      return _fallbackBodyForParsedResponse(parsedResponse);
-    }
-
-    return 'No response body.';
+/// Returns the display and share text for a request-send state.
+String _responseBodyText(RequestSendState state) {
+  if (state.status == RequestSendStatus.sending) {
+    return 'Sending request...';
   }
 
-  String _fallbackBodyForParsedResponse(ParsedResponse parsedResponse) =>
-      switch (parsedResponse.bodyType) {
-        ParsedResponseBodyType.empty => 'No response body.',
-        ParsedResponseBodyType.binary => 'Binary response received.',
-        ParsedResponseBodyType.error => parsedResponse.execution.errorMessage,
-        _ => parsedResponse.execution.bodyText,
-      };
+  final parsedResponse = state.parsedResponse;
+  if (parsedResponse != null &&
+      parsedResponse.formattedBody.trim().isNotEmpty) {
+    return parsedResponse.formattedBody;
+  }
+
+  final issueLines = <String>[
+    if (state.errorMessage.trim().isNotEmpty) state.errorMessage.trim(),
+    ...state.resolutionIssues.map(
+      (issue) => 'Resolution issue: ${issue.placeholder} (${issue.type.name})',
+    ),
+    ...state.authIssues.map((issue) => 'Auth issue: ${issue.message}'),
+  ];
+
+  if (issueLines.isNotEmpty) {
+    return issueLines.join('\n');
+  }
+
+  if (parsedResponse != null) {
+    return _fallbackBodyForParsedResponse(parsedResponse);
+  }
+
+  return 'No response body.';
 }
+
+/// Preserves the existing body fallback text for non-standard response types.
+String _fallbackBodyForParsedResponse(ParsedResponse parsedResponse) =>
+    switch (parsedResponse.bodyType) {
+      ParsedResponseBodyType.empty => 'No response body.',
+      ParsedResponseBodyType.binary => 'Binary response received.',
+      ParsedResponseBodyType.error => parsedResponse.execution.errorMessage,
+      _ => parsedResponse.execution.bodyText,
+    };
 
 class _ResponseActionBar extends StatelessWidget {
   const _ResponseActionBar({
@@ -337,13 +477,20 @@ class _ResponseActionBar extends StatelessWidget {
     required this.selectedMode,
     required this.onModeSelected,
     required this.onFilterPressed,
+    required this.wrapResponse,
+    required this.onToggleWrap,
+    required this.onSharePressed,
   });
 
   final RequestSendState state;
   final ResponseViewMode selectedMode;
   final ValueChanged<ResponseViewMode> onModeSelected;
   final VoidCallback onFilterPressed;
+  final bool wrapResponse;
+  final VoidCallback onToggleWrap;
+  final VoidCallback onSharePressed;
 
+  /// Builds response navigation and direct body actions with stable semantics.
   @override
   Widget build(BuildContext context) => SafeArea(
     top: false,
@@ -372,13 +519,26 @@ class _ResponseActionBar extends StatelessWidget {
           if (selectedMode == ResponseViewMode.body)
             const SizedBox(width: AppSpacing.small),
           const SizedBox(width: AppSpacing.small),
-           _CircularActionButton(icon: CupertinoIcons.square_arrow_up, onPressed: () {
-            //TODO: 
-           }),
+          _CircularActionButton(
+            key: const ValueKey<String>(
+              AppWidgetKeys.requestsResponseShareButton,
+            ),
+            icon: CupertinoIcons.square_arrow_up,
+            tooltip: AppStrings.requestResponseShareTooltip,
+            onPressed: onSharePressed,
+            isEnabled: state.status != RequestSendStatus.sending,
+          ),
           const SizedBox(width: AppSpacing.small),
-           _CircularActionButton(icon: CupertinoIcons.ellipsis, onPressed: () {
-            //TODO: 
-           }),
+          _CircularActionButton(
+            key: const ValueKey<String>(
+              AppWidgetKeys.requestsResponseWrapButton,
+            ),
+            icon: CupertinoIcons.textformat,
+            tooltip: AppStrings.requestResponseWrapTooltip,
+            onPressed: onToggleWrap,
+            isToggle: true,
+            isSelected: wrapResponse,
+          ),
         ],
       ),
     ),
@@ -516,8 +676,6 @@ class _RequestSnapshotView extends StatelessWidget {
       );
     }
 
-    final requestHeaders = snapshot.headers.entries.toList(growable: false);
-
     return ListView(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.large,
@@ -526,36 +684,12 @@ class _RequestSnapshotView extends StatelessWidget {
         AppSpacing.large,
       ),
       children: [
-        _InfoCard(
-          child: Text(
-            '${snapshot.method} ${snapshot.url}',
-            style: Theme.of(
-              context,
-            ).textTheme.titleSmall?.copyWith(fontFamily: 'monospace'),
+        KeyedSubtree(
+          key: const ValueKey<String>(
+            AppWidgetKeys.requestsResponseRawRequestCard,
           ),
-        ),
-        const SizedBox(height: AppSpacing.small),
-        _SectionCard(
-          title: AppStrings.requestResponseRequestHeaders,
-          child: requestHeaders.isEmpty
-              ? const Text(AppStrings.requestResponseNoHeaders)
-              : Column(
-                  children: [
-                    for (final header in requestHeaders) ...[
-                      _NameValueRow(name: header.key, value: header.value),
-                      if (header != requestHeaders.last)
-                        const SizedBox(height: AppSpacing.small),
-                    ],
-                  ],
-                ),
-        ),
-        const SizedBox(height: AppSpacing.small),
-        _SectionCard(
-          title: AppStrings.requestResponseRequestBody,
-          child: _BodyPreviewText(
-            text: snapshot.body?.trim().isNotEmpty == true
-                ? snapshot.body!
-                : AppStrings.requestResponseRequestBodyEmpty,
+          child: _InfoCard(
+            child: _BodyPreviewText(text: buildRawRequest(snapshot)),
           ),
         ),
       ],
@@ -814,6 +948,7 @@ class _JsonViewer extends StatelessWidget {
   final bool highlightJson;
   final bool softWrap;
 
+  /// Builds a lazy vertical response canvas with one horizontal viewport when wrapping is off.
   @override
   Widget build(BuildContext context) {
     final lines = body.split('\n');
@@ -823,22 +958,65 @@ class _JsonViewer extends StatelessWidget {
       child: SelectionArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.medium),
-          child: Scrollbar(
-            child: ListView.builder(
-              physics: const BouncingScrollPhysics(),
-              itemCount: lines.length,
-              itemBuilder: (context, index) => _JsonLineRow(
-                lineNumber: index + 1,
-                content: lines[index],
-                highlightJson: highlightJson,
-                softWrap: softWrap,
-              ),
-            ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final canvasWidth = softWrap
+                  ? constraints.maxWidth
+                  : _responseCanvasWidth(context, constraints.maxWidth, lines);
+              final responseList = SizedBox(
+                width: canvasWidth,
+                child: Scrollbar(
+                  child: ListView.builder(
+                    physics: const BouncingScrollPhysics(),
+                    itemCount: lines.length,
+                    itemBuilder: (context, index) => _JsonLineRow(
+                      lineNumber: index + 1,
+                      content: lines[index],
+                      highlightJson: highlightJson,
+                      softWrap: softWrap,
+                    ),
+                  ),
+                ),
+              );
+
+              return softWrap
+                  ? responseList
+                  : SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: responseList,
+                    );
+            },
           ),
         ),
       ),
     );
   }
+}
+
+/// Measures the shared response canvas from the longest monospace line.
+double _responseCanvasWidth(
+  BuildContext context,
+  double viewportWidth,
+  List<String> lines,
+) {
+  final baseStyle = Theme.of(
+    context,
+  ).textTheme.bodySmall?.copyWith(fontFamily: 'monospace');
+  final longestLine = lines.fold<String>(
+    '',
+    (longest, line) => line.length > longest.length ? line : longest,
+  );
+  final textPainter = TextPainter(
+    text: TextSpan(text: longestLine, style: baseStyle),
+    textDirection: Directionality.of(context),
+    textScaler: MediaQuery.textScalerOf(context),
+    maxLines: 1,
+  )..layout();
+  final lineGutter =
+      AppSpacing.xxLarge + AppSpacing.small + AppSpacing.xxxSmall;
+  final contentWidth = textPainter.width + lineGutter + AppSpacing.small;
+
+  return contentWidth > viewportWidth ? contentWidth : viewportWidth;
 }
 
 class _JsonLineRow extends StatelessWidget {
@@ -854,6 +1032,7 @@ class _JsonLineRow extends StatelessWidget {
   final bool highlightJson;
   final bool softWrap;
 
+  /// Renders a response line inside the shared canvas while preserving syntax highlighting.
   @override
   Widget build(BuildContext context) {
     final colors = context.appColors;
@@ -861,6 +1040,15 @@ class _JsonLineRow extends StatelessWidget {
       fontFamily: 'monospace',
       color: colors.textPrimary,
     );
+    final codeText = highlightJson
+        ? Text.rich(
+            TextSpan(
+              style: baseStyle,
+              children: _highlightJson(content, baseStyle, colors),
+            ),
+            softWrap: softWrap,
+          )
+        : Text(content, style: baseStyle, softWrap: softWrap);
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.xxSmall),
@@ -875,17 +1063,7 @@ class _JsonLineRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: AppSpacing.xxxSmall),
-          Expanded(
-            child: highlightJson
-                ? Text.rich(
-                    TextSpan(
-                      style: baseStyle,
-                      children: _highlightJson(content, baseStyle, colors),
-                    ),
-                    softWrap: softWrap,
-                  )
-                : Text(content, style: baseStyle, softWrap: softWrap),
-          ),
+          Expanded(child: codeText),
         ],
       ),
     );
@@ -1429,23 +1607,53 @@ class _CookieDisplayTile extends StatelessWidget {
 }
 
 class _CircularActionButton extends StatelessWidget {
-  const _CircularActionButton({required this.icon, required this.onPressed});
+  const _CircularActionButton({
+    super.key,
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+    this.isEnabled = true,
+    this.isToggle = false,
+    this.isSelected = false,
+  });
 
   final IconData icon;
+  final String tooltip;
   final VoidCallback onPressed;
+  final bool isEnabled;
+  final bool isToggle;
+  final bool isSelected;
 
+  /// Renders a compact action with a 48dp target and state semantics.
   @override
   Widget build(BuildContext context) {
     final colors = context.appColors;
 
-    return GestureDetector(
-      onTap: onPressed,
-      child: DecoratedBox(
-        decoration: BoxDecoration(color: colors.surface, shape: BoxShape.circle),
-        child: SizedBox(
-          width: AppSpacing.xLarge + AppSpacing.small,
-          height: AppSpacing.xLarge + AppSpacing.small,
-          child: Icon(icon, color: colors.iconPrimary),
+    return Tooltip(
+      message: tooltip,
+      child: Semantics(
+        button: true,
+        enabled: isEnabled,
+        label: tooltip,
+        toggled: isToggle ? isSelected : null,
+        child: GestureDetector(
+          onTap: isEnabled ? onPressed : null,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: isSelected ? colors.primary : colors.surface,
+              shape: BoxShape.circle,
+            ),
+            child: SizedBox(
+              width: AppSpacing.xLarge + AppSpacing.small,
+              height: AppSpacing.xLarge + AppSpacing.small,
+              child: Icon(
+                icon,
+                color: isEnabled
+                    ? (isSelected ? colors.textOnPrimary : colors.iconPrimary)
+                    : colors.iconSecondary,
+              ),
+            ),
+          ),
         ),
       ),
     );

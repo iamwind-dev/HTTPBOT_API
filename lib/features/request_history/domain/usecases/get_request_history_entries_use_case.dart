@@ -1,3 +1,4 @@
+import '../../../request_builder/domain/entities/request_draft.dart';
 import '../entities/request_history_entry.dart';
 import '../repositories/request_history_repository.dart';
 
@@ -6,7 +7,9 @@ class GetRequestHistoryEntriesUseCase {
 
   final RequestHistoryRepository _repository;
 
-  /// Returns the full saved request history for future list and detail screens.
-  Future<List<RequestHistoryEntry>> call() =>
-      _repository.getRequestHistoryEntries();
+  /// Returns all entries or only the entries for the supplied request scope.
+  Future<List<RequestHistoryEntry>> call({RequestDraft? request}) =>
+      request == null
+      ? _repository.getRequestHistoryEntries()
+      : _repository.getRequestHistoryEntriesForRequest(request);
 }

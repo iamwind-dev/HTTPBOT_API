@@ -1,6 +1,8 @@
 import 'package:equatable/equatable.dart';
 
+import '../../../request_builder/domain/entities/parsed_response.dart';
 import '../../../request_builder/domain/entities/request_draft.dart';
+import '../../../request_builder/domain/entities/request_execution_result.dart';
 import 'request_history_response_snapshot.dart';
 
 class RequestHistoryEntry extends Equatable {
@@ -9,12 +11,16 @@ class RequestHistoryEntry extends Equatable {
     required this.sentAt,
     required this.request,
     required this.response,
+    required this.executionResult,
+    required this.parsedResponse,
   });
 
   final String id;
   final DateTime sentAt;
   final RequestDraft request;
   final RequestHistoryResponseSnapshot response;
+  final RequestExecutionResult executionResult;
+  final ParsedResponse parsedResponse;
 
   /// Returns a compact request label that future history lists can render directly.
   String get title => '${request.method.wireName} ${request.url}'.trim();
@@ -25,5 +31,7 @@ class RequestHistoryEntry extends Equatable {
     sentAt,
     request,
     response,
+    executionResult,
+    parsedResponse,
   ];
 }

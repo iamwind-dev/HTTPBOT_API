@@ -212,28 +212,34 @@ class _RequestEditorSheetState extends State<_RequestEditorSheet> {
     context.read<RequestEditorCubit>().updateMethod(selectedMethod);
   }
 
-  /// Opens the temporary response viewer and stores the latest summary when it closes.
-  Future<void> _openResponseSheet() async {
+  /// Opens the response viewer, optionally sending the current draft first.
+  Future<void> _openResponseSheet({
+    bool sendRequest = true,
+    ResponseViewMode initialMode = ResponseViewMode.body,
+  }) async {
     final editorCubit = context.read<RequestEditorCubit>();
     final requestSendBloc = context.read<RequestSendBloc>();
 
-    setState(() {
-      _lastResponseBadge = null;
-    });
+    if (sendRequest) {
+      setState(() {
+        _lastResponseBadge = null;
+      });
 
-    requestSendBloc.add(const RequestSendResetRequested());
-    requestSendBloc.add(
-      RequestSendRequested(
-        draft: editorCubit.state.draft,
-        variableStore: _variableStore,
-      ),
-    );
+      requestSendBloc.add(const RequestSendResetRequested());
+      requestSendBloc.add(
+        RequestSendRequested(
+          draft: editorCubit.state.draft,
+          variableStore: _variableStore,
+        ),
+      );
+    }
 
     final badgeData = await showRequestResponseSheet(
       context,
       requestEditorCubit: editorCubit,
       requestSendBloc: requestSendBloc,
       variableStore: _variableStore,
+      initialMode: initialMode,
     );
 
     if (!mounted || badgeData == null) {
@@ -589,7 +595,13 @@ class _RequestEditorSheetState extends State<_RequestEditorSheet> {
                           alignment: Alignment.centerLeft,
                           child: responseBadge == null
                               ? const SizedBox.shrink()
-                              : _ResponseBadge(data: responseBadge),
+                              : _ResponseBadge(
+                                  data: responseBadge,
+                                  onTap: () => _openResponseSheet(
+                                    sendRequest: false,
+                                    initialMode: ResponseViewMode.request,
+                                  ),
+                                ),
                         ),
                       ),
                       const SizedBox(width: AppSpacing.medium),
@@ -817,7 +829,7 @@ class _RequestBasicsSection extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      const _EditorSectionTitle(title: 'Request Name'),
+      const _EditorSectionTitle(title: 'Request'),
       const SizedBox(height: AppSpacing.small),
       _EditorTextField(
         fieldKey: AppWidgetKeys.requestsEditorTitleField,
@@ -897,6 +909,7 @@ class _KeyValueSection extends StatelessWidget {
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       _EditorSectionTitle(title: title),
+      const SizedBox(height: AppSpacing.small),
       _KeyValueCard(
         sectionId: sectionId,
         items: items,
@@ -906,12 +919,12 @@ class _KeyValueSection extends StatelessWidget {
             : null,
         onAddPressed: () => _appendEmptyItem(context),
       ),
-      if (sectionId == 'headers')
-        MethodHeaderNote(
-          method: context.read<RequestEditorCubit>().state.draft.method,
-          body: context.read<RequestEditorCubit>().state.draft.body,
-          headers: items,
-        ),
+      // if (sectionId == 'headers')
+      //   MethodHeaderNote(
+      //     method: context.read<RequestEditorCubit>().state.draft.method,
+      //     body: context.read<RequestEditorCubit>().state.draft.body,
+      //     headers: items,
+      //   ),
     ],
   );
 }
@@ -1542,14 +1555,16 @@ class _BodySection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        const SizedBox(height: AppSpacing.small),
         const _EditorSectionTitle(title: AppStrings.requestEditorBody),
         const SizedBox(height: AppSpacing.xxxSmall),
-        if (!methodSupportsRequestBody(draft.method)) ...[
-          _InfoCard(
-            message:
-                'Body will not be sent for ${draft.method.wireName} in this version.',
-          ),
-        ],
+        // if (!methodSupportsRequestBody(draft.method)) ...[
+        //   _InfoCard(
+        //     message:
+        //         'Body will not be sent for ${draft.method.wireName} in this version.',
+        //   ),
+        // ],
+        const SizedBox(height: AppSpacing.small),
         _BodyModeCard(
           draft: draft,
           body: body,
@@ -4792,6 +4807,7 @@ class _ApiKeyAuthFields extends StatelessWidget {
           ),
         ),
         if (_isCustom) ...[
+          const _EditorSectionTitle(title: AppStrings.requestEditorAuth),
           const SizedBox(height: AppSpacing.small),
           _EditorTextField(
             fieldKey: AppWidgetKeys.requestsEditorAuthField(
@@ -7080,42 +7096,57 @@ class _SendButton extends StatelessWidget {
 }
 
 class _ResponseBadge extends StatelessWidget {
-  const _ResponseBadge({required this.data});
+  const _ResponseBadge({required this.data, required this.onTap});
 
   final RequestEditorResponseBadgeData data;
+  final VoidCallback onTap;
 
   /// Shows the latest response summary in the editor footer after a send completes.
   @override
-  Widget build(BuildContext context) => DecoratedBox(
-    key: const ValueKey<String>(AppWidgetKeys.requestsEditorResponseBadge),
-    decoration: BoxDecoration(
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    label: AppStrings.requestEditorResponseBadgeTooltip,
+    child: Material(
       color: context.appColors.surface,
       borderRadius: BorderRadius.all(Radius.circular(AppRadius.xxLarge)),
-    ),
-    child: Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.medium,
-        vertical: AppSpacing.small,
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: AppSpacing.small,
-            height: AppSpacing.small,
-            decoration: BoxDecoration(
-              color: context.appColors.methodPost,
-              shape: BoxShape.circle,
+      clipBehavior: Clip.antiAlias,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(
+          minHeight: AppSpacing.xxLarge + AppSpacing.xSmall,
+        ),
+        child: InkWell(
+          key: const ValueKey<String>(
+            AppWidgetKeys.requestsEditorResponseBadge,
+          ),
+          onTap: onTap,
+          borderRadius: BorderRadius.all(Radius.circular(AppRadius.xxLarge)),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.medium,
+              vertical: AppSpacing.small,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: AppSpacing.small,
+                  height: AppSpacing.small,
+                  decoration: BoxDecoration(
+                    color: context.appColors.methodPost,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.small),
+                Text(
+                  data.displayLabel,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w500),
+                ),
+              ],
             ),
           ),
-          const SizedBox(width: AppSpacing.small),
-          Text(
-            data.displayLabel,
-            style: Theme.of(
-              context,
-            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w500),
-          ),
-        ],
+        ),
       ),
     ),
   );
@@ -7238,7 +7269,7 @@ class _InfoCard extends StatelessWidget {
 BoxDecoration _buildCardDecoration(BuildContext context) => BoxDecoration(
   color: context.appColors.surface,
   border: Border.all(color: context.appColors.border, width: 0.5),
-  borderRadius: const BorderRadius.all(Radius.circular(AppRadius.medium)),
+  borderRadius: const BorderRadius.all(Radius.circular(AppRadius.xxLarge)),
 );
 
 /// Returns the shared field decoration used by request-editor text fields and dropdowns.

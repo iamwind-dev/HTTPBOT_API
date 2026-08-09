@@ -72,6 +72,17 @@ class RequestSendState extends Equatable {
          errorMessage: errorMessage,
        );
 
+  /// Creates a completed read-only state from a stored response execution.
+  RequestSendState.history({
+    required RequestExecutionResult executionResult,
+    required ParsedResponse parsedResponse,
+  }) : this(
+         status: RequestSendStatus.completed,
+         draft: executionResult.request,
+         executionResult: executionResult,
+         parsedResponse: parsedResponse,
+       );
+
   final RequestSendStatus status;
   final RequestDraft? draft;
   final ResolvedRequest? resolvedRequest;

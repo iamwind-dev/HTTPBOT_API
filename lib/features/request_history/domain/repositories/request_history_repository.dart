@@ -1,8 +1,14 @@
+import '../../../request_builder/domain/entities/request_draft.dart';
 import '../entities/request_history_entry.dart';
 
 abstract class RequestHistoryRepository {
   /// Returns the saved request history entries in display order.
   Future<List<RequestHistoryEntry>> getRequestHistoryEntries();
+
+  /// Returns saved entries for one request method and URL scope.
+  Future<List<RequestHistoryEntry>> getRequestHistoryEntriesForRequest(
+    RequestDraft request,
+  );
 
   /// Persists one history entry after a request send completes.
   Future<void> saveRequestHistoryEntry(RequestHistoryEntry entry);
